@@ -13,9 +13,10 @@ import (
 	"provider_management/internal/db"
 	"provider_management/internal/handler"
 	"provider_management/internal/logger"
-	"provider_management/internal/mq"
 	"provider_management/internal/repository"
 	"provider_management/internal/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -28,17 +29,31 @@ func main() {
 
 	complaintRepo := repository.NewComplaintRepo(mongoDB)
 	assessmentRepo := repository.NewAssessmentRepo(mongoDB)
+	transactionRepo := repository.NewTransactionRepo(mongoDB)
+	acceptedServiceRepo := repository.NewAcceptedServiceRepo(mongoDB)
+	userRepo := repository.NewUserRepo(mongoDB)
 
 	complaintService := service.NewComplaintService(complaintRepo, assessmentRepo)
+	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 
-	consumer := mq.NewConsumer(cfg.RabbitURL, complaintService, logger.NewLogger().Logger)
-	go consumer.StartWorkers(5)
+	complaintHandler := handler.NewComplaintHandler(complaintService, logg)
+	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 
-	h := handler.NewComplaintHandler(complaintService, logg)
+	r := gin.Default()
+
+	r.GET("/complaints", complaintHandler.GetAll)
+	r.GET("/complaints/:id", complaintHandler.GetByID)
+	r.POST("/complaints/:id/assessment", complaintHandler.PostAssessment)
+
+	r.GET("/transactions", transactionHandler.GetAll)
+	r.GET("/transactions/:id", transactionHandler.GetByID)
+
+	// consumer := mq.NewConsumer(cfg.RabbitURL, complaintService, logger.NewLogger().Logger)
+	// go consumer.StartWorkers(5)
 
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
-		Handler: h.Router(),
+		Handler: r,
 	}
 
 	go func() {
