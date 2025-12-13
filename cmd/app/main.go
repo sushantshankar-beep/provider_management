@@ -16,12 +16,12 @@ import (
 	"provider_management/internal/repository"
 	"provider_management/internal/service"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	cfg := config.Load()
-
 	logg := logger.NewLogger()
 
 	client := db.ConnectMongo(cfg.MongoURI)
@@ -32,14 +32,37 @@ func main() {
 	transactionRepo := repository.NewTransactionRepo(mongoDB)
 	acceptedServiceRepo := repository.NewAcceptedServiceRepo(mongoDB)
 	userRepo := repository.NewUserRepo(mongoDB)
+	vehiclesRepo := repository.NewSavedVehiclesRepo(mongoDB)
+	amcRepo := repository.NewAMCPurchaseRepo(mongoDB)
 
 	complaintService := service.NewComplaintService(complaintRepo, assessmentRepo)
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
+	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
 
 	complaintHandler := handler.NewComplaintHandler(complaintService, logg)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
+	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 
 	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: []string{
+			"http://localhost:8002",
+			"http://localhost:5173",
+		},
+		AllowMethods: []string{
+			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
+		},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Accept",
+			"Authorization",
+			"ngrok-skip-browser-warning",
+		},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	r.GET("/complaints", complaintHandler.GetAll)
 	r.GET("/complaints/:id", complaintHandler.GetByID)
@@ -48,9 +71,13 @@ func main() {
 	r.GET("/transactions", transactionHandler.GetAll)
 	r.GET("/transactions/:id", transactionHandler.GetByID)
 
+	r.GET("/admin/users", userAdminHandler.GetAll)
+	r.GET("/admin/users/:id", userAdminHandler.GetByID)
+	r.PATCH("/admin/users/:id/status", userAdminHandler.UpdateStatus)
+
 	// consumer := mq.NewConsumer(cfg.RabbitURL, complaintService, logger.NewLogger().Logger)
 	// go consumer.StartWorkers(5)
-
+	
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
 		Handler: r,
