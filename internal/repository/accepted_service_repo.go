@@ -122,16 +122,28 @@ func (r *AcceptedServiceRepo) FindByProviderID(ctx context.Context, providerID s
 	}
 
 	pipeline := mongo.Pipeline{
-		{{"$match", bson.D{{"provider", providerObjectID}}}},
-		{{"$lookup", bson.D{
-			{"from", "servicerequests"},
-			{"localField", "serviceRequest"},
-			{"foreignField", "_id"},
-			{"as", "serviceRequestDetails"},
-		}}},
-		{{"$sort", bson.D{{"createdAt", -1}}}},
-		{{"$limit", limit}},
-	}
+		bson.D{
+			{Key: "$match", Value: bson.D{
+				{Key: "provider", Value: providerObjectID},
+			}},
+		},
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "servicerequests"},
+				{Key: "localField", Value: "serviceRequest"},
+				{Key: "foreignField", Value: "_id"},
+				{Key: "as", Value: "serviceRequestDetails"},
+			}},
+		},
+		bson.D{
+			{Key: "$sort", Value: bson.D{
+				{Key: "createdAt", Value: -1},
+			}},
+		},
+		bson.D{
+			{Key: "$limit", Value: limit},
+		},
+	}	
 
 	cursor, err := r.col.Aggregate(ctx, pipeline)
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-
+    "provider_management/internal/routes"
 	"provider_management/internal/config"
 	"provider_management/internal/db"
 	"provider_management/internal/handler"
@@ -16,7 +16,6 @@ import (
 	"provider_management/internal/repository"
 	"provider_management/internal/service"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -45,50 +44,18 @@ func main() {
 	complaintHandler := handler.NewComplaintHandler(complaintService, logg)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
-    providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
+	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
 
-	
 	r := gin.Default()
 
-	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:8002",
-			"http://localhost:5173",
-		},
-		AllowMethods: []string{
-			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
-		},
-		AllowHeaders: []string{
-			"Origin",
-			"Content-Type",
-			"Accept",
-			"Authorization",
-			"ngrok-skip-browser-warning",
-		},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
-
-	r.GET("/complaints", complaintHandler.GetAll)
-	r.GET("/complaints/:id", complaintHandler.GetByID)
-	r.POST("/complaints/:id/assessment", complaintHandler.PostAssessment)
-
-	r.GET("/transactions", transactionHandler.GetAll)
-	r.GET("/transactions/:id", transactionHandler.GetByID)
-
-	r.GET("/admin/users", userAdminHandler.GetAll)
-	r.GET("/admin/users/:id", userAdminHandler.GetByID)
-	r.PATCH("/admin/users/:id/status", userAdminHandler.UpdateStatus)
-
-	// consumer := mq.NewConsumer(cfg.RabbitURL, complaintService, logger.NewLogger().Logger)
-	// go consumer.StartWorkers(5)
-	r.GET("/admin/providers", providerAdminHandler.GetAll)
-	r.GET("/admin/providers/:id", providerAdminHandler.GetByID)
-	r.PATCH("/admin/providers/status/:id", providerAdminHandler.UpdateStatus)
-	r.PATCH("/admin/providers/kyc/:id", providerAdminHandler.UpdateKYC)
-	r.PATCH("/admin/providers/verify-document/:id", providerAdminHandler.VerifyDocument)
-	r.PATCH("/admin/providers/:id/account-action", providerAdminHandler.UpdateAccountAction)
-	r.PATCH("/admin/providers/commission/:id", providerAdminHandler.UpdateCommission)
+	routes.SetupRoutes(
+		r,
+		complaintHandler,
+		transactionHandler,
+		userAdminHandler,
+		providerAdminHandler,
+	)
+	
 
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
@@ -110,4 +77,3 @@ func main() {
 	defer cancel()
 	srv.Shutdown(ctx)
 }
-
