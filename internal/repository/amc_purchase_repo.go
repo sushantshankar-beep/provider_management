@@ -2,8 +2,8 @@ package repository
 
 import (
 	"context"
-
 	"provider_management/internal/domain"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -53,4 +53,25 @@ func (r *AMCPurchaseRepo) FindActiveByUserIDs(ctx context.Context, userIDs []pri
 	}
 
 	return amcList, nil
+}
+
+func (r *AMCPurchaseRepo) FindActiveAMCs(ctx context.Context) ([]domain.AMCPurchase, error) {
+	now := time.Now()
+	filter := bson.M{
+		"planEndDate":   bson.M{"$gt": now},
+		"paymentStatus": "paid",
+	}
+
+	var amcs []domain.AMCPurchase
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	if err := cursor.All(ctx, &amcs); err != nil {
+		return nil, err
+	}
+
+	return amcs, nil
 }

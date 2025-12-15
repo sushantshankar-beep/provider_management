@@ -22,7 +22,6 @@ func (h *UserAdminHandler) GetAll(c *gin.Context) {
 	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
 	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "10"), 10, 64)
 
-
 	res, err := h.svc.GetAllUsers(
 		c,
 		c.Query("search"),
@@ -31,7 +30,6 @@ func (h *UserAdminHandler) GetAll(c *gin.Context) {
 		page,
 		limit,
 	)
-	log.Println("Handler reached", err)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
@@ -43,6 +41,7 @@ func (h *UserAdminHandler) GetAll(c *gin.Context) {
 
 func (h *UserAdminHandler) GetByID(c *gin.Context) {
 	res, err := h.svc.GetUserByID(c, c.Param("id"))
+	log.Println("error",err)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return

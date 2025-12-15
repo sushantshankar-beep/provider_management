@@ -16,10 +16,10 @@ import (
 )
 
 type UserAdminService struct {
-	users           *repository.UserRepo
-	vehicles        *repository.SavedVehiclesRepo
-	bookings        *repository.AcceptedServiceRepo
-	amc             *repository.AMCPurchaseRepo
+	users    *repository.UserRepo
+	vehicles *repository.SavedVehiclesRepo
+	bookings *repository.AcceptedServiceRepo
+	amc      *repository.AMCPurchaseRepo
 }
 
 func NewUserAdminService(
@@ -39,14 +39,15 @@ func NewUserAdminService(
 type UserAdminListResponse struct {
 	Users      []UserAdminResponse `json:"users"`
 	Pagination Pagination          `json:"pagination"`
+	Stats      *UserStatsResponse  `json:"stats"`
 }
 
-type Pagination struct {
-	CurrentPage int   `json:"currentPage"`
-	TotalPages  int   `json:"totalPages"`
-	TotalUsers  int64 `json:"totalUsers"`
-	HasNext     bool  `json:"hasNext"`
-	HasPrev     bool  `json:"hasPrev"`
+type UserStatsResponse struct {
+	TotalRegisteredUsers int64 `json:"total_registered_users"`
+	TotalActiveUsers     int64 `json:"total_active_users"`
+	TotalInactiveUsers   int64 `json:"total_inactive_users"`
+	ActiveAMCUsers       int64 `json:"active_amc_users"`
+	UsersWithBookings    int64 `json:"users_with_bookings"`
 }
 
 type UserAdminResponse struct {
@@ -70,10 +71,10 @@ type UserAdminResponse struct {
 
 type UserDetailResponse struct {
 	UserAdminResponse
-	TotalExpenses int64              `json:"totalExpenses"`
-	Vehicles      []VehicleInfo      `json:"vehicles"`
-	AMCInfo       AMCInfo            `json:"amcInfo"`
-	PreferredLang string             `json:"preferredLanguage"`
+	TotalExpenses int64         `json:"totalExpenses"`
+	Vehicles      []VehicleInfo `json:"vehicles"`
+	AMCInfo       AMCInfo       `json:"amcInfo"`
+	PreferredLang string        `json:"preferredLanguage"`
 }
 
 type VehicleInfo struct {
@@ -81,22 +82,22 @@ type VehicleInfo struct {
 	VehicleNumber string `json:"vehicleNumber"`
 	Brand         string `json:"brand"`
 	Model         string `json:"model"`
-	Year          int    `json:"year"`
+	Year          string    `json:"year"`
 	FuelType      string `json:"fuelType"`
 	VehicleType   string `json:"vehicleType"`
 }
 
 type AMCInfo struct {
-	AMCStatus           string    `json:"amcStatus"`
-	CurrentPlanName     string    `json:"currentPlanName"`
-	StartDate           time.Time `json:"startDate,omitempty"`
-	EndDate             time.Time `json:"endDate,omitempty"`
-	ActivationDate      time.Time `json:"activationDate,omitempty"`
-	BoundVehicleNumber  string    `json:"boundVehicleNumber"`
-	TotalServices       int       `json:"totalServices"`
-	ServicesUsed        int       `json:"servicesUsed"`
-	ServicesRemaining   int       `json:"servicesRemaining"`
-	PaymentStatus       string    `json:"paymentStatus"`
+	AMCStatus          string    `json:"amcStatus"`
+	CurrentPlanName    string    `json:"currentPlanName"`
+	StartDate          time.Time `json:"startDate,omitempty"`
+	EndDate            time.Time `json:"endDate,omitempty"`
+	ActivationDate     time.Time `json:"activationDate,omitempty"`
+	BoundVehicleNumber string    `json:"boundVehicleNumber"`
+	TotalServices      int       `json:"totalServices"`
+	ServicesUsed       int       `json:"servicesUsed"`
+	ServicesRemaining  int       `json:"servicesRemaining"`
+	PaymentStatus      string    `json:"paymentStatus"`
 }
 
 func (s *UserAdminService) GetAllUsers(
@@ -105,7 +106,7 @@ func (s *UserAdminService) GetAllUsers(
 	page, limit int64,
 ) (*UserAdminListResponse, error) {
 	query := bson.M{}
-    
+
 	if search != "" {
 		orConditions := []bson.M{
 			{"name": bson.M{"$regex": search, "$options": "i"}},
@@ -116,12 +117,15 @@ func (s *UserAdminService) GetAllUsers(
 	}
 
 	if status != "" {
-		if status == "active" {
-			query["isActive"] = true
-		} else if status == "inactive" {
-			query["isActive"] = false
+		switch status {
+		case "active":
+			query["isActive"] = domain.AccountStatusActive
+		case "inactive":
+			query["isActive"] = bson.M{"$ne": domain.AccountStatusActive}
+		default:
+			query["isActive"] = status
 		}
-	}	
+	}
 
 	if zone != "" {
 		query["selectedCityName"] = zone
@@ -129,10 +133,16 @@ func (s *UserAdminService) GetAllUsers(
 
 	skip := (page - 1) * limit
 	users, total, err := s.users.FindAll(ctx, query, skip, limit)
-	log.Println("Service reached", users)
+	log.Println("Service reached", len(users), "users")
 	log.Println("Total users found:", total)
 	if err != nil {
 		return nil, err
+	}
+
+	stats, err := s.getUserStatistics(ctx, 14)
+	if err != nil {
+		log.Printf("Error getting user stats: %v", err)
+		stats = &UserStatsResponse{}
 	}
 
 	if len(users) == 0 {
@@ -145,6 +155,7 @@ func (s *UserAdminService) GetAllUsers(
 				HasNext:     false,
 				HasPrev:     false,
 			},
+			Stats: stats,
 		}, nil
 	}
 
@@ -168,11 +179,6 @@ func (s *UserAdminService) GetAllUsers(
 		return nil, err
 	}
 
-status = "inactive"
-if users != nil && len(users) > 0 && users[0].IsActive {
-	status = "active"
-}
-
 	result := make([]UserAdminResponse, len(users))
 	for i, u := range users {
 		vehicleInfo := vehicleMap[u.ID]
@@ -185,6 +191,11 @@ if users != nil && len(users) > 0 && users[0].IsActive {
 			}
 		}
 
+		status := u.IsActive
+		if u.IsActive == "true" {
+			status = "active"
+		}
+
 		result[i] = UserAdminResponse{
 			ID:            u.InternalID,
 			MongoID:       u.ID,
@@ -193,7 +204,7 @@ if users != nil && len(users) > 0 && users[0].IsActive {
 			Email:         defaultStr(u.Email, "—"),
 			UserID:        fmt.Sprintf("VW%06d", u.InternalID),
 			Zone:          defaultStr(u.SelectedCityName, "N/A"),
-			Status: status,
+			Status:        status,
 			CreatedDate:   u.CreatedAt.Format("2006-01-02"),
 			PlatformUsed:  "Android",
 			VehicleType:   defaultStr(vehicleInfo.Type, "N/A"),
@@ -216,6 +227,7 @@ if users != nil && len(users) > 0 && users[0].IsActive {
 			HasNext:     page < int64(totalPages),
 			HasPrev:     page > 1,
 		},
+		Stats: stats,
 	}, nil
 }
 
@@ -271,6 +283,11 @@ func (s *UserAdminService) GetUserByID(
 		}
 	}
 
+	status := u.IsActive
+	if u.IsActive == "true" {
+		status = "active"
+	}
+
 	return &UserDetailResponse{
 		UserAdminResponse: UserAdminResponse{
 			ID:            u.InternalID,
@@ -280,7 +297,7 @@ func (s *UserAdminService) GetUserByID(
 			Email:         defaultStr(u.Email, "—"),
 			UserID:        fmt.Sprintf("VW%06d", u.InternalID),
 			Zone:          defaultStr(u.SelectedCityName, "N/A"),
-			Status:        defaultStr(fmt.Sprintf("%v", u.IsActive), "active"),
+			Status:        status,
 			CreatedDate:   u.CreatedAt.Format(time.RFC3339),
 			VehicleCount:  len(vehicles),
 			TotalBookings: int(totalBookings),
@@ -312,18 +329,100 @@ func (s *UserAdminService) UpdateUserStatus(
 	if err != nil {
 		return nil, err
 	}
-status = "inactive"
-if u.IsActive {
-	status = "active"
-}
 
-
+	updatedStatus := u.IsActive
+	if u.IsActive == "true" {
+		updatedStatus = "active"
+	}
 
 	return &UserAdminResponse{
 		ID:     u.InternalID,
 		UserID: fmt.Sprintf("VW%06d", u.InternalID),
-		Status: status,
+		Status: updatedStatus,
 	}, nil
+}
+
+func (s *UserAdminService) getUserStatistics(ctx context.Context, days int) (*UserStatsResponse, error) {
+	stats := &UserStatsResponse{}
+
+	userStats, err := s.users.GetStatistics(ctx, days)
+	if err != nil {
+		log.Printf("Error getting user stats: %v", err)
+		return stats, nil
+	}
+
+	stats.TotalRegisteredUsers = userStats.TotalUsers
+	stats.TotalActiveUsers = userStats.ActiveUsers
+	stats.TotalInactiveUsers = userStats.InactiveUsers
+
+	activeAMCUsers, err := s.getActiveAMCUsersCount(ctx)
+	if err != nil {
+		log.Printf("Error counting active AMC users: %v", err)
+		stats.ActiveAMCUsers = 0
+	} else {
+		stats.ActiveAMCUsers = activeAMCUsers
+	}
+
+	usersWithBookings, err := s.getUsersWithBookingsCount(ctx)
+	if err != nil {
+		log.Printf("Error counting users with bookings: %v", err)
+		stats.UsersWithBookings = 0
+	} else {
+		stats.UsersWithBookings = usersWithBookings
+	}
+
+	return stats, nil
+}
+
+func (s *UserAdminService) getActiveAMCUsersCount(ctx context.Context) (int64, error) {
+	activeAMCs, err := s.amc.FindActiveAMCs(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	userIDs := make(map[primitive.ObjectID]bool)
+	for _, amc := range activeAMCs {
+		userIDs[amc.UserID] = true
+	}
+
+	return int64(len(userIDs)), nil
+}
+
+func (s *UserAdminService) getUsersWithBookingsCount(ctx context.Context) (int64, error) {
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"paymentStatus": "paid",
+			},
+		},
+		{
+			"$group": bson.M{
+				"_id": "$user",
+			},
+		},
+		{
+			"$count": "totalUsers",
+		},
+	}
+
+	cursor, err := s.bookings.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var result struct {
+		TotalUsers int64 `bson:"totalUsers"`
+	}
+
+	if cursor.Next(ctx) {
+		if err := cursor.Decode(&result); err != nil {
+			return 0, err
+		}
+		return result.TotalUsers, nil
+	}
+
+	return 0, nil
 }
 
 func (s *UserAdminService) getVehicleCounts(ctx context.Context, userIDs []string) (map[string]struct {
@@ -486,11 +585,4 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 		ServicesRemaining:  servicesRemaining,
 		PaymentStatus:      amc.PaymentStatus,
 	}, nil
-}
-
-func defaultStr(v, def string) string {
-	if v == "" {
-		return def
-	}
-	return v
 }

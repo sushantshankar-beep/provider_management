@@ -34,15 +34,20 @@ func main() {
 	userRepo := repository.NewUserRepo(mongoDB)
 	vehiclesRepo := repository.NewSavedVehiclesRepo(mongoDB)
 	amcRepo := repository.NewAMCPurchaseRepo(mongoDB)
+	providerRepo := repository.NewProviderRepo(mongoDB)
+	serviceRepo := repository.NewAcceptedServiceRepo(mongoDB)
 
 	complaintService := service.NewComplaintService(complaintRepo, assessmentRepo)
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
+	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo)
 
 	complaintHandler := handler.NewComplaintHandler(complaintService, logg)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
+    providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
 
+	
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
@@ -77,7 +82,14 @@ func main() {
 
 	// consumer := mq.NewConsumer(cfg.RabbitURL, complaintService, logger.NewLogger().Logger)
 	// go consumer.StartWorkers(5)
-	
+	r.GET("/admin/providers", providerAdminHandler.GetAll)
+	r.GET("/admin/providers/:id", providerAdminHandler.GetByID)
+	r.PATCH("/admin/providers/status/:id", providerAdminHandler.UpdateStatus)
+	r.PATCH("/admin/providers/kyc/:id", providerAdminHandler.UpdateKYC)
+	r.PATCH("/admin/providers/verify-document/:id", providerAdminHandler.VerifyDocument)
+	r.PATCH("/admin/providers/:id/account-action", providerAdminHandler.UpdateAccountAction)
+	r.PATCH("/admin/providers/commission/:id", providerAdminHandler.UpdateCommission)
+
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
 		Handler: r,
@@ -98,3 +110,4 @@ func main() {
 	defer cancel()
 	srv.Shutdown(ctx)
 }
+

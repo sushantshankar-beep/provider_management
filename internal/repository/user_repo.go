@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"log"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -22,7 +23,7 @@ func NewUserRepo(db *mongo.Database) *UserRepo {
 
 func (r *UserRepo) FindByID(ctx context.Context, id string) (*domain.User, error) {
 	var res domain.User
-	
+
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err == nil {
 		err = r.col.FindOne(ctx, bson.M{"_id": objID}).Decode(&res)
@@ -30,7 +31,7 @@ func (r *UserRepo) FindByID(ctx context.Context, id string) (*domain.User, error
 			return &res, nil
 		}
 	}
-	
+
 	err = r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&res)
 	if err != nil {
 		return nil, err
@@ -48,7 +49,7 @@ func (r *UserRepo) FindAll(
 		SetSkip(skip).
 		SetLimit(limit).
 		SetSort(bson.M{"createdAt": -1})
-    
+
 	cur, err := r.col.Find(ctx, query, opts)
 	if err != nil {
 		return nil, 0, err
@@ -64,7 +65,7 @@ func (r *UserRepo) FindAll(
 	if err != nil {
 		return nil, 0, err
 	}
-    log.Println("Repo found total users:", total)
+	log.Println("Repo found total users:", total)
 	return users, total, nil
 }
 
@@ -82,20 +83,15 @@ func (r *UserRepo) UpdateStatus(
 	status string,
 ) (*domain.User, error) {
 
-	isActive := false
-if status == "active" {
-    isActive = true
-}
-
-
 	var user domain.User
 	err := r.col.FindOneAndUpdate(
 		ctx,
 		query,
-		bson.M{"$set": bson.M{"isActive": isActive}},
+		bson.M{"$set": bson.M{"isActive": status}},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&user)
-    log.Println("Repo updated user status to:", status)
+	log.Println("Repo updated user status to:", status)
+
 	if err != nil {
 		return nil, err
 	}
@@ -106,4 +102,75 @@ func (r *UserRepo) Count(ctx context.Context, query bson.M) (int64, error) {
 	return r.col.CountDocuments(ctx, query)
 }
 
+func (r *UserRepo) GetStatistics(ctx context.Context, days int) (*UserStatistics, error) {
+	endDate := time.Now()
+	startDate := endDate.AddDate(0, 0, -days)
+	pipeline := []bson.M{
+		{
+			"$facet": bson.M{
+				"total_users": []bson.M{
+					{"$count": "count"},
+				},
+				"active_users": []bson.M{
+					{"$match": bson.M{"isActive": domain.AccountStatusActive}},
+					{"$count": "count"},
+				},
+				"inactive_users": []bson.M{
+					{"$match": bson.M{"isActive": bson.M{"$ne": domain.AccountStatusActive}}},
+					{"$count": "count"},
+				},
+				"new_users": []bson.M{
+					{"$match": bson.M{
+						"createdAt": bson.M{"$gte": startDate, "$lte": endDate},
+					}},
+					{"$count": "count"},
+				},
+			},
+		},
+	}
 
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []struct {
+		TotalUsers    []struct{ Count int64 } `bson:"total_users"`
+		ActiveUsers   []struct{ Count int64 } `bson:"active_users"`
+		InactiveUsers []struct{ Count int64 } `bson:"inactive_users"`
+		NewUsers      []struct{ Count int64 } `bson:"new_users"`
+	}
+
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	if len(results) == 0 {
+		return &UserStatistics{}, nil
+	}
+
+	stats := &UserStatistics{}
+
+	if len(results[0].TotalUsers) > 0 {
+		stats.TotalUsers = results[0].TotalUsers[0].Count
+	}
+	if len(results[0].ActiveUsers) > 0 {
+		stats.ActiveUsers = results[0].ActiveUsers[0].Count
+	}
+	if len(results[0].InactiveUsers) > 0 {
+		stats.InactiveUsers = results[0].InactiveUsers[0].Count
+	}
+	if len(results[0].NewUsers) > 0 {
+		stats.NewUsersLastNDays = results[0].NewUsers[0].Count
+	}
+
+	return stats, nil
+}
+
+type UserStatistics struct {
+	TotalUsers        int64 `json:"total_users"`
+	ActiveUsers       int64 `json:"active_users"`
+	InactiveUsers     int64 `json:"inactive_users"`
+	NewUsersLastNDays int64 `json:"new_users_last_n_days"`
+}

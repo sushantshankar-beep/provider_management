@@ -2,17 +2,6 @@ package domain
 
 import "time"
 
-type GeoPoint struct {
-	Type        string    `bson:"type" json:"type"`
-	Coordinates []float64 `bson:"coordinates" json:"coordinates"`
-}
-
-type OTP struct {
-	Code      string    `bson:"code,omitempty" json:"-"`
-	ExpiresAt time.Time `bson:"expiresAt,omitempty" json:"-"`
-	Verified  bool      `bson:"verified" json:"-"`
-}
-
 type Preferences struct {
 	Email struct {
 		AllowInvoice      bool `bson:"allowInvoice" json:"allow_invoice"`
@@ -45,7 +34,7 @@ type User struct {
 	Preferences        Preferences  `bson:"preferences,omitempty" json:"preferences,omitempty"`
 	SelectedCity       string       `bson:"selectedCity,omitempty" json:"selected_city,omitempty"`
 	SelectedCityName   string       `bson:"selectedCityName,omitempty" json:"selected_city_name,omitempty"`
-	IsActive bool `bson:"isActive" json:"is_active"`
+	IsActive           string       `bson:"isActive" json:"is_active"`
 	CreatedAt          time.Time    `bson:"createdAt" json:"created_at"`
 	UpdatedAt          time.Time    `bson:"updatedAt" json:"updated_at"`
 }
