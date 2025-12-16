@@ -31,6 +31,7 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 	vehicleType := c.Query("vehicleType")
 	zone := c.Query("zone")
 
+
 	res, err := h.svc.GetAllProviders(
 		c.Request.Context(),
 		page, limit, sort, search, status, name, mobile,
@@ -38,9 +39,11 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 	)
 
 	if err != nil {
+		log.Printf("Error fetching providers: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": "Failed to fetch providers",
+			"details": err.Error(),
 		})
 		return
 	}
@@ -51,7 +54,6 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 		"data":    res,
 	})
 }
-
 func (h *ProviderAdminHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 
@@ -63,8 +65,7 @@ func (h *ProviderAdminHandler) GetByID(c *gin.Context) {
 		})
 		return
 	}
-	log.Println("Provider Data:", res)
-	log.Println("Provider Data:", err)
+
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Provider fetched successfully",

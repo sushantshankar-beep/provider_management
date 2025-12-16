@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"log"
+
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -65,7 +65,7 @@ func (r *UserRepo) FindAll(
 	if err != nil {
 		return nil, 0, err
 	}
-	log.Println("Repo found total users:", total)
+
 	return users, total, nil
 }
 
@@ -90,7 +90,6 @@ func (r *UserRepo) UpdateStatus(
 		bson.M{"$set": bson.M{"isActive": status}},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&user)
-	log.Println("Repo updated user status to:", status)
 
 	if err != nil {
 		return nil, err

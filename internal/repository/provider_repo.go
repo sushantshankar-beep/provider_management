@@ -15,7 +15,6 @@ import (
 type ProviderRepo struct {
 	col *mongo.Collection
 }
-
 func NewProviderRepo(db *mongo.Database) *ProviderRepo {
 	return &ProviderRepo{col: db.Collection("providerschemas")}
 }
@@ -136,50 +135,55 @@ func (r *ProviderRepo) UpdateKYCStatus(ctx context.Context, id string, status st
 
 func (r *ProviderRepo) UpdateDocumentVerification(
 	ctx context.Context,
-	id string,
+	providerID string,
 	documentType string,
 	documentID string,
-	action string,
+	status string,
 ) (*domain.Provider, error) {
-	objID, err := primitive.ObjectIDFromHex(id)
+
+	providerObjID, err := primitive.ObjectIDFromHex(providerID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid provider id")
 	}
 
-	updateField := ""
-	var update bson.M
+	var docObjID primitive.ObjectID
+	if documentType == "identityProof" || documentType == "addressProof" {
+		docObjID, err = primitive.ObjectIDFromHex(documentID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid document id")
+		}
+	}
 
-	if documentType == "identityProof" {
-		updateField = "identityProof.$.verified"
-		update = bson.M{
-			"$set": bson.M{updateField: action},
-		}
-	} else if documentType == "addressProof" {
-		updateField = "addressProof.$.verified"
-		update = bson.M{
-			"$set": bson.M{updateField: action},
-		}
-	} else if documentType == "cancelCheque" {
-		update = bson.M{
-			"$set": bson.M{"cancelCheque.verified": action},
-		}
-	} else {
+	filter := bson.M{"_id": providerObjID}
+	update := bson.M{}
+
+	switch documentType {
+	case "identityProof":
+		filter["identityProof._id"] = docObjID
+		update = bson.M{"$set": bson.M{"identityProof.$.verified": status}}
+	case "addressProof":
+		filter["addressProof._id"] = docObjID
+		update = bson.M{"$set": bson.M{"addressProof.$.verified": status}}
+	case "cancelCheque":
+		update = bson.M{"$set": bson.M{"cancelCheque.verified": status}}
+	default:
 		return nil, fmt.Errorf("invalid document type")
 	}
 
-	var provider domain.Provider
+	var updatedProvider domain.Provider
 	err = r.col.FindOneAndUpdate(
 		ctx,
-		bson.M{"_id": objID},
+		filter,
 		update,
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
-	).Decode(&provider)
-
+	).Decode(&updatedProvider)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to update document: %v", err)
 	}
-	return &provider, nil
+
+	return &updatedProvider, nil
 }
+
 
 func (r *ProviderRepo) UpdateAccountStatus(ctx context.Context, id string, status string) (*domain.Provider, error) {
 	objID, err := primitive.ObjectIDFromHex(id)

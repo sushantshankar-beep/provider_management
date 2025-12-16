@@ -133,8 +133,7 @@ func (s *UserAdminService) GetAllUsers(
 
 	skip := (page - 1) * limit
 	users, total, err := s.users.FindAll(ctx, query, skip, limit)
-	log.Println("Service reached", len(users), "users")
-	log.Println("Total users found:", total)
+
 	if err != nil {
 		return nil, err
 	}

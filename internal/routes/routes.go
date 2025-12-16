@@ -15,6 +15,7 @@ func SetupRoutes(
 	transactionHandler *handler.TransactionHandler,
 	userAdminHandler *handler.UserAdminHandler,
 	providerAdminHandler *handler.ProviderAdminHandler,
+	bookingAdminHandler *handler.AdminBookingHandler,
 ) {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: []string{
@@ -53,4 +54,13 @@ func SetupRoutes(
 	r.PATCH("/admin/providers/verify-document/:id", providerAdminHandler.VerifyDocument)
 	r.PATCH("/admin/providers/:id/account-action", providerAdminHandler.UpdateAccountAction)
 	r.PATCH("/admin/providers/commission/:id", providerAdminHandler.UpdateCommission)
+
+	r.GET("/admin/bookings", bookingAdminHandler.GetAllBookings)
+    r.GET("/admin/bookings/stats", bookingAdminHandler.GetBookingStats)
+    r.GET("/admin/bookings/:bookingId", bookingAdminHandler.GetBookingByID)
+    r.PUT("/admin/bookings/:bookingId/cancel",bookingAdminHandler.CancelBooking)
+    r.PUT("/admin/bookings/:bookingId/complete", bookingAdminHandler.MarkBookingCompleted)
+    r.GET("/admin/bookings/get-invoice/:serviceId", bookingAdminHandler.GetInvoiceData)
+
+
 }

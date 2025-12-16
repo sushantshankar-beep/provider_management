@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
@@ -41,7 +40,6 @@ func (h *UserAdminHandler) GetAll(c *gin.Context) {
 
 func (h *UserAdminHandler) GetByID(c *gin.Context) {
 	res, err := h.svc.GetUserByID(c, c.Param("id"))
-	log.Println("error",err)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return

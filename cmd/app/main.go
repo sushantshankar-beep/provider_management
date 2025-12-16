@@ -35,16 +35,19 @@ func main() {
 	amcRepo := repository.NewAMCPurchaseRepo(mongoDB)
 	providerRepo := repository.NewProviderRepo(mongoDB)
 	serviceRepo := repository.NewAcceptedServiceRepo(mongoDB)
+	adminBookingRepo := repository.NewAdminBookingRepo(mongoDB)
 
 	complaintService := service.NewComplaintService(complaintRepo, assessmentRepo)
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
 	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo)
+	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
 
 	complaintHandler := handler.NewComplaintHandler(complaintService, logg)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
+    adminBookingHandler := handler.NewAdminBookingHandler(adminBookingService)
 
 	r := gin.Default()
 
@@ -54,6 +57,7 @@ func main() {
 		transactionHandler,
 		userAdminHandler,
 		providerAdminHandler,
+		adminBookingHandler ,
 	)
 	
 

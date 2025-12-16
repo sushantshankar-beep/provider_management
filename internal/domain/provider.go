@@ -2,6 +2,7 @@ package domain
 
 import (
 	"time"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
@@ -19,10 +20,10 @@ const (
 )
 
 type Proof struct {
-	Type     string `bson:"type" json:"type"`
-	File     string `bson:"file" json:"file"`
-	Verified string `bson:"verified" json:"verified"`
-	ID       string `bson:"_id,omitempty" json:"document_id,omitempty"`
+	ID       primitive.ObjectID `bson:"_id,omitempty" json:"document_id,omitempty"`
+	Type     string             `bson:"type" json:"type"`
+	File     string             `bson:"file" json:"file"`
+	Verified string             `bson:"verified" json:"verified"`
 }
 
 type CancelCheque struct {
