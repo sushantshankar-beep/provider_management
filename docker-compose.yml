@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  provider_management:
+    build: .
+    container_name: provider_management
+    env_file:
+      - .env
+    ports:
+      - "6600:6600"
+    restart: always
