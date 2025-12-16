@@ -1,14 +1,14 @@
 package domain
 
 import "time"
-
+import "go.mongodb.org/mongo-driver/bson/primitive"
 type ServiceMetadata struct {
 	BroadcastedTo int       `bson:"broadcastedTo" json:"broadcasted_to"`
 	LastBidAt     time.Time `bson:"lastBidAt,omitempty" json:"last_bid_at,omitempty"`
 }
 
 type ServiceRequest struct {
-	ID            string         `bson:"_id,omitempty" json:"_id"`
+ID primitive.ObjectID `bson:"_id,omitempty" json:"-"`
 	InternalID    int64          `bson:"id" json:"id"`
 	UserID        string         `bson:"user" json:"user_id"`
 	VehicleNumber string         `bson:"vehicleNumber" json:"vehicle_number"`

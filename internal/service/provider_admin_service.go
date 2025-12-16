@@ -249,7 +249,7 @@ func (s *ProviderAdminService) GetAllProviders(
 
 	formattedProviders := make([]ProviderResponse, len(providers))
 	for i, p := range providers {
-		totalJobs, completedJobs, err := s.services.GetServiceStats(ctx, p.ID)
+		totalJobs, completedJobs, err := s.services.GetServiceStats(ctx, p.ID.Hex())
 		if err != nil {
 			log.Printf("Error getting service stats for provider %s: %v", p.ID, err)
 			totalJobs = 0
@@ -294,7 +294,7 @@ func (s *ProviderAdminService) GetAllProviders(
 		}
 
 		formattedProviders[i] = ProviderResponse{
-			ID:               p.ID,
+			ID:               p.ID.Hex(),
 			ProviderID:       providerIDStr,
 			Name:             defaultStr(p.Name, "N/A"),
 			Mobile:           p.Phone,
@@ -346,14 +346,14 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		return nil, err
 	}
 
-	totalJobs, completedJobs, err := s.services.GetServiceStats(ctx, provider.ID)
+	totalJobs, completedJobs, err := s.services.GetServiceStats(ctx, provider.ID.Hex())
 	if err != nil {
 		log.Printf("Error getting service stats: %v", err)
 		totalJobs = 0
 		completedJobs = 0
 	}
 
-	recentServices, err := s.services.FindByProviderID(ctx, provider.ID, 10)
+	recentServices, err := s.services.FindByProviderID(ctx, provider.ID.Hex(), 10)
 	if err != nil {
 		log.Printf("Error fetching recent services: %v", err)
 		recentServices = []domain.Service{}
@@ -392,7 +392,7 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 	serviceNames := constants.GetServiceNamesByIDs(provider.ProviderServices)
 
 	return &ProviderDetailResponse{
-		ID:                   provider.ID,
+		ID:                   provider.ID.Hex(),
 		ProviderID:           providerIDStr,
 		Name:                 defaultStr(provider.Name, "N/A"),
 		Phone:                provider.Phone,

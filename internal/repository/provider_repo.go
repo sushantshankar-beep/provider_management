@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
-
+     "log"
 	"provider_management/internal/domain"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,6 +15,7 @@ import (
 type ProviderRepo struct {
 	col *mongo.Collection
 }
+
 func NewProviderRepo(db *mongo.Database) *ProviderRepo {
 	return &ProviderRepo{col: db.Collection("providerschemas")}
 }
@@ -61,35 +62,27 @@ func (r *ProviderRepo) FindAll(
 }
 
 func (r *ProviderRepo) FindByID(ctx context.Context, id string) (*domain.Provider, error) {
-	var provider domain.Provider
+    objectID, err := primitive.ObjectIDFromHex(id)
+    if err != nil {
+        return nil, fmt.Errorf("invalid provider id")
+    }
 
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err == nil {
-		err = r.col.FindOne(ctx, bson.M{"_id": objID}).Decode(&provider)
-		if err == nil {
-			return &provider, nil
-		}
-	}
+    var provider domain.Provider
+    err = r.col.FindOne(ctx, bson.M{"_id": objectID}).Decode(&provider)
+    if err != nil {
+        return nil, err
+    }
 
-	err = r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&provider)
-	if err != nil {
-		var internalID int64
-		if _, err := fmt.Sscanf(id, "%d", &internalID); err == nil {
-			err = r.col.FindOne(ctx, bson.M{"id": internalID}).Decode(&provider)
-			if err == nil {
-				return &provider, nil
-			}
-		}
-		return nil, err
-	}
-	return &provider, nil
+    return &provider, nil
 }
+
 
 func (r *ProviderRepo) FindOne(ctx context.Context, query bson.M) (*domain.Provider, error) {
 	var provider domain.Provider
 	if err := r.col.FindOne(ctx, query).Decode(&provider); err != nil {
 		return nil, err
 	}
+	log.Println("Found provider: %+v", provider)
 	return &provider, nil
 }
 
@@ -183,7 +176,6 @@ func (r *ProviderRepo) UpdateDocumentVerification(
 
 	return &updatedProvider, nil
 }
-
 
 func (r *ProviderRepo) UpdateAccountStatus(ctx context.Context, id string, status string) (*domain.Provider, error) {
 	objID, err := primitive.ObjectIDFromHex(id)

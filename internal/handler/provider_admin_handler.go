@@ -1,12 +1,10 @@
 package handler
 
 import (
+	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
-
 	"provider_management/internal/service"
-
-	"github.com/gin-gonic/gin"
 )
 
 type ProviderAdminHandler struct {
@@ -30,7 +28,6 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 	accountStatus := c.Query("accountStatus")
 	vehicleType := c.Query("vehicleType")
 	zone := c.Query("zone")
-
 
 	res, err := h.svc.GetAllProviders(
 		c.Request.Context(),

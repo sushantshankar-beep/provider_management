@@ -40,7 +40,7 @@ type BankDetails struct {
 }
 
 type Provider struct {
-	ID                   string        `bson:"_id,omitempty" json:"id"`
+	ID                   primitive.ObjectID     `bson:"_id,omitempty" json:"id"`
 	InternalID           int64         `bson:"id" json:"-"`
 	Name                 string        `bson:"name" json:"name"`
 	Slug                 string        `bson:"slug,omitempty" json:"slug,omitempty"`

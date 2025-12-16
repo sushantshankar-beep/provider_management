@@ -143,7 +143,7 @@ func (r *AcceptedServiceRepo) FindByProviderID(ctx context.Context, providerID s
 		bson.D{
 			{Key: "$limit", Value: limit},
 		},
-	}	
+	}
 
 	cursor, err := r.col.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -164,7 +164,7 @@ func (r *AcceptedServiceRepo) FindByProviderID(ctx context.Context, providerID s
 	for _, result := range results {
 		service := domain.Service{
 			ID:               result.ID,
-			ServiceRequestID: result.ServiceRequestID,
+			ServiceRequestID: result.ServiceRequestID.Hex(),
 			Status:           result.Status,
 			ServiceType:      result.ServiceType,
 		}
@@ -238,7 +238,7 @@ func (r *AcceptedServiceRepo) FindWithServiceRequest(ctx context.Context, id str
 	}
 
 	var serviceRequest domain.ServiceRequest
-	srObjID, err := primitive.ObjectIDFromHex(acceptedService.ServiceRequestID)
+	srObjID, err := primitive.ObjectIDFromHex(acceptedService.ServiceRequestID.Hex())
 	if err != nil {
 		return &acceptedService, nil, nil
 	}

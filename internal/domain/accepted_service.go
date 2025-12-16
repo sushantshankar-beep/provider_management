@@ -1,6 +1,7 @@
 package domain
 
 import "time"
+import "go.mongodb.org/mongo-driver/bson/primitive"
 
 type OTPInfo struct {
 	Code       string     `bson:"code,omitempty" json:"code,omitempty"`
@@ -22,7 +23,7 @@ type ServiceLocation struct {
 type AcceptedService struct {
 	ID                  string     `bson:"_id,omitempty" json:"_id"`
 	InternalID          int64      `bson:"id" json:"id"`
-	ServiceRequestID    string     `bson:"serviceRequest" json:"service_request_id"`
+    ServiceRequestID primitive.ObjectID `bson:"serviceRequest" json:"-"`
 	ServiceRequestNo    int64      `bson:"serviceRequestId,omitempty" json:"service_request_no,omitempty"`
 	UserID              string     `bson:"user" json:"user_id"`
 	ProviderID          string     `bson:"provider" json:"provider_id"`
