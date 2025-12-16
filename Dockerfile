@@ -1,16 +1,17 @@
 # ---------- Build stage ----------
 FROM golang:1.23-alpine as builder
 
+
 WORKDIR /app
 
-# Install git (needed for go mod)
+# Install git (for go mod)
 RUN apk add --no-cache git
 
-# Copy go mod files first (cache optimization)
+# Cache dependencies
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy full source
+# Copy source
 COPY . .
 
 # Build binary
@@ -22,11 +23,14 @@ FROM alpine:latest
 
 WORKDIR /app
 
+# CA certs for MongoDB Atlas (IMPORTANT)
+RUN apk add --no-cache ca-certificates
+
 # Copy binary only
 COPY --from=builder /app/provider_management .
 
-# Expose app port
+# Expose container port (documentation only)
 EXPOSE 6600
 
-# Run app
+# ✅ IMPORTANT: exec form (inherits env correctly)
 CMD ["./provider_management"]
