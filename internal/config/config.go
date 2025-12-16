@@ -10,19 +10,19 @@ type Config struct {
 }
 
 func Load() Config {
+	port := getEnv("PORT", "8080")
+
 	return Config{
-		// MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		// MongoDBName: getEnv("MONGO_DB", "provider_db"),
-		MongoURI:  getEnv("MONGO_URI", "mongodb+srv://apps_db_user:PbCklZTgDHXzHUMk@cluster0.3yf1adk.mongodb.net/?appName=Cluster0"),
-		MongoDBName:    getEnv("DB_NAME", "test"),
-		// RabbitURL:   getEnv("RABBIT_URL", "amqp://guest:guest@localhost:5672/"),
-		HTTPAddr:    getEnv("HTTP_ADDR", ":8080"),
+		MongoURI:    getEnv("MONGO_URI", ""),
+		MongoDBName: getEnv("MONGO_DB", "test"),
+		RabbitURL:   getEnv("RABBIT_URL", ""),
+		HTTPAddr:    ":" + port,
 	}
 }
 
-func getEnv(k, d string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
+func getEnv(key, defaultVal string) string {
+	if val, ok := os.LookupEnv(key); ok && val != "" {
+		return val
 	}
-	return d
+	return defaultVal
 }

@@ -15,11 +15,15 @@ import (
 	"provider_management/internal/logger"
 	"provider_management/internal/repository"
 	"provider_management/internal/service"
+	"github.com/joho/godotenv"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+        log.Println("⚠️ .env not loaded:", err)
+    }
 	cfg := config.Load()
 	logg := logger.NewLogger()
 
