@@ -74,7 +74,7 @@ type DetailedBookingResponse struct {
 	ProviderName       string                  `json:"providerName"`
 	ProviderPhone      string                  `json:"providerPhone"`
 	MechanicType       []string                `json:"mechanicType"`
-	Rating             *RatingsSummary         `json:"rating,omitempty"`
+	Rating             *RatingsSummary         `json:"rating"`
 	VehicleType        string                  `json:"vehicleType"`
 	VehicleNumber      string                  `json:"vehicleNumber"`
 	Brand              string                  `json:"brand"`
@@ -89,23 +89,23 @@ type DetailedBookingResponse struct {
 	Status             string                  `json:"status"`
 	Amount             float64                 `json:"amount"`
 	PaymentStatus      string                  `json:"paymentStatus"`
-	PaymentDetails     *PaymentDetailsInfo     `json:"paymentDetails,omitempty"`
+	PaymentDetails     *PaymentDetailsInfo     `json:"paymentDetails"`
 	EstimatedTime      *EstimatedTimeInfo      `json:"estimatedTime,omitempty"`
 	Distance           string                  `json:"distance,omitempty"`
-	OTP                *OTPInfo                `json:"otp,omitempty"`
-	Timeline           *TimelineInfo           `json:"timeline,omitempty"`
-	UserRating         *RatingInfo             `json:"userRating,omitempty"`
-	ProviderRating     *RatingInfo             `json:"providerRating,omitempty"`
-	UserComplaint      *ComplaintInfo          `json:"userComplaint,omitempty"`
-	ProviderComplaint  *ComplaintInfo          `json:"providerComplaint,omitempty"`
-	TransactionDetails *TransactionDetailsInfo `json:"transactionDetails,omitempty"`
-	ProviderEarnings   *ProviderEarningsInfo   `json:"providerEarnings,omitempty"`
-	AllBookings        []BookingSummary        `json:"allBookings,omitempty"`
+	OTP                *OTPInfo                `json:"otp"`
+	Timeline           *TimelineInfo           `json:"timeline"`
+	UserRating         *RatingInfo             `json:"userRating"`
+	ProviderRating     *RatingInfo             `json:"providerRating"`
+	UserComplaint      *ComplaintInfo          `json:"userComplaint"`
+	ProviderComplaint  *ComplaintInfo          `json:"providerComplaint"`
+	TransactionDetails *TransactionDetailsInfo `json:"transactionDetails"`
+	ProviderEarnings   *ProviderEarningsInfo   `json:"providerEarnings"`
+	AllBookings        []BookingSummary        `json:"allBookings"`
 }
 
 type RatingsSummary struct {
-	User     int `json:"user"`
-	Provider int `json:"provider"`
+	User     float64 `json:"user"`
+	Provider float64 `json:"provider"`
 }
 
 type PaymentDetailsInfo struct {
@@ -124,16 +124,17 @@ type EstimatedTimeInfo struct {
 type OTPInfo struct {
 	Verified   bool       `json:"verified"`
 	Code       string     `json:"code"`
-	VerifiedAt *time.Time `json:"verifiedAt,omitempty"`
+	VerifiedAt *time.Time `json:"verifiedAt"`
 }
 
 type TimelineInfo struct {
 	CreatedAt     time.Time  `json:"createdAt"`
-	ReachedAt     *time.Time `json:"reachedAt,omitempty"`
-	StartedAt     *time.Time `json:"startedAt,omitempty"`
-	CompletedAt   *time.Time `json:"completedAt,omitempty"`
-	OTPVerifiedAt *time.Time `json:"otpVerifiedAt,omitempty"`
-	JobStartedAt  *time.Time `json:"jobStartedAt,omitempty"`
+	ReachedAt     *time.Time `json:"reachedAt"`
+	StartedAt     *time.Time `json:"startedAt"`
+	CompletedAt   *time.Time `json:"completedAt"`
+	CancelledAt   *time.Time `json:"cancelledAt,omitempty"`
+	OTPVerifiedAt *time.Time `json:"otpVerifiedAt"`
+	JobStartedAt  *time.Time `json:"jobStartedAt"`
 }
 
 type RatingInfo struct {
@@ -146,12 +147,13 @@ type RatingInfo struct {
 }
 
 type ComplaintInfo struct {
-	ID        string    `json:"id"`
-	RaisedBy  string    `json:"raisedBy"`
-	Problem   string    `json:"problem"`
-	Photos    []string  `json:"photos"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID          string    `json:"id"`
+	ComplaintID string    `json:"complaintId"`
+	RaisedBy    string    `json:"raisedBy"`
+	Problem     string    `json:"problem"`
+	Photos      []string  `json:"photos"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type TransactionDetailsInfo struct {
@@ -164,14 +166,14 @@ type TransactionDetailsInfo struct {
 }
 
 type ProviderEarningsInfo struct {
-	UserPaid            float64         `json:"userPaid"`
-	Commission          CommissionInfo  `json:"commission"`
-	GST                 GSTInfo         `json:"gst"`
-	NetPayout           float64         `json:"netPayout"`
-	PayoutStatus        string          `json:"payoutStatus"`
-	PaymentMode         string          `json:"paymentMode"`
-	ExpectedTime        string          `json:"expectedTime"`
-	ExpectedPayoutDate  time.Time       `json:"expectedPayoutDate"`
+	UserPaid           float64        `json:"userPaid"`
+	Commission         CommissionInfo `json:"commission"`
+	GST                GSTInfo        `json:"gst"`
+	NetPayout          float64        `json:"netPayout"`
+	PayoutStatus       string         `json:"payoutStatus"`
+	PaymentMode        string         `json:"paymentMode"`
+	ExpectedTime       string         `json:"expectedTime"`
+	ExpectedPayoutDate *time.Time     `json:"expectedPayoutDate"`
 }
 
 type CommissionInfo struct {
@@ -185,9 +187,10 @@ type GSTInfo struct {
 }
 
 type BookingSummary struct {
-	ID        string    `json:"id"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID          string     `json:"id"`
+	Status      string     `json:"status"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	CancelledBy string     `json:"cancelledBy,omitempty"`
 }
 
 
@@ -420,19 +423,37 @@ func (s *AdminBookingService) GetBookingByID(
 		return nil, err
 	}
 
-	svc, err := s.repo.FindAcceptedServiceByServiceRequestID(ctx, sr.ID)
-	if err != nil {
-		return nil, err
+	allServices, _, err := s.repo.FindAcceptedServices(ctx, map[string]interface{}{
+		"serviceRequest": sr.ID,
+	}, 0, 100, "-createdAt")
+	if err != nil || len(allServices) == 0 {
+		return nil, fmt.Errorf("booking not found")
+	}
+
+	svc := allServices[0]
+
+	status := "Confirmed"
+	switch svc.Status {
+	case "not_started":
+		status = "Confirmed"
+	case "started":
+		status = "In Progress"
+	case "completed":
+		status = "Completed"
+	case "cancelled":
+		status = "Cancelled"
+	default:
+		status = "Cancelled by Provider"
 	}
 
 	booking := &DetailedBookingResponse{
 		ID:            svc.ID,
-		BookingID:     fmt.Sprintf("BK%d", sr.InternalID),
+		BookingID:     fmt.Sprintf("BK%03d", sr.InternalID),
 		ProviderID:    svc.ProviderID,
-		Status:        strings.ToLower(svc.Status),
+		Status:        status,
 		Amount:        svc.FinalPrice,
-		PaymentStatus: strings.ToLower(svc.PaymentStatus),
-		ServiceType:   svc.ServiceType,
+		PaymentStatus: svc.PaymentStatus,
+		ServiceType:   sr.ServiceType,
 		BookingDate:   svc.CreatedAt,
 		VehicleType:   sr.VehicleType,
 		VehicleNumber: sr.VehicleNumber,
@@ -445,12 +466,26 @@ func (s *AdminBookingService) GetBookingByID(
 		Location:      sr.Address,
 	}
 
+	addressParts := strings.Split(sr.Address, ",")
+	if len(addressParts) >= 2 {
+		zone := strings.TrimSpace(addressParts[len(addressParts)-2])
+		zone = strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return -1
+			}
+			return r
+		}, zone)
+		booking.Zone = strings.TrimSpace(zone)
+	}
+	if booking.Zone == "" {
+		booking.Zone = "N/A"
+	}
+
 	if user, err := s.repo.FindUserByID(ctx, svc.UserID); err == nil {
-		booking.UserID = fmt.Sprintf("VW%d", user.InternalID)
+		booking.UserID = fmt.Sprintf("VW%06d", user.InternalID)
 		booking.CustomerName = user.Name
 		booking.Phone = user.Phone
 		booking.Email = user.Email
-		booking.Zone = user.SelectedCityName
 	}
 
 	if provider, err := s.repo.FindProviderByID(ctx, svc.ProviderID); err == nil {
@@ -459,14 +494,24 @@ func (s *AdminBookingService) GetBookingByID(
 		booking.MechanicType = provider.VehicleType
 	}
 
-	gstAmount := svc.FinalPrice * 0.18
-	subtotal := svc.FinalPrice - gstAmount
+	basePrice := svc.BasePrice
+	if basePrice == 0 {
+		basePrice = svc.FinalPrice
+	}
+	finalPrice := svc.FinalPrice
+	gstAmount := finalPrice * 0.18
+	subtotal := finalPrice - gstAmount
+	discount := 0.0
+	if basePrice > finalPrice {
+		discount = basePrice - finalPrice
+	}
+
 	booking.PaymentDetails = &PaymentDetailsInfo{
-		ServiceCharge: svc.FinalPrice,
-		Discount:      0,
+		ServiceCharge: basePrice,
+		Discount:      discount,
 		Subtotal:      subtotal,
 		GST:           gstAmount,
-		Total:         svc.FinalPrice,
+		Total:         finalPrice,
 	}
 
 	booking.OTP = &OTPInfo{
@@ -480,30 +525,39 @@ func (s *AdminBookingService) GetBookingByID(
 		ReachedAt:     svc.ReachedAt,
 		StartedAt:     svc.StartedAt,
 		CompletedAt:   svc.CompletedAt,
+		CancelledAt:   svc.CancelledAt,
 		OTPVerifiedAt: svc.OTPVerifiedAt,
 		JobStartedAt:  svc.JobStartedAt,
 	}
 
+	var transaction *domain.Transaction
 	if svc.OrderID != "" {
 		if txn, err := s.repo.FindTransactionByOrderID(ctx, svc.OrderID); err == nil {
-			paymentStatus := "success"
-			if txn.Status != "success" && txn.Status != "completed" {
-				paymentStatus = txn.Status
+			transaction = txn
+			paymentStatus := "failure"
+			if txn.TxnResponse != nil {
+				if respMap, ok := txn.TxnResponse.(map[string]interface{}); ok {
+					if txnStatus, ok := respMap["status"].(string); ok {
+						paymentStatus = txnStatus
+					}
+				}
 			}
+
 			booking.TransactionDetails = &TransactionDetailsInfo{
 				TransactionID:     txn.TxnID,
 				TransactionNumber: txn.InternalID,
 				Amount:            txn.Amount,
-				Status:            strings.ToLower(svc.PaymentStatus),
+				Status:            txn.Status,
 				PaymentStatus:     paymentStatus,
-				PaymentMethod:     strings.ToLower(txn.PaymentSource),
+				PaymentMethod:     txn.PaymentSource,
 			}
 		}
 	}
 
 	ratings, _ := s.repo.FindRatingsByServiceIDs(ctx, []string{svc.ID})
-	userRatingStars := 0
-	providerRatingStars := 0
+	var userRatings []int
+	var providerRatings []int
+
 	for _, rating := range ratings {
 		ratingInfo := &RatingInfo{
 			Stars:             rating.Stars,
@@ -515,29 +569,48 @@ func (s *AdminBookingService) GetBookingByID(
 		}
 		if rating.RaterType == "user" {
 			booking.UserRating = ratingInfo
-			userRatingStars = rating.Stars
+			userRatings = append(userRatings, rating.Stars)
 		} else if rating.RaterType == "provider" {
 			booking.ProviderRating = ratingInfo
-			providerRatingStars = rating.Stars
+			providerRatings = append(providerRatings, rating.Stars)
 		}
 	}
 
-	if userRatingStars > 0 || providerRatingStars > 0 {
-		booking.Rating = &RatingsSummary{
-			User:     userRatingStars,
-			Provider: providerRatingStars,
+	userAvg := 0.0
+	if len(userRatings) > 0 {
+		sum := 0
+		for _, r := range userRatings {
+			sum += r
 		}
+		userAvg = float64(sum) / float64(len(userRatings))
+		userAvg = float64(int(userAvg*10+0.5)) / 10
+	}
+
+	providerAvg := 0.0
+	if len(providerRatings) > 0 {
+		sum := 0
+		for _, r := range providerRatings {
+			sum += r
+		}
+		providerAvg = float64(sum) / float64(len(providerRatings))
+		providerAvg = float64(int(providerAvg*10+0.5)) / 10
+	}
+
+	booking.Rating = &RatingsSummary{
+		User:     userAvg,
+		Provider: providerAvg,
 	}
 
 	if svc.ComplaintUserID != "" {
 		if complaint, err := s.repo.FindComplaintByID(ctx, svc.ComplaintUserID); err == nil {
 			booking.UserComplaint = &ComplaintInfo{
-				ID:        complaint.ID,
-				RaisedBy:  complaint.RaisedBy,
-				Problem:   complaint.Problem,
-				Photos:    complaint.Photos,
-				Status:    complaint.Status,
-				CreatedAt: complaint.CreatedAt,
+				ID:          complaint.ID,
+				ComplaintID: fmt.Sprintf("CMPL%06d", complaint.InternalID),
+				RaisedBy:    complaint.RaisedBy,
+				Problem:     complaint.Problem,
+				Photos:      complaint.Photos,
+				Status:      complaint.Status,
+				CreatedAt:   complaint.CreatedAt,
 			}
 		}
 	}
@@ -545,68 +618,67 @@ func (s *AdminBookingService) GetBookingByID(
 	if svc.ComplaintProviderID != "" {
 		if complaint, err := s.repo.FindComplaintByID(ctx, svc.ComplaintProviderID); err == nil {
 			booking.ProviderComplaint = &ComplaintInfo{
-				ID:        complaint.ID,
-				RaisedBy:  complaint.RaisedBy,
-				Problem:   complaint.Problem,
-				Photos:    complaint.Photos,
-				Status:    complaint.Status,
-				CreatedAt: complaint.CreatedAt,
+				ID:          complaint.ID,
+				ComplaintID: fmt.Sprintf("CMPL%06d", complaint.InternalID),
+				RaisedBy:    complaint.RaisedBy,
+				Problem:     complaint.Problem,
+				Photos:      complaint.Photos,
+				Status:      complaint.Status,
+				CreatedAt:   complaint.CreatedAt,
 			}
 		}
 	}
 
-	commissionPercentage := 20.0
-	if provider, err := s.repo.FindProviderByID(ctx, svc.ProviderID); err == nil {
-		if provider.CommissionPercentage > 0 {
-			commissionPercentage = provider.CommissionPercentage
+	if finalPrice > 0 && transaction != nil && transaction.Status == "paid" {
+		commissionAmount := finalPrice * 0.2
+		netPayout := finalPrice * 0.62
+
+		payoutStatus := "Pending"
+		if transaction.Status == "paid" {
+			payoutStatus = "Completed"
+		} else if transaction.Status == "refunded" {
+			payoutStatus = "Refunded"
+		} else if transaction.Status == "failed" {
+			payoutStatus = "Failed"
+		}
+
+		var expectedPayoutDate *time.Time
+		if transaction.Status == "paid" {
+			date := transaction.CreatedAt.Add(24 * time.Hour)
+			expectedPayoutDate = &date
+		}
+
+		booking.ProviderEarnings = &ProviderEarningsInfo{
+			UserPaid: finalPrice,
+			Commission: CommissionInfo{
+				Percentage: 20,
+				Amount:     commissionAmount,
+			},
+			GST: GSTInfo{
+				Percentage: 18,
+				Amount:     gstAmount,
+			},
+			NetPayout:          netPayout,
+			PayoutStatus:       payoutStatus,
+			PaymentMode:        transaction.PaymentSource,
+			ExpectedTime:       "24 Hours",
+			ExpectedPayoutDate: expectedPayoutDate,
 		}
 	}
 
-	commissionAmount := svc.FinalPrice * (commissionPercentage / 100)
-	gstPercentage := 18.0
-	gstAmountEarnings := svc.FinalPrice * (gstPercentage / 100)
-	netPayout := svc.FinalPrice - commissionAmount - gstAmountEarnings
-
-	payoutStatus := "Pending"
-	if svc.Status == "completed" {
-		payoutStatus = "Completed"
-	}
-
-	expectedPayoutDate := svc.CreatedAt.Add(24 * time.Hour)
-
-	booking.ProviderEarnings = &ProviderEarningsInfo{
-		UserPaid: svc.FinalPrice,
-		Commission: CommissionInfo{
-			Percentage: commissionPercentage,
-			Amount:     commissionAmount,
-		},
-		GST: GSTInfo{
-			Percentage: gstPercentage,
-			Amount:     gstAmountEarnings,
-		},
-		NetPayout:          netPayout,
-		PayoutStatus:       payoutStatus,
-		PaymentMode:        "payu",
-		ExpectedTime:       "24 Hours",
-		ExpectedPayoutDate: expectedPayoutDate,
-	}
-
-	userServices, _, _ := s.repo.FindAcceptedServices(ctx, map[string]interface{}{
-		"user": svc.UserID,
-	}, 0, 100, "-createdAt")
 	var allBookings []BookingSummary
-	for _, service := range userServices {
+	for _, service := range allServices {
 		allBookings = append(allBookings, BookingSummary{
-			ID:        service.ID,
-			Status:    strings.ToLower(service.Status),
-			CreatedAt: service.CreatedAt,
+			ID:          service.ID,
+			Status:      service.Status,
+			CreatedAt:   service.CreatedAt,
+			CancelledBy: service.CancelledBy,
 		})
 	}
 	booking.AllBookings = allBookings
 
 	return booking, nil
 }
-
 
 
 func (s *AdminBookingService) CancelBooking(ctx context.Context, bookingID string) (*DetailedBookingResponse, error) {
