@@ -29,7 +29,6 @@ func Load() Config {
 		MongoDBName: getEnv("MONGO_DB", "provider_db"),
 		RabbitURL:   getEnv("RABBIT_URL", "amqp://guest:guest@localhost:5672/"),
 		HTTPAddr:    getEnv("HTTP_ADDR", ":8080"),
-		HTTPAddr:    ":" + port,
 	}
 }
 
