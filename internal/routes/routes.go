@@ -11,18 +11,17 @@ import (
 
 func SetupRoutes(
 	r *gin.Engine,
+	allowedOrigins []string,
 	complaintHandler *handler.ComplaintHandler,
 	transactionHandler *handler.TransactionHandler,
 	userAdminHandler *handler.UserAdminHandler,
 	providerAdminHandler *handler.ProviderAdminHandler,
 	bookingAdminHandler *handler.AdminBookingHandler,
+	payoutHandler *handler.PayoutHandler,
+    settlementHandler *handler.SettlementHandler,
 ) {
 	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:8002",
-			"http://localhost:5173",
-			"https://api-vahanwire.vahanwire.com",
-		},
+		AllowOrigins: allowedOrigins,
 		AllowMethods: []string{
 			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
 		},
@@ -36,7 +35,7 @@ func SetupRoutes(
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-
+    
 	r.GET("/complaints", complaintHandler.GetAll)
 	r.GET("/complaints/:id", complaintHandler.GetByID)
 	r.POST("/complaints/:id/assessment", complaintHandler.PostAssessment)
@@ -63,5 +62,12 @@ func SetupRoutes(
     r.PUT("/admin/bookings/:bookingId/complete", bookingAdminHandler.MarkBookingCompleted)
     r.GET("/admin/bookings/get-invoice/:serviceId", bookingAdminHandler.GetInvoiceData)
 
+	r.POST("/admin/payouts/6hour",payoutHandler.Create6HourPayout)
+    r.GET("/admin/payouts", payoutHandler.GetPayouts)
+    r.GET("/admin/payouts/:id/services", payoutHandler.GetPayoutServices)
+    r.GET("/admin/payouts/:id/provider", payoutHandler.GetPayoutProviderData)
+
+    r.POST("/settlements", settlementHandler.CreateSettlement)
+    r.GET("/allsettlements", settlementHandler.GetSettlements)
 
 }

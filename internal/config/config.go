@@ -1,11 +1,15 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 type Config struct {
-	MongoURI    string
-	MongoDBName string
-	HTTPAddr    string
+	MongoURI       string
+	MongoDBName    string
+	HTTPAddr       string
+	AllowedOrigins []string
 }
 
 func Load() Config {
@@ -14,10 +18,17 @@ func Load() Config {
 		port = "8080"
 	}
 
+	origins := os.Getenv("ALLOWED_ORIGINS")
+	var allowedOrigins []string
+	if origins != "" {
+		allowedOrigins = strings.Split(origins, ",")
+	}
+
 	return Config{
-		MongoURI:    mustEnv("MONGO_URI"),
-		MongoDBName: mustEnv("MONGO_DB"),
-		HTTPAddr:    ":" + port,
+		MongoURI:       mustEnv("MONGO_URI"),
+		MongoDBName:    mustEnv("MONGO_DB"),
+		HTTPAddr:       ":" + port,
+		AllowedOrigins: allowedOrigins,
 	}
 }
 

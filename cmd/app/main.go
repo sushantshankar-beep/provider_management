@@ -40,28 +40,37 @@ func main() {
 	providerRepo := repository.NewProviderRepo(mongoDB)
 	serviceRepo := repository.NewAcceptedServiceRepo(mongoDB)
 	adminBookingRepo := repository.NewAdminBookingRepo(mongoDB)
+	paymentPayoutRepo := repository.NewPaymentPayoutRepo(mongoDB)
+    settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
 
 	complaintService := service.NewComplaintService(complaintRepo, assessmentRepo)
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
 	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo)
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
+	payoutService := service.NewPayoutService( acceptedServiceRepo, paymentPayoutRepo)
+    settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo,providerRepo)
 
 	complaintHandler := handler.NewComplaintHandler(complaintService, logg)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
     adminBookingHandler := handler.NewAdminBookingHandler(adminBookingService)
+	payoutHandler := handler.NewPayoutHandler(payoutService)
+    settlementHandler := handler.NewSettlementHandler(settlementService)
 
 	r := gin.Default()
 
 	routes.SetupRoutes(
 		r,
+		cfg.AllowedOrigins,
 		complaintHandler,
 		transactionHandler,
 		userAdminHandler,
 		providerAdminHandler,
 		adminBookingHandler ,
+		payoutHandler,
+        settlementHandler,
 	)
 	
 

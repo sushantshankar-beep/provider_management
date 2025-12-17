@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-     "log"
 	"provider_management/internal/domain"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -82,7 +81,6 @@ func (r *ProviderRepo) FindOne(ctx context.Context, query bson.M) (*domain.Provi
 	if err := r.col.FindOne(ctx, query).Decode(&provider); err != nil {
 		return nil, err
 	}
-	log.Println("Found provider: %+v", provider)
 	return &provider, nil
 }
 
@@ -228,4 +226,13 @@ func (r *ProviderRepo) CountByStatus(ctx context.Context, query bson.M, statusFi
 	}
 	finalQuery[statusField] = statusValue
 	return r.col.CountDocuments(ctx, finalQuery)
+}
+
+func (r *ProviderRepo) GetProviderByObjectID(ctx context.Context, id primitive.ObjectID) (*domain.Provider, error) {
+	var provider domain.Provider
+	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&provider)
+	if err != nil {
+		return nil, err
+	}
+	return &provider, nil
 }

@@ -163,7 +163,7 @@ func (r *AcceptedServiceRepo) FindByProviderID(ctx context.Context, providerID s
 	var services []domain.Service
 	for _, result := range results {
 		service := domain.Service{
-			ID:               result.ID,
+			ID:               result.ID.Hex(),
 			ServiceRequestID: result.ServiceRequestID.Hex(),
 			Status:           result.Status,
 			ServiceType:      result.ServiceType,
@@ -249,4 +249,86 @@ func (r *AcceptedServiceRepo) FindWithServiceRequest(ctx context.Context, id str
 	}
 
 	return &acceptedService, &serviceRequest, nil
+}
+
+func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
+	ctx context.Context,
+	from, to time.Time,
+) ([]domain.AcceptedService, error) {
+
+	filter := bson.M{
+		"status":        "completed",
+		"paymentStatus": "paid",
+		"completedAt": bson.M{
+			"$gte": from,
+			"$lt":  to,
+		},
+	}
+
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	var services []domain.AcceptedService
+	if err := cursor.All(ctx, &services); err != nil {
+		return nil, err
+	}
+
+	return services, nil
+}
+
+
+func (r *AcceptedServiceRepo) MarkAsSettled(ctx context.Context, serviceIDs []primitive.ObjectID, settlementID primitive.ObjectID) error {
+	now := time.Now()
+	update := bson.M{
+		"$set": bson.M{
+			"isSettled":    true,
+			"settlementId": settlementID,
+			"settledAt":    now,
+			"updatedAt":    now,
+		},
+	}
+	filter := bson.M{"_id": bson.M{"$in": serviceIDs}}
+	_, err := r.col.UpdateMany(ctx, filter, update)
+	return err
+}
+
+func (r *AcceptedServiceRepo) FindCompletedPaidByProvider(ctx context.Context, providerID primitive.ObjectID) ([]*domain.AcceptedService, error) {
+	filter := bson.M{
+		"provider":      providerID,
+		"status":        "completed",
+		"paymentStatus": "paid",
+	}
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var services []*domain.AcceptedService
+	if err := cursor.All(ctx, &services); err != nil {
+		return nil, err
+	}
+	return services, nil
+}
+
+func (r *AcceptedServiceRepo) FindUnsettledByProvider(ctx context.Context, providerID primitive.ObjectID) ([]*domain.AcceptedService, error) {
+	filter := bson.M{
+		"provider":      providerID,
+		"status":        "completed",
+		"paymentStatus": "paid",
+		"isSettled":     false,
+	}
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var services []*domain.AcceptedService
+	if err := cursor.All(ctx, &services); err != nil {
+		return nil, err
+	}
+	return services, nil
 }

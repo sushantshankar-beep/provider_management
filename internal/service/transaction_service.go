@@ -71,7 +71,7 @@ func (s *TransactionService) ListTransactions(ctx context.Context) ([]Transactio
 		if txn.ServiceID != primitive.NilObjectID {
 			service, err := s.services.FindByID(ctx, txn.ServiceID.Hex())
 			if err == nil {
-				resp.BookingID = service.ID
+				resp.BookingID = service.ID.Hex()
 
 				resp.BookingNo = fmt.Sprintf("BK%d", service.ServiceRequestNo)
 			} else {
@@ -116,7 +116,7 @@ func (s *TransactionService) GetTransaction(ctx context.Context, id string) (*Tr
 	if txn.ServiceID != primitive.NilObjectID {
 		service, err := s.services.FindByID(ctx, txn.ServiceID.Hex())
 		if err == nil {
-			resp.BookingID = service.ID
+			resp.BookingID = service.ID.Hex()
 			resp.BookingNo = fmt.Sprintf("BK%d", service.ServiceRequestNo)
 		} else {
 			log.Printf("Failed to fetch service %s: %v", txn.ServiceID.Hex(), err)

@@ -21,12 +21,12 @@ type ServiceLocation struct {
 }
 
 type AcceptedService struct {
-	ID                  string     `bson:"_id,omitempty" json:"_id"`
+	ID         primitive.ObjectID `bson:"_id,omitempty"`
 	InternalID          int64      `bson:"id" json:"id"`
     ServiceRequestID primitive.ObjectID `bson:"serviceRequest" json:"-"`
 	ServiceRequestNo    int64      `bson:"serviceRequestId,omitempty" json:"service_request_no,omitempty"`
 	UserID              string     `bson:"user" json:"user_id"`
-	ProviderID          string     `bson:"provider" json:"provider_id"`
+	ProviderID          primitive.ObjectID   `bson:"provider" json:"provider_id"`
 	AcceptedBidID       string     `bson:"acceptedBid" json:"accepted_bid_id"`
 	NotToSendProviders  []string   `bson:"notToSendProviders,omitempty" json:"not_to_send_providers,omitempty"`
 	OTP                 OTPInfo    `bson:"otp,omitempty" json:"otp,omitempty"`
@@ -42,6 +42,9 @@ type AcceptedService struct {
 	BasePrice           float64    `bson:"basePrice" json:"base_price"`
 	FinalPrice          float64    `bson:"finalPrice" json:"final_price"`
 	PaymentStatus       string     `bson:"paymentStatus" json:"payment_status"`
+	IsSettled           bool       `bson:"isSettled" json:"is_settled"`
+	SettlementID        *primitive.ObjectID `bson:"settlementId,omitempty" json:"settlement_id,omitempty"`
+	SettledAt           *time.Time `bson:"settledAt,omitempty" json:"settled_at,omitempty"`
 	ComplaintUserID     string     `bson:"complaintUser,omitempty" json:"complaint_user_id,omitempty"`
 	ComplaintProviderID string     `bson:"complaintProvider,omitempty" json:"complaint_provider_id,omitempty"`
 	OrderID             string     `bson:"orderId,omitempty" json:"order_id,omitempty"`
