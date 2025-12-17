@@ -31,11 +31,15 @@ func SetupRoutes(
 			"Accept",
 			"Authorization",
 			"ngrok-skip-browser-warning",
+			"X-Requested-With",
+		},
+		ExposeHeaders: []string{
+			"Content-Length",
+			"Authorization",
 		},
 		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		MaxAge: 12 * time.Hour,
 	}))
-    
 	r.GET("/complaints", complaintHandler.GetAll)
 	r.GET("/complaints/:id", complaintHandler.GetByID)
 	r.POST("/complaints/:id/assessment", complaintHandler.PostAssessment)
@@ -67,7 +71,7 @@ func SetupRoutes(
     r.GET("/admin/payouts/:id/services", payoutHandler.GetPayoutServices)
     r.GET("/admin/payouts/:id/provider", payoutHandler.GetPayoutProviderData)
 
-    r.POST("/settlements", settlementHandler.CreateSettlement)
-    r.GET("/allsettlements", settlementHandler.GetSettlements)
+    r.POST("/admin/settlements", settlementHandler.CreateSettlement)
+    r.GET("/admin/allsettlements", settlementHandler.GetSettlements)
 
 }
