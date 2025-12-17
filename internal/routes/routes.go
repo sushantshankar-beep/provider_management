@@ -21,6 +21,7 @@ func SetupRoutes(
 		AllowOrigins: []string{
 			"http://localhost:8002",
 			"http://localhost:5173",
+			"https://api-vahanwire.vahanwire.com",
 		},
 		AllowMethods: []string{
 			"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
