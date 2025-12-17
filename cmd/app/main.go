@@ -15,6 +15,7 @@ import (
 	"provider_management/internal/logger"
 	"provider_management/internal/repository"
 	"provider_management/internal/service"
+	"provider_management/internal/middleware"
 	"github.com/joho/godotenv"
 
 	"github.com/gin-gonic/gin"
@@ -60,6 +61,8 @@ func main() {
     settlementHandler := handler.NewSettlementHandler(settlementService)
 
 	r := gin.Default()
+	r.SetTrustedProxies(nil)
+	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
 
 	routes.SetupRoutes(
 		r,
