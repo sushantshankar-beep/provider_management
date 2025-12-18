@@ -34,6 +34,7 @@ type User struct {
 	Preferences        Preferences  `bson:"preferences,omitempty" json:"preferences,omitempty"`
 	SelectedCity       string       `bson:"selectedCity,omitempty" json:"selected_city,omitempty"`
 	SelectedCityName   string       `bson:"selectedCityName,omitempty" json:"selected_city_name,omitempty"`
+	WalletBalance float64            `bson:"walletBalance" json:"wallet_balance"`
 	IsActive           string       `bson:"isActive" json:"is_active"`
 	CreatedAt          time.Time    `bson:"createdAt" json:"created_at"`
 	UpdatedAt          time.Time    `bson:"updatedAt" json:"updated_at"`

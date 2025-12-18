@@ -15,7 +15,7 @@ func NewUserAdminHandler(svc *service.UserAdminService) *UserAdminHandler {
 	return &UserAdminHandler{svc: svc}
 }
 
-func (h *UserAdminHandler) GetAll(c *gin.Context) {
+func (h *UserAdminHandler) GetAllUsers(c *gin.Context) {
 	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
 	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "10"), 10, 64)
 

@@ -21,7 +21,7 @@ func NewPaymentPayoutRepo(db *mongo.Database) *PaymentPayoutRepo {
 	return &PaymentPayoutRepo{col: db.Collection("payment_payouts")}
 }
 
-func (r *PaymentPayoutRepo) Create( ctx context.Context, payout *domain.PaymentPayout ) error {
+func (r *PaymentPayoutRepo) Create(ctx context.Context, payout *domain.PaymentPayout) error {
 	_, err := r.col.InsertOne(ctx, payout)
 	return err
 }
@@ -72,7 +72,7 @@ func (r *PaymentPayoutRepo) FindByID(
 	}
 
 	var payout domain.PaymentPayout
-    log.Println("IDVSKDJBJK",id);
+	log.Println("IDVSKDJBJK", id)
 	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&payout)
 	if err != nil {
 		return nil, err
@@ -104,22 +104,22 @@ func (r *PaymentPayoutRepo) MarkSettled(
 }
 
 func (r *PaymentPayoutRepo) FindByPayoutID(
-    ctx context.Context,
-    payoutID int64,
+	ctx context.Context,
+	payoutID int64,
 ) (*domain.PaymentPayout, error) {
-    
-    if r == nil || r.col == nil {
-        return nil, fmt.Errorf("payment payout repository not initialized")
-    }
 
-    var payout domain.PaymentPayout
-    err := r.col.FindOne(ctx, bson.M{"payoutId": payoutID}).Decode(&payout)
-    if err != nil {
-        if err == mongo.ErrNoDocuments {
-            return nil, fmt.Errorf("payout with ID %d not found", payoutID)
-        }
-        return nil, fmt.Errorf("failed to find payout: %v", err)
-    }
+	if r == nil || r.col == nil {
+		return nil, fmt.Errorf("payment payout repository not initialized")
+	}
 
-    return &payout, nil
+	var payout domain.PaymentPayout
+	err := r.col.FindOne(ctx, bson.M{"payoutId": payoutID}).Decode(&payout)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("payout with ID %d not found", payoutID)
+		}
+		return nil, fmt.Errorf("failed to find payout: %v", err)
+	}
+
+	return &payout, nil
 }

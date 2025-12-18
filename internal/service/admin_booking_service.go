@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
 	"strconv"
@@ -21,7 +21,7 @@ type AdminBookingService struct {
 
 func NewAdminBookingService(repo *repository.AdminBookingRepo) *AdminBookingService {
 	return &AdminBookingService{repo: repo}
-	
+
 }
 
 type BookingResponse struct {
@@ -300,58 +300,49 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		}
 	}
 
-	// Handle providerId filter like Node.js code
-if providerID := params["providerId"]; providerID != "" {
-    // First, try to find the provider by ID
-    var providerObjectID primitive.ObjectID
-    
-    // Check if it's an ObjectId string
-    if primitive.IsValidObjectID(providerID) {
-        // It's already an ObjectId string
-        providerObjectID, _ = primitive.ObjectIDFromHex(providerID)
-        filter["provider"] = providerObjectID
-    } else {
-        // It might be a providerId field or internal ID
-        // Try to find provider by providerId field
-        if provider, err := s.repo.FindProviderByProviderID(ctx, providerID); err == nil && provider != nil {
-            // Use the provider's _id as ObjectId
-            providerObjectID = provider.ID
-            filter["provider"] = providerObjectID
-        } else {
-            // Try as internal ID
-            if internalID, err := strconv.ParseInt(providerID, 10, 64); err == nil {
-                if provider, err := s.repo.FindProviderByInternalID(ctx, internalID); err == nil && provider != nil {
-                    providerObjectID = provider.ID
-                    filter["provider"] = providerObjectID
-                }
-            }
-        }
-    }
-    
-    // Log for debugging
-    log.Printf("Provider filter: providerID=%s, filter.provider=%v", providerID, filter["provider"])
-}
+	if providerID := params["providerId"]; providerID != "" {
+
+		var providerObjectID primitive.ObjectID
+
+		if primitive.IsValidObjectID(providerID) {
+
+			providerObjectID, _ = primitive.ObjectIDFromHex(providerID)
+			filter["provider"] = providerObjectID
+		} else {
+
+			if provider, err := s.repo.FindProviderByProviderID(ctx, providerID); err == nil && provider != nil {
+
+				providerObjectID = provider.ID
+				filter["provider"] = providerObjectID
+			} else {
+
+				if internalID, err := strconv.ParseInt(providerID, 10, 64); err == nil {
+					if provider, err := s.repo.FindProviderByInternalID(ctx, internalID); err == nil && provider != nil {
+						providerObjectID = provider.ID
+						filter["provider"] = providerObjectID
+					}
+				}
+			}
+		}
+
+		log.Printf("Provider filter: providerID=%s, filter.provider=%v", providerID, filter["provider"])
+	}
+
 	if bookingID := params["bookingId"]; bookingID != "" {
 		cleanID := strings.ReplaceAll(bookingID, "BK", "")
 		if numericID, err := strconv.ParseInt(cleanID, 10, 64); err == nil {
-			if sr, err := s.repo.FindServiceRequestByInternalID(ctx, numericID); err == nil {
-				objID, _ := primitive.ObjectIDFromHex(sr.ID.Hex())
-				filter["serviceRequest"] = objID
-			}
+			filter["id"] = numericID
 		}
 	}
 
 	if search := params["search"]; search != "" {
 		searchConditions := []bson.M{}
 		cleanSearch := strings.ReplaceAll(search, "BK", "")
-		if bookingIDParam := params["bookingId"]; bookingIDParam != "" {
-			cleanID := strings.ReplaceAll(bookingIDParam, "BK", "")
-			if numericID, err := strconv.ParseInt(cleanID, 10, 64); err == nil {
-				if sr, err := s.repo.FindServiceRequestByInternalIDs(ctx, numericID); err == nil {
-					objID, _ := primitive.ObjectIDFromHex(sr.ID.Hex())
-					filter["serviceRequest"] = objID
-				}
-			}
+
+		if bookingID, err := strconv.ParseInt(cleanSearch, 10, 64); err == nil {
+			searchConditions = append(searchConditions, bson.M{
+				"id": bookingID,
+			})
 		}
 
 		cleanSearch = strings.ReplaceAll(search, "VW", "")
@@ -388,7 +379,6 @@ if providerID := params["providerId"]; providerID != "" {
 				"provider": bson.M{"$in": providerIDs},
 			})
 		}
-
 
 		if len(searchConditions) > 0 {
 			filter["$or"] = searchConditions
@@ -447,19 +437,15 @@ if providerID := params["providerId"]; providerID != "" {
 
 	for _, svc := range services {
 
-		var (
-			sr           *domain.ServiceRequest
-			srInternalID int64
-		)
+		var sr *domain.ServiceRequest
 
 		if sreq, err := s.repo.FindServiceRequestByID(ctx, svc.ServiceRequestID.Hex()); err == nil {
 			sr = sreq
-			srInternalID = sreq.InternalID
 		}
 
 		booking := BookingResponse{
 			ID:            svc.ID.Hex(),
-			BookingID:     fmt.Sprintf("BK%d", srInternalID), // ✅ SERVICE REQUEST ID
+			BookingID:     fmt.Sprintf("BK%d", svc.InternalID),
 			ProviderID:    svc.ProviderID.Hex(),
 			Status:        s.mapStatus(svc.Status),
 			Amount:        svc.FinalPrice,
@@ -594,25 +580,25 @@ func (s *AdminBookingService) GetBookingByID(
 	bookingID string,
 ) (*DetailedBookingResponse, error) {
 
-	srIDStr := strings.TrimPrefix(bookingID, "BK")
-	srInternalID, err := strconv.ParseInt(srIDStr, 10, 64)
+	svcIDStr := strings.TrimPrefix(bookingID, "BK")
+	svcInternalID, err := strconv.ParseInt(svcIDStr, 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid booking id")
 	}
 
-	sr, err := s.repo.FindServiceRequestByInternalID(ctx, srInternalID)
-	if err != nil {
-		return nil, err
-	}
+	filter := bson.M{"id": svcInternalID}
 
-	allServices, _, err := s.repo.FindAcceptedServices(ctx, map[string]interface{}{
-		"serviceRequest": sr.ID,
-	}, 0, 100, "-createdAt")
+	allServices, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 100, "-createdAt")
 	if err != nil || len(allServices) == 0 {
 		return nil, fmt.Errorf("booking not found")
 	}
 
 	svc := allServices[0]
+
+	sr, err := s.repo.FindServiceRequestByID(ctx, svc.ServiceRequestID.Hex())
+	if err != nil {
+		sr = &domain.ServiceRequest{}
+	}
 
 	status := "Confirmed"
 	switch svc.Status {
@@ -630,12 +616,12 @@ func (s *AdminBookingService) GetBookingByID(
 
 	booking := &DetailedBookingResponse{
 		ID:            svc.ID.Hex(),
-		BookingID:     fmt.Sprintf("BK%03d", sr.InternalID),
+		BookingID:     fmt.Sprintf("BK%d", svc.InternalID),
 		ProviderID:    svc.ProviderID.Hex(),
 		Status:        status,
 		Amount:        svc.FinalPrice,
 		PaymentStatus: svc.PaymentStatus,
-		ServiceType:   sr.ServiceType,
+		ServiceType:   svc.ServiceType,
 		BookingDate:   svc.CreatedAt,
 		VehicleType:   sr.VehicleType,
 		VehicleNumber: sr.VehicleNumber,
@@ -863,118 +849,99 @@ func (s *AdminBookingService) GetBookingByID(
 }
 
 func (s *AdminBookingService) CancelBooking(ctx context.Context, bookingID string) (*DetailedBookingResponse, error) {
-    cleanID := strings.TrimPrefix(bookingID, "BK")
-    srInternalID, err := strconv.ParseInt(cleanID, 10, 64)
-    if err != nil {
-        return nil, fmt.Errorf("invalid booking id")
-    }
-    
-    sr, err := s.repo.FindServiceRequestByInternalID(ctx, srInternalID)
-    if err != nil {
-        return nil, fmt.Errorf("booking not found")
-    }
-    
-    filter := bson.M{
-        "serviceRequest": sr.ID,
-        "status": bson.M{"$nin": []string{"completed", "cancelled"}},
-    }
-    
-    services, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 1, "-createdAt")
-    if err != nil {
-        return nil, fmt.Errorf("error finding booking: %v", err)
-    }
-    
-    if len(services) == 0 {
-        return nil, fmt.Errorf("active booking not found")
-    }
-    
-    svc := services[0]
-    
-    if svc.Status == "cancelled" {
-        return nil, fmt.Errorf("booking already cancelled")
-    }
-    if svc.Status == "completed" {
-        return nil, fmt.Errorf("cannot cancel completed booking")
-    }
-    
-    now := time.Now()
-    update := bson.M{
-        "status":      "cancelled",
-        "cancelledBy": "admin",
-        "cancelledAt": now,
-        "updatedAt":   now,
-    }
-    
-    _, err = s.repo.UpdateAcceptedService(ctx, svc.ID.Hex(), update)
-    if err != nil {
-        return nil, err
-    }
-    
-    if svc.ProviderID.Hex() != "" {
-        err = s.repo.UpdateProviderIsAssigned(ctx, svc.ProviderID.Hex(), false)
-        if err != nil {
-            log.Printf("Failed to update provider status: %v", err)
-        }
-    }
-    
-    return s.GetBookingByID(ctx, bookingID)
+	svcIDStr := strings.TrimPrefix(bookingID, "BK")
+	svcInternalID, err := strconv.ParseInt(svcIDStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid booking id")
+	}
+	filter := bson.M{"id": svcInternalID}
+	services, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 1, "-createdAt")
+	if err != nil {
+		return nil, fmt.Errorf("error finding booking: %v", err)
+	}
+
+	if len(services) == 0 {
+		return nil, fmt.Errorf("booking not found")
+	}
+
+	svc := services[0]
+
+	if svc.Status == "cancelled" {
+		return nil, fmt.Errorf("booking already cancelled")
+	}
+	if svc.Status == "completed" {
+		return nil, fmt.Errorf("cannot cancel completed booking")
+	}
+
+	now := time.Now()
+	update := bson.M{
+		"status":      "cancelled",
+		"cancelledBy": "admin",
+		"cancelledAt": now,
+		"updatedAt":   now,
+	}
+
+	_, err = s.repo.UpdateAcceptedService(ctx, svc.ID.Hex(), update)
+	if err != nil {
+		return nil, err
+	}
+
+	if svc.ProviderID.Hex() != "" {
+		err = s.repo.UpdateProviderIsAssigned(ctx, svc.ProviderID.Hex(), false)
+		if err != nil {
+			log.Printf("Failed to update provider status: %v", err)
+		}
+	}
+
+	return s.GetBookingByID(ctx, bookingID)
 }
 
 func (s *AdminBookingService) MarkBookingCompleted(ctx context.Context, bookingID string) (*DetailedBookingResponse, error) {
-    cleanID := strings.TrimPrefix(bookingID, "BK")
-    srInternalID, err := strconv.ParseInt(cleanID, 10, 64)
-    if err != nil {
-        return nil, fmt.Errorf("invalid booking id")
-    }
-    
-    sr, err := s.repo.FindServiceRequestByInternalID(ctx, srInternalID)
-    if err != nil {
-        return nil, fmt.Errorf("booking not found")
-    }
-    
-    filter := bson.M{
-        "serviceRequest": sr.ID,
-        "status": bson.M{"$nin": []string{"completed", "cancelled"}},
-    }
-    
-    services, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 1, "-createdAt")
-    if err != nil {
-        return nil, fmt.Errorf("error finding booking: %v", err)
-    }
-    
-    if len(services) == 0 {
-        return nil, fmt.Errorf("active booking not found")
-    }
-    
-    svc := services[0]
-    
-    if svc.Status == "completed" {
-        return nil, fmt.Errorf("booking already completed")
-    }
-    if svc.Status == "cancelled" {
-        return nil, fmt.Errorf("cannot complete cancelled booking")
-    }
-    
-    now := time.Now()
-    update := bson.M{
-        "status":      "completed",
-        "completedAt": now,
-        "updatedAt":   now,
-    }
-    
-    _, err = s.repo.UpdateAcceptedService(ctx, svc.ID.Hex(), update)
-    if err != nil {
-        return nil, err
-    }
-    
-    if svc.ProviderID.Hex() != "" {
-        err = s.repo.UpdateProviderIsAssigned(ctx, svc.ProviderID.Hex(), false)
-        if err != nil {
-            log.Printf("Failed to update provider status: %v", err)
-        }
-    }
-    
-    return s.GetBookingByID(ctx, bookingID)
+	svcIDStr := strings.TrimPrefix(bookingID, "BK")
+	svcInternalID, err := strconv.ParseInt(svcIDStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid booking id")
+	}
+
+	filter := bson.M{"id": svcInternalID}
+	services, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 1, "-createdAt")
+	if err != nil {
+		return nil, fmt.Errorf("error finding booking: %v", err)
+	}
+
+	if len(services) == 0 {
+		return nil, fmt.Errorf("booking not found")
+	}
+
+	svc := services[0]
+
+	if svc.Status == "completed" {
+		return nil, fmt.Errorf("booking already completed")
+	}
+	if svc.Status == "cancelled" {
+		return nil, fmt.Errorf("cannot complete cancelled booking")
+	}
+
+	now := time.Now()
+	update := bson.M{
+		"status":      "completed",
+		"completedAt": now,
+		"updatedAt":   now,
+	}
+
+	_, err = s.repo.UpdateAcceptedService(ctx, svc.ID.Hex(), update)
+	if err != nil {
+		return nil, err
+	}
+
+	if svc.ProviderID.Hex() != "" {
+		err = s.repo.UpdateProviderIsAssigned(ctx, svc.ProviderID.Hex(), false)
+		if err != nil {
+			log.Printf("Failed to update provider status: %v", err)
+		}
+	}
+
+	return s.GetBookingByID(ctx, bookingID)
 }
 
 func (s *AdminBookingService) mapStatus(status string) string {
@@ -1059,9 +1026,9 @@ func (s *AdminBookingService) GetInvoiceData(
 
 	invoiceSuffix := svc.ID.Hex()
 
-if len(invoiceSuffix) >= 8 {
-	invoiceSuffix = invoiceSuffix[len(invoiceSuffix)-8:]
-}
+	if len(invoiceSuffix) >= 8 {
+		invoiceSuffix = invoiceSuffix[len(invoiceSuffix)-8:]
+	}
 
 	invoice := &InvoiceData{
 		InvoiceNumber: fmt.Sprintf("INV-%s", strings.ToUpper(invoiceSuffix)),

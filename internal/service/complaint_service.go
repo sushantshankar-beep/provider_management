@@ -3,63 +3,57 @@ package service
 import (
 	"context"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
 	"strconv"
+	"strings"
 	"time"
 )
 
-type ComplaintService interface {
-	CreateComplaint(ctx context.Context, req CreateComplaintRequest) (*domain.Complaint, error)
-	GetComplaint(ctx context.Context, id string) (*domain.Complaint, error)
-	ListComplaints(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error)
-	AssessComplaint(ctx context.Context, complaintID string, req AssessComplaintRequest) error
-	UpdateComplaintStatus(ctx context.Context, complaintID string, status string, adminID string) error
-	AddNote(ctx context.Context, complaintID string, req AddNoteRequest) error
-	GetComplaintStats(ctx context.Context) (*domain.ComplaintStats, error)
-}
-
-type complaintService struct {
-	complaintRepo       repository.ComplaintRepository
-	acceptedServiceRepo repository.AcceptedServiceRepo
-	userRepo            repository.UserRepo
-	providerRepo        repository.ProviderRepo
-	refundService       RefundService
-	payoutService       PayoutServices
+type ComplaintService struct {
+	complaintRepo       *repository.ComplaintRepository
+	acceptedServiceRepo *repository.AcceptedServiceRepo
+	userRepo            *repository.UserRepo
+	providerRepo        *repository.ProviderRepo
+	refundService       *RefundService
+	payoutService       *PayoutService
 }
 
 type CreateComplaintRequest struct {
 	AcceptedServiceID string   `json:"accepted_service_id"`
-	RaisedBy          string   `json:"raised_by"` // "user" or "provider"
+	RaisedBy          string   `json:"raised_by"`
 	Problem           string   `json:"problem"`
 	Photos            []string `json:"photos,omitempty"`
 	Category          string   `json:"category,omitempty"`
 }
 
 type AssessComplaintRequest struct {
-	FaultParty       domain.FaultParty `json:"fault_party"`
-	RefundToUser     domain.RefundType `json:"refund_to_user"`
+	FaultParty       domain.FaultParty `json:"fault_party" binding:"required"`
+	RefundToUser     domain.RefundType `json:"refund_to_user" binding:"required"`
 	RefundAmount     float64           `json:"refund_amount,omitempty"`
-	PayoutToProvider domain.PayoutType `json:"payout_to_provider"`
+	PayoutToProvider domain.PayoutType `json:"payout_to_provider" binding:"required"`
 	PayoutAmount     float64           `json:"payout_amount,omitempty"`
 	Remarks          string            `json:"remarks,omitempty"`
 	AssessedBy       string            `json:"assessed_by"`
 }
 
 type AddNoteRequest struct {
-	Content string `json:"content"`
-	AddedBy string `json:"added_by"`
+	Content string `json:"content" binding:"required"`
+	AddedBy string `json:"addedBy" binding:"required"`
 }
 
 func NewComplaintService(
-	complaintRepo repository.ComplaintRepository,
-	acceptedServiceRepo repository.AcceptedServiceRepo,
-	userRepo repository.UserRepo,
-	providerRepo repository.ProviderRepo,
-	refundService RefundService,
-	payoutService PayoutServices,
-) ComplaintService {
-	return &complaintService{
+	complaintRepo *repository.ComplaintRepository,
+	acceptedServiceRepo *repository.AcceptedServiceRepo,
+	userRepo *repository.UserRepo,
+	providerRepo *repository.ProviderRepo,
+	refundService *RefundService,
+	payoutService *PayoutService,
+) *ComplaintService {
+	return &ComplaintService{
 		complaintRepo:       complaintRepo,
 		acceptedServiceRepo: acceptedServiceRepo,
 		userRepo:            userRepo,
@@ -69,84 +63,99 @@ func NewComplaintService(
 	}
 }
 
-func (s *complaintService) CreateComplaint(ctx context.Context, req CreateComplaintRequest) (*domain.Complaint, error) {
-	// Get accepted service details
-	// acceptedService, err := s.acceptedServiceRepo.GetByID(ctx, req.AcceptedServiceID)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get accepted service: %w", err)
-	// }
+func (s *ComplaintService) GetComplaint(ctx context.Context, id string) (*domain.Complaint, error) {
 
-	// complaint := &domain.Complaint{
-	// 	AcceptedServiceID: req.AcceptedServiceID,
-	// 	AcceptedServiceNo: acceptedService.InternalID,
-	// 	RaisedBy:          req.RaisedBy,
-	// 	Problem:           req.Problem,
-	// 	Photos:            req.Photos,
-	// 	Status:            "pending",
-	// 	Category:          req.Category,
-	// 	Timeline: domain.ComplaintTimeline{
-	// 		Initiated: timePtr(time.Now()),
-	// 	},
-	// }
+	cleanID := strings.TrimPrefix(id, "CMP")
 
-	// Set UserID and ProviderID from accepted service
-	// complaint.UserID = acceptedService.UserID
-	// complaint.ProviderID = acceptedService.ProviderID.Hex()
+	log.Printf("GetComplaint - Original ID: %s, Clean ID: %s", id, cleanID)
 
-	// // Fetch and set user name
-	// user, err := s.userRepo.GetByID(ctx, acceptedService.UserID)
-	// if err == nil && user != nil {
-	// 	complaint.UserName = user.Name
-	// }
-
-	// // Fetch and set provider name
-	// provider, err := s.providerRepo.GetByID(ctx, acceptedService.ProviderID.Hex())
-	// if err == nil && provider != nil {
-	// 	complaint.ProviderName = provider.Name
-	// }
-
-	// // Set booking number (using AcceptedServiceNo)
-	// complaint.BookingNumber = fmt.Sprintf("BKG-%d", acceptedService.InternalID)
-
-	// // Create complaint
-	// if err := s.complaintRepo.Create(ctx, complaint); err != nil {
-	// 	return nil, fmt.Errorf("failed to create complaint: %w", err)
-	// }
-
-	// return complaint, nil
-}
-
-func (s *complaintService) GetComplaint(ctx context.Context, id string) (*domain.Complaint, error) {
-	// Try to get by ID string
-	complaint, err := s.complaintRepo.GetByID(ctx, id)
-	if err == nil {
-		return complaint, nil
+	if primitive.IsValidObjectID(cleanID) {
+		complaint, err := s.complaintRepo.GetByID(ctx, cleanID)
+		if err == nil {
+			log.Printf("Found complaint by MongoDB ObjectID: %s", cleanID)
+			return complaint, nil
+		}
+		log.Printf("Not found by ObjectID, trying internal ID. Error: %v", err)
 	}
 
-	// Try to parse as internal ID (integer)
-	if internalID, parseErr := strconv.ParseInt(id, 10, 64); parseErr == nil {
-		return s.complaintRepo.GetByInternalID(ctx, internalID)
+	if internalID, parseErr := strconv.ParseInt(cleanID, 10, 64); parseErr == nil {
+		log.Printf("Trying to find by internal ID: %d", internalID)
+		complaint, err := s.complaintRepo.GetByInternalID(ctx, internalID)
+		if err == nil {
+			log.Printf("Found complaint by internal ID: %d, MongoDB _id: %s", internalID, complaint.ID)
+			return complaint, nil
+		}
+		log.Printf("Not found by internal ID. Error: %v", err)
 	}
 
-	return nil, fmt.Errorf("complaint not found")
+	return nil, fmt.Errorf("complaint not found with ID: %s", id)
 }
 
-func (s *complaintService) ListComplaints(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error) {
+func (s *ComplaintService) GetComplaintWithDetails(ctx context.Context, id string) (*domain.ComplaintWithDetails, error) {
+	complaint, err := s.GetComplaint(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	complaintWithDetails := &domain.ComplaintWithDetails{
+		Complaint: *complaint,
+	}
+
+	if complaint.UserID != "" {
+		user, err := s.userRepo.FindByID(ctx, complaint.UserID)
+		if err != nil {
+			log.Printf("Warning: Could not fetch user details for ID %s: %v", complaint.UserID, err)
+		} else {
+			complaintWithDetails.UserDetails = &domain.UserDetails{
+				ID:    user.ID,
+				Name:  user.Name,
+				Email: user.Email,
+				Phone: user.Phone,
+			}
+		}
+	}
+
+	if complaint.ProviderID != "" {
+		provider, err := s.providerRepo.FindByID(ctx, complaint.ProviderID)
+		if err != nil {
+			log.Printf("Warning: Could not fetch provider details for ID %s: %v", complaint.ProviderID, err)
+		} else {
+			complaintWithDetails.ProviderDetails = &domain.ProviderDetails{
+				ID:          provider.ID.Hex(),
+				Name:        provider.Name,
+				Email:       provider.Email,
+				Phone:       provider.Phone,
+				CompanyName: provider.CompanyName,
+			}
+		}
+	}
+
+	return complaintWithDetails, nil
+}
+
+func (s *ComplaintService) ListComplaints(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error) {
 	return s.complaintRepo.List(ctx, filter)
 }
 
-func (s *complaintService) AssessComplaint(ctx context.Context, complaintID string, req AssessComplaintRequest) error {
-	// Get complaint
+func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID string, req AssessComplaintRequest) error {
+
 	complaint, err := s.GetComplaint(ctx, complaintID)
 	if err != nil {
 		return fmt.Errorf("failed to get complaint: %w", err)
 	}
 
-	if complaint.Status != "in_review" {
-		return fmt.Errorf("complaint must be in review status to assess")
+	if complaint.Status != "initiated" {
+		return fmt.Errorf("complaint must be in initiated status to assess, current status: %s", complaint.Status)
 	}
 
-	// Create assessment
+	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount <= 0 {
+		return fmt.Errorf("refund_amount must be greater than 0 when refund_to_user is not 'none'")
+	}
+
+	if req.PayoutToProvider != domain.PayoutTypeNone && req.PayoutAmount <= 0 {
+		return fmt.Errorf("payout_amount must be greater than 0 when payout_to_provider is not 'none'")
+	}
+
 	assessment := domain.ComplaintAssessment{
 		FaultParty:       req.FaultParty,
 		RefundToUser:     req.RefundToUser,
@@ -157,43 +166,42 @@ func (s *complaintService) AssessComplaint(ctx context.Context, complaintID stri
 		AssessedBy:       req.AssessedBy,
 	}
 
-	// Save assessment
+	log.Printf("AssessComplaint - Saving assessment using MongoDB _id: %s", complaint.ID)
 	if err := s.complaintRepo.SaveAssessment(ctx, complaint.ID, assessment); err != nil {
+		log.Printf("AssessComplaint - Failed to save assessment: %v", err)
 		return fmt.Errorf("failed to save assessment: %w", err)
 	}
 
-	// Update status to resolved
+	log.Printf("AssessComplaint - Updating status to resolved")
 	if err := s.complaintRepo.UpdateStatus(ctx, complaint.ID, "resolved"); err != nil {
+		log.Printf("AssessComplaint - Failed to update status: %v", err)
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
-	// Process refund if applicable
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount > 0 {
+		log.Printf("AssessComplaint - Processing refund of %.2f for user %s", req.RefundAmount, complaint.UserID)
 		if err := s.refundService.ProcessRefund(ctx, RefundRequest{
 			UserID:      complaint.UserID,
 			Amount:      req.RefundAmount,
 			Reason:      fmt.Sprintf("Complaint ID %d - %s", complaint.InternalID, req.Remarks),
 			ComplaintID: complaint.ID,
 		}); err != nil {
-			// Log error but don't fail the assessment
-			fmt.Printf("failed to process refund: %v\n", err)
+			log.Printf("Warning: Failed to process refund: %v", err)
 		}
 	}
 
-	// Process payout if applicable
-	if req.PayoutToProvider != domain.PayoutTypeNone && req.PayoutAmount > 0 {
-		if err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
-			ProviderID:  complaint.ProviderID,
-			Amount:      req.PayoutAmount,
-			Reason:      fmt.Sprintf("Complaint ID %d - %s", complaint.InternalID, req.Remarks),
-			ComplaintID: complaint.ID,
-		}); err != nil {
-			// Log error but don't fail the assessment
-			fmt.Printf("failed to process payout: %v\n", err)
-		}
-	}
+	// if req.PayoutToProvider != domain.PayoutTypeNone && req.PayoutAmount > 0 {
+	// 	log.Printf("AssessComplaint - Processing payout of %.2f for provider %s", req.PayoutAmount, complaint.ProviderID)
+	// 	if err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
+	// 		ProviderID:  complaint.ProviderID,
+	// 		Amount:      req.PayoutAmount,
+	// 		Reason:      fmt.Sprintf("Complaint ID %d - %s", complaint.InternalID, req.Remarks),
+	// 		ComplaintID: complaint.ID,
+	// 	}); err != nil {
+	// 		log.Printf("Warning: Failed to process payout: %v", err)
+	// 	}
+	// }
 
-	// Add actions triggered
 	actions := []string{}
 	if req.RefundToUser != domain.RefundTypeNone {
 		actions = append(actions, "Refund sent to Refund Management module")
@@ -203,61 +211,98 @@ func (s *complaintService) AssessComplaint(ctx context.Context, complaintID stri
 	}
 
 	if len(actions) > 0 {
-		if err := s.complaintRepo.Update(ctx, complaint.ID, map[string]interface{}{
+		log.Printf("AssessComplaint - Updating triggered actions: %v", actions)
+		if err := s.complaintRepo.Update(ctx, complaint.ID, bson.M{
 			"actionsTriggered": actions,
 		}); err != nil {
-			fmt.Printf("failed to update actions: %v\n", err)
+			log.Printf("Warning: Failed to update actions: %v", err)
 		}
+	}
+
+	log.Printf("AssessComplaint - Assessment completed successfully")
+	return nil
+}
+
+func (s *ComplaintService) UpdateComplaintStatus(ctx context.Context, complaintID string, status string, adminID string) error {
+	log.Printf("UpdateComplaintStatus - Starting for complaint ID: %s, new status: %s", complaintID, status)
+
+	complaint, err := s.GetComplaint(ctx, complaintID)
+	if err != nil {
+		log.Printf("UpdateComplaintStatus - Failed to get complaint: %v", err)
+		return fmt.Errorf("failed to get complaint: %w", err)
+	}
+
+	log.Printf("UpdateComplaintStatus - Found complaint with MongoDB _id: %s", complaint.ID)
+
+	validStatuses := []string{"initiated", "in_review", "resolved", "cancelled"}
+	isValid := false
+	for _, vs := range validStatuses {
+		if status == vs {
+			isValid = true
+			break
+		}
+	}
+	if !isValid {
+		return fmt.Errorf("invalid status: %s", status)
+	}
+
+	now := time.Now()
+	updateData := bson.M{
+		"updatedByAdmin": adminID,
+		"adminUpdatedAt": now,
+	}
+
+	log.Printf("UpdateComplaintStatus - Updating admin info using MongoDB _id: %s", complaint.ID)
+	if err := s.complaintRepo.Update(ctx, complaint.ID, updateData); err != nil {
+		log.Printf("UpdateComplaintStatus - Failed to update admin info: %v", err)
+		return fmt.Errorf("failed to update admin info: %w", err)
+	}
+
+	log.Printf("UpdateComplaintStatus - Updating status")
+	if err := s.complaintRepo.UpdateStatus(ctx, complaint.ID, status); err != nil {
+		log.Printf("UpdateComplaintStatus - Failed to update status: %v", err)
+		return fmt.Errorf("failed to update status: %w", err)
+	}
+
+	log.Printf("UpdateComplaintStatus - Status updated successfully")
+	return nil
+}
+
+func (s *ComplaintService) AddNote(ctx context.Context, complaintID string, req AddNoteRequest) error {
+	log.Printf("AddNote - Complaint ID: %s, Request: %+v", complaintID, req)
+
+	if _, err := primitive.ObjectIDFromHex(complaintID); err != nil {
+		return fmt.Errorf("invalid complaint ID format: %w", err)
+	}
+
+	if req.Content == "" {
+		return fmt.Errorf("note content cannot be empty")
+	}
+
+	if req.AddedBy == "" {
+		return fmt.Errorf("addedBy field is required")
+	}
+
+	note := domain.ComplaintNote{
+		ID:        primitive.NewObjectID().Hex(),
+		Content:   req.Content,
+		AddedBy:   req.AddedBy,
+		CreatedAt: time.Now(),
+	}
+
+	log.Printf("Creating note: %+v", note)
+
+	err := s.complaintRepo.AddNote(ctx, complaintID, note)
+	if err != nil {
+		log.Printf("Repository error: %v", err)
+		return fmt.Errorf("failed to add note to complaint: %w", err)
 	}
 
 	return nil
 }
 
-func (s *complaintService) UpdateComplaintStatus(ctx context.Context, complaintID string, status string, adminID string) error {
-	complaint, err := s.GetComplaint(ctx, complaintID)
-	if err != nil {
-		return fmt.Errorf("failed to get complaint: %w", err)
-	}
-
-	// Update admin info
-	now := time.Now()
-	updateData := map[string]interface{}{
-		"updatedByAdmin": adminID,
-		"adminUpdatedAt": now,
-	}
-
-	if err := s.complaintRepo.Update(ctx, complaint.ID, updateData); err != nil {
-		return fmt.Errorf("failed to update admin info: %w", err)
-	}
-
-	return s.complaintRepo.UpdateStatus(ctx, complaint.ID, status)
-}
-
-func (s *complaintService) AddNote(ctx context.Context, complaintID string, req AddNoteRequest) error {
-	complaint, err := s.GetComplaint(ctx, complaintID)
-	if err != nil {
-		return fmt.Errorf("failed to get complaint: %w", err)
-	}
-
-	note := domain.ComplaintNote{
-		Content: req.Content,
-		AddedBy: req.AddedBy,
-	}
-
-	return s.complaintRepo.AddNote(ctx, complaint.ID, note)
-}
-
-func (s *complaintService) GetComplaintStats(ctx context.Context) (*domain.ComplaintStats, error) {
+func (s *ComplaintService) GetComplaintStats(ctx context.Context) (*domain.ComplaintStats, error) {
 	return s.complaintRepo.GetStats(ctx)
-}
-
-func timePtr(t time.Time) *time.Time {
-	return &t
-}
-
-// Placeholder interfaces - you'll need to implement these based on your refund/payout logic
-type RefundService interface {
-	ProcessRefund(ctx context.Context, req RefundRequest) error
 }
 
 type RefundRequest struct {
@@ -265,10 +310,6 @@ type RefundRequest struct {
 	Amount      float64
 	Reason      string
 	ComplaintID string
-}
-
-type PayoutServices interface {
-	ProcessPayout(ctx context.Context, req PayoutRequest) error
 }
 
 type PayoutRequest struct {

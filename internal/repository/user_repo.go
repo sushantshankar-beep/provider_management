@@ -5,6 +5,7 @@ import (
 
 	"time"
 
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -172,4 +173,35 @@ type UserStatistics struct {
 	ActiveUsers       int64 `json:"active_users"`
 	InactiveUsers     int64 `json:"inactive_users"`
 	NewUsersLastNDays int64 `json:"new_users_last_n_days"`
+}
+
+func (r *UserRepo) UpdateWallet(ctx context.Context, userID string, newBalance float64) error {
+	update := bson.M{
+		"$set": bson.M{
+			"walletBalance": newBalance,
+		},
+	}
+
+	result, err := r.col.UpdateOne(ctx, bson.M{"_id": userID}, update)
+	if err != nil {
+		return fmt.Errorf("failed to update wallet: %w", err)
+	}
+
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
+}
+
+func (r *UserRepo) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	var user domain.User
+	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	return &user, nil
 }

@@ -32,8 +32,7 @@ func main() {
 	client := db.ConnectMongo(cfg.MongoURI)
 	mongoDB := client.Database(cfg.MongoDBName)
 
-	complaintRepo := repository.NewComplaintRepo(mongoDB)
-	assessmentRepo := repository.NewAssessmentRepo(mongoDB)
+	complaintRepo := repository.NewComplaintRepository(mongoDB)
 	transactionRepo := repository.NewTransactionRepo(mongoDB)
 	acceptedServiceRepo := repository.NewAcceptedServiceRepo(mongoDB)
 	userRepo := repository.NewUserRepo(mongoDB)
@@ -44,14 +43,20 @@ func main() {
 	adminBookingRepo := repository.NewAdminBookingRepo(mongoDB)
 	paymentPayoutRepo := repository.NewPaymentPayoutRepo(mongoDB)
 	settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
+    serviceMasterRepo := repository.NewServiceMasterRepo(mongoDB)
+	adminRepo := repository.NewAdminRepository(mongoDB)
+	authMiddleware := middleware.NewAuthMiddleware(adminRepo)
 
-	complaintService := service.NewComplaintService(complaintRepo, assessmentRepo, acceptedServiceRepo, userRepo, providerRepo, nil, nil)
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
 	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo)
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
-	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo)
+	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo , settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
+	refundService := service.NewRefundService(userRepo, transactionRepo)
+	complaintService := service.NewComplaintService(complaintRepo,acceptedServiceRepo,userRepo,providerRepo,refundService,payoutService)
+	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
+	adminService := service.NewAdminService(adminRepo)
 
 	complaintHandler := handler.NewComplaintHandler(complaintService)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
@@ -60,6 +65,8 @@ func main() {
 	adminBookingHandler := handler.NewAdminBookingHandler(adminBookingService)
 	payoutHandler := handler.NewPayoutHandler(payoutService)
 	settlementHandler := handler.NewSettlementHandler(settlementService)
+	serviceMasterHandler := handler.NewServiceHandler(serviceMasterService)
+	adminHandler := handler.NewAdminHandler(adminService)
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
@@ -75,6 +82,9 @@ func main() {
 		adminBookingHandler,
 		payoutHandler,
 		settlementHandler,
+		serviceMasterHandler,
+		adminHandler,
+		authMiddleware,
 	)
 
 	srv := &http.Server{

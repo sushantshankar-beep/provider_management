@@ -13,17 +13,29 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/constants"
 )
 
 type PayoutService struct {
-	serviceRepo *repository.AcceptedServiceRepo
-	payoutRepo  *repository.PaymentPayoutRepo
+	serviceRepo    *repository.AcceptedServiceRepo
+	payoutRepo     *repository.PaymentPayoutRepo
+	providerRepo   *repository.ProviderRepo
+	settlementRepo *repository.ProviderSettlementRepo
 }
 
-func NewPayoutService(serviceRepo *repository.AcceptedServiceRepo, payoutRepo *repository.PaymentPayoutRepo) *PayoutService {
+type ProviderPayoutDetails struct {
+	ProviderDetails   map[string]any   `json:"provider_details"`
+	AccountDetails    map[string]any   `json:"account_details"`
+	EarningSummary    map[string]any   `json:"earning_summary"`
+	SettlementHistory []map[string]any `json:"settlement_history"`
+}
+
+func NewPayoutService(serviceRepo *repository.AcceptedServiceRepo, payoutRepo *repository.PaymentPayoutRepo, providerRepo *repository.ProviderRepo, settlementRepo *repository.ProviderSettlementRepo) *PayoutService {
 	return &PayoutService{
-		serviceRepo: serviceRepo,
-		payoutRepo:  payoutRepo,
+		serviceRepo:    serviceRepo,
+		payoutRepo:     payoutRepo,
+		providerRepo:   providerRepo,
+		settlementRepo: settlementRepo,
 	}
 }
 
@@ -301,4 +313,145 @@ func (s *PayoutService) GetPayoutProviderData(ctx context.Context, payoutID stri
 	}
 
 	return services, nil
+}
+
+func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID string) (*ProviderPayoutDetails, error) {
+	numericID := payoutID
+	if strings.HasPrefix(strings.ToUpper(payoutID), "SET") {
+		numericID = payoutID[3:]
+	}
+
+	payoutIDInt, err := strconv.ParseInt(numericID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid payout ID: %v", err)
+	}
+
+	filter := bson.M{"payoutId": payoutIDInt}
+	payouts, _, err := s.payoutRepo.GetPayouts(ctx, filter, 0, 1, "createdAt", -1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch payout: %v", err)
+	}
+
+	if len(payouts) == 0 {
+		return nil, mongo.ErrNoDocuments
+	}
+
+	payout := payouts[0]
+
+	provider, err := s.providerRepo.FindByID(ctx, payout.ProviderID.Hex())
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch provider: %v", err)
+	}
+
+	brandNames := []string{}
+	if len(provider.ProviderBrands) > 0 {
+		brandNames = constants.GetBrandNamesByIDs(provider.ProviderBrands)
+	}
+
+	serviceNames := []string{}
+	if len(provider.ProviderServices) > 0 {
+		serviceNames = constants.GetServiceNamesByIDs(provider.ProviderServices)
+	}
+
+	providerDetails := map[string]any{
+		"name":          provider.Name,
+		"phone_number":  provider.Phone,
+		"provider_id":   payout.ProviderID.Hex(),
+		"email_id":      provider.Email,
+		"mechanic_type": strings.Join(provider.VehicleType, ", "),
+		"vehicle_brand": strings.Join(brandNames, ", "),
+		"zone":          provider.City,
+		"join_date":     provider.CreatedAt,
+		"approval_date": provider.UpdatedAt,
+		"service_type":  strings.Join(serviceNames, ", "),
+	}
+
+	accountDetails := map[string]any{
+		"account_holder_name": "",
+		"branch_name":         "",
+		"ifsc_code":           "",
+		"upi_id":              "",
+		"gst_number":          provider.GSTNumber,
+		"verified":            provider.Status,
+	}
+
+	if provider.BankDetails != nil {
+		accountDetails["account_holder_name"] = provider.BankDetails.AccountHolderName
+		accountDetails["branch_name"] = provider.BankDetails.BranchName
+		accountDetails["ifsc_code"] = provider.BankDetails.IfscCode
+		accountDetails["upi_id"] = provider.BankDetails.Upi
+	}
+
+	totalEarnings := 0.0
+	totalSettled := 0.0
+	pendingSettlement := 0.0
+	totalGST := 0.0
+	adjustments := 0.0
+
+	allPayouts, _, err := s.payoutRepo.GetPayouts(ctx, bson.M{"providerId": payout.ProviderID}, 0, 1000, "createdAt", -1)
+	if err == nil {
+		for _, p := range allPayouts {
+			totalEarnings += p.BaseAmount
+			totalGST += p.GSTAmount
+
+			if p.Status == "settled" {
+				totalSettled += p.NetPayable
+			} else if p.Status == "pending" {
+				pendingSettlement += p.NetPayable
+			}
+		}
+	}
+
+	earningSummary := map[string]any{
+		"total_earnings":     totalEarnings,
+		"total_settled":      totalSettled,
+		"pending_settlement": pendingSettlement,
+		"gst":                totalGST,
+		"adjustments":        adjustments,
+	}
+
+	settlementHistory := []map[string]any{}
+
+	if s.settlementRepo != nil {
+		settlements, _, err := s.settlementRepo.GetSettlements(ctx, bson.M{
+			"providerId": payout.ProviderID,
+			"status":     "settled",
+		}, 0, 100, "settledAt", -1)
+
+		if err == nil {
+			for _, settlement := range settlements {
+				settlementHistory = append(settlementHistory, map[string]any{
+					"date":          settlement.SettledAt,
+					"settlement_id": fmt.Sprintf("UP%06d", settlement.SettlementID),
+					"amount":        settlement.TotalAmount,
+					"payment_mode":  settlement.PaymentMode,
+					"method":        settlement.PaymentMethod,
+				})
+			}
+		}
+	} else {
+		settledPayouts, _, err := s.payoutRepo.GetPayouts(ctx, bson.M{
+			"providerId": payout.ProviderID,
+			"status":     "settled",
+		}, 0, 100, "updatedAt", -1)
+
+		if err == nil {
+			for _, p := range settledPayouts {
+				if p.SettlementID != nil {
+					settlementHistory = append(settlementHistory, map[string]any{
+						"date":          p.UpdatedAt,
+						"settlement_id": fmt.Sprintf("UTR-IMPS-%s", p.SettlementID.Hex()[:6]),
+						"amount":        p.NetPayable,
+					})
+				}
+			}
+		}
+	}
+
+	return &ProviderPayoutDetails{
+		ProviderDetails:   providerDetails,
+		AccountDetails:    accountDetails,
+		EarningSummary:    earningSummary,
+		SettlementHistory: settlementHistory,
+	}, nil
 }

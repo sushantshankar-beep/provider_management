@@ -3,45 +3,31 @@ package repository
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-
+	"log"
 	"provider_management/internal/domain"
+	"time"
 )
 
-type ComplaintRepository interface {
-	Create(ctx context.Context, complaint *domain.Complaint) error
-	GetByID(ctx context.Context, id string) (*domain.Complaint, error)
-	GetByInternalID(ctx context.Context, internalID int64) (*domain.Complaint, error)
-	List(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error)
-	Update(ctx context.Context, id string, update interface{}) error
-	UpdateStatus(ctx context.Context, id string, status string) error
-	AddNote(ctx context.Context, id string, note domain.ComplaintNote) error
-	SaveAssessment(ctx context.Context, id string, assessment domain.ComplaintAssessment) error
-	GetStats(ctx context.Context) (*domain.ComplaintStats, error)
-	GenerateInternalID(ctx context.Context) (int64, error)
-}
-
-type complaintRepository struct {
+type ComplaintRepository struct {
 	collection *mongo.Collection
 	counterCol *mongo.Collection
 }
 
-func NewComplaintRepository(db *mongo.Database) ComplaintRepository {
-	return &complaintRepository{
+func NewComplaintRepository(db *mongo.Database) *ComplaintRepository {
+	return &ComplaintRepository{
 		collection: db.Collection("complaints"),
 		counterCol: db.Collection("counters"),
 	}
 }
 
-func (r *complaintRepository) Create(ctx context.Context, complaint *domain.Complaint) error {
+func (r *ComplaintRepository) Create(ctx context.Context, complaint *domain.Complaint) error {
 	complaint.CreatedAt = time.Now()
 	complaint.UpdatedAt = time.Now()
 
-	// Generate internal ID if not set
 	if complaint.InternalID == 0 {
 		internalID, err := r.GenerateInternalID(ctx)
 		if err != nil {
@@ -50,7 +36,6 @@ func (r *complaintRepository) Create(ctx context.Context, complaint *domain.Comp
 		complaint.InternalID = internalID
 	}
 
-	// If ID is not set, MongoDB will generate it
 	_, err := r.collection.InsertOne(ctx, complaint)
 	if err != nil {
 		return fmt.Errorf("failed to create complaint: %w", err)
@@ -59,33 +44,49 @@ func (r *complaintRepository) Create(ctx context.Context, complaint *domain.Comp
 	return nil
 }
 
-func (r *complaintRepository) GetByID(ctx context.Context, id string) (*domain.Complaint, error) {
-	var complaint domain.Complaint
+func (r *ComplaintRepository) GetByID(ctx context.Context, id string) (*domain.Complaint, error) {
+	log.Printf("GetByID - Looking up complaint by MongoDB _id: %s", id)
 
-	// Try to find by _id (MongoDB ObjectID as string)
-	err := r.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&complaint)
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		log.Printf("GetByID - Invalid ObjectID format: %v", err)
+		return nil, fmt.Errorf("invalid ObjectID format: %w", err)
+	}
+
+	var complaint domain.Complaint
+	err = r.collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&complaint)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
+			log.Printf("GetByID - Complaint not found with _id: %s", id)
 			return nil, fmt.Errorf("complaint not found")
 		}
+		log.Printf("GetByID - Database error: %v", err)
 		return nil, fmt.Errorf("failed to get complaint: %w", err)
 	}
+
+	log.Printf("GetByID - Found complaint: _id=%s, internal_id=%d", complaint.ID, complaint.InternalID)
 	return &complaint, nil
 }
 
-func (r *complaintRepository) GetByInternalID(ctx context.Context, internalID int64) (*domain.Complaint, error) {
+func (r *ComplaintRepository) GetByInternalID(ctx context.Context, internalID int64) (*domain.Complaint, error) {
+	log.Printf("GetByInternalID - Looking up complaint by internal ID: %d", internalID)
+
 	var complaint domain.Complaint
 	err := r.collection.FindOne(ctx, bson.M{"id": internalID}).Decode(&complaint)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
+			log.Printf("GetByInternalID - Complaint not found with internal ID: %d", internalID)
 			return nil, fmt.Errorf("complaint not found")
 		}
+		log.Printf("GetByInternalID - Database error: %v", err)
 		return nil, fmt.Errorf("failed to get complaint: %w", err)
 	}
+
+	log.Printf("GetByInternalID - Found complaint: _id=%s, internal_id=%d", complaint.ID, complaint.InternalID)
 	return &complaint, nil
 }
 
-func (r *complaintRepository) List(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error) {
+func (r *ComplaintRepository) List(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error) {
 	query := bson.M{}
 
 	if filter.Status != nil {
@@ -120,13 +121,11 @@ func (r *complaintRepository) List(ctx context.Context, filter domain.ComplaintF
 		}
 	}
 
-	// Count total documents
 	total, err := r.collection.CountDocuments(ctx, query)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count complaints: %w", err)
 	}
 
-	// Pagination
 	page := filter.Page
 	if page < 1 {
 		page = 1
@@ -156,63 +155,113 @@ func (r *complaintRepository) List(ctx context.Context, filter domain.ComplaintF
 	return complaints, total, nil
 }
 
-func (r *complaintRepository) Update(ctx context.Context, id string, update interface{}) error {
+func (r *ComplaintRepository) Update(ctx context.Context, id string, update interface{}) error {
+
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		log.Printf("Update - Invalid ObjectID format: %v", err)
+		return fmt.Errorf("invalid ObjectID format: %w", err)
+	}
+
 	updateDoc := bson.M{
 		"$set": update,
 	}
 	updateDoc["$set"].(bson.M)["updatedAt"] = time.Now()
 
-	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, updateDoc)
+	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": objectID}, updateDoc)
 	if err != nil {
+		log.Printf("Update - Database error: %v", err)
 		return fmt.Errorf("failed to update complaint: %w", err)
 	}
 
 	if result.MatchedCount == 0 {
+		log.Printf("Update - Complaint not found with _id: %s", id)
 		return fmt.Errorf("complaint not found")
 	}
 
+	log.Printf("Update - Successfully updated complaint. Matched: %d, Modified: %d",
+		result.MatchedCount, result.ModifiedCount)
 	return nil
 }
 
-func (r *complaintRepository) UpdateStatus(ctx context.Context, id string, status string) error {
+func (r *ComplaintRepository) UpdateStatus(ctx context.Context, id string, status string) error {
+	log.Printf("UpdateStatus - Updating status to '%s' for complaint _id: %s", status, id)
+
 	now := time.Now()
 	update := bson.M{
 		"status":    status,
 		"updatedAt": now,
 	}
 
-	// Update timeline based on status
 	switch status {
 	case "in_review":
 		update["timeline.inReview"] = now
+		log.Printf("UpdateStatus - Setting timeline.inReview")
 	case "resolved":
 		update["timeline.resolved"] = now
+		log.Printf("UpdateStatus - Setting timeline.resolved")
 	}
 
-	return r.Update(ctx, id, update)
+	err := r.Update(ctx, id, update)
+	if err != nil {
+		log.Printf("UpdateStatus - Failed to update: %v", err)
+	} else {
+		log.Printf("UpdateStatus - Successfully updated status")
+	}
+	return err
 }
 
-func (r *complaintRepository) AddNote(ctx context.Context, id string, note domain.ComplaintNote) error {
-	note.CreatedAt = time.Now()
+func (r *ComplaintRepository) AddNote(ctx context.Context, complaintID string, note domain.ComplaintNote) error {
+	log.Printf("AddNote - Adding note to complaint _id: %s", complaintID)
 
-	update := bson.M{
-		"$push": bson.M{"notes": note},
-		"$set":  bson.M{"updatedAt": time.Now()},
+	// Convert string ID to ObjectID
+	objectID, err := primitive.ObjectIDFromHex(complaintID)
+	if err != nil {
+		log.Printf("AddNote - Invalid ObjectID format: %v", err)
+		return fmt.Errorf("invalid ObjectID format: %w", err)
 	}
 
-	result, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	// Create the update operation
+	update := bson.M{
+		"$push": bson.M{
+			"notes": note,
+		},
+		"$set": bson.M{
+			"updatedAt": time.Now(),
+		},
+	}
+
+	// Execute the update
+	result, err := r.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": objectID},
+		update,
+	)
+
 	if err != nil {
-		return fmt.Errorf("failed to add note: %w", err)
+		log.Printf("AddNote - Database error: %v", err)
+		return fmt.Errorf("database error: %w", err)
 	}
 
 	if result.MatchedCount == 0 {
-		return fmt.Errorf("complaint not found")
+		log.Printf("AddNote - Complaint not found with _id: %s", complaintID)
+		return fmt.Errorf("complaint not found with ID: %s", complaintID)
 	}
+
+	if result.ModifiedCount == 0 {
+		log.Printf("AddNote - Failed to modify, but complaint exists")
+		return fmt.Errorf("failed to add note, complaint not modified")
+	}
+
+	log.Printf("AddNote - Note added successfully. Matched: %d, Modified: %d",
+		result.MatchedCount, result.ModifiedCount)
 
 	return nil
 }
 
-func (r *complaintRepository) SaveAssessment(ctx context.Context, id string, assessment domain.ComplaintAssessment) error {
+func (r *ComplaintRepository) SaveAssessment(ctx context.Context, id string, assessment domain.ComplaintAssessment) error {
+	log.Printf("SaveAssessment - Saving assessment for complaint _id: %s", id)
+
 	assessment.AssessedAt = time.Now()
 
 	update := bson.M{
@@ -220,10 +269,16 @@ func (r *complaintRepository) SaveAssessment(ctx context.Context, id string, ass
 		"updatedAt":  time.Now(),
 	}
 
-	return r.Update(ctx, id, update)
+	err := r.Update(ctx, id, update)
+	if err != nil {
+		log.Printf("SaveAssessment - Failed: %v", err)
+	} else {
+		log.Printf("SaveAssessment - Successfully saved assessment")
+	}
+	return err
 }
 
-func (r *complaintRepository) GetStats(ctx context.Context) (*domain.ComplaintStats, error) {
+func (r *ComplaintRepository) GetStats(ctx context.Context) (*domain.ComplaintStats, error) {
 	pipeline := []bson.M{
 		{
 			"$facet": bson.M{
@@ -231,11 +286,11 @@ func (r *complaintRepository) GetStats(ctx context.Context) (*domain.ComplaintSt
 					{"$count": "count"},
 				},
 				"user": []bson.M{
-					{"$match": bson.M{"raisedBy": "user"}},
+					{"$match": bson.M{"raisedBy": "User"}},
 					{"$count": "count"},
 				},
 				"provider": []bson.M{
-					{"$match": bson.M{"raisedBy": "provider"}},
+					{"$match": bson.M{"raisedBy": "Provider"}},
 					{"$count": "count"},
 				},
 			},
@@ -274,7 +329,7 @@ func (r *complaintRepository) GetStats(ctx context.Context) (*domain.ComplaintSt
 	return stats, nil
 }
 
-func (r *complaintRepository) GenerateInternalID(ctx context.Context) (int64, error) {
+func (r *ComplaintRepository) GenerateInternalID(ctx context.Context) (int64, error) {
 	filter := bson.M{"_id": "complaint_internal_id"}
 	update := bson.M{"$inc": bson.M{"sequence_value": 1}}
 	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)

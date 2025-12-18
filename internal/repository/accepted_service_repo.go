@@ -278,7 +278,6 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 	return services, nil
 }
 
-
 func (r *AcceptedServiceRepo) MarkAsSettled(ctx context.Context, serviceIDs []primitive.ObjectID, settlementID primitive.ObjectID) error {
 	now := time.Now()
 	update := bson.M{
