@@ -6,16 +6,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
-	"time"
-    "provider_management/internal/routes"
 	"provider_management/internal/config"
 	"provider_management/internal/db"
 	"provider_management/internal/handler"
 	"provider_management/internal/logger"
-	"provider_management/internal/repository"
-	"provider_management/internal/service"
 	"provider_management/internal/middleware"
+	"provider_management/internal/repository"
+	"provider_management/internal/routes"
+	"provider_management/internal/service"
+	"syscall"
+	"time"
+
 	"github.com/joho/godotenv"
 
 	"github.com/gin-gonic/gin"
@@ -23,8 +24,8 @@ import (
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-        log.Println("⚠️ .env not loaded:", err)
-    }
+		log.Println("⚠️ .env not loaded:", err)
+	}
 	cfg := config.Load()
 	logg := logger.NewLogger()
 
@@ -42,23 +43,23 @@ func main() {
 	serviceRepo := repository.NewAcceptedServiceRepo(mongoDB)
 	adminBookingRepo := repository.NewAdminBookingRepo(mongoDB)
 	paymentPayoutRepo := repository.NewPaymentPayoutRepo(mongoDB)
-    settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
+	settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
 
-	complaintService := service.NewComplaintService(complaintRepo, assessmentRepo)
+	complaintService := service.NewComplaintService(complaintRepo, assessmentRepo, acceptedServiceRepo, userRepo, providerRepo, nil, nil)
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
 	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo)
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
-	payoutService := service.NewPayoutService( acceptedServiceRepo, paymentPayoutRepo)
-    settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo,providerRepo)
+	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo)
+	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
 
-	complaintHandler := handler.NewComplaintHandler(complaintService, logg)
+	complaintHandler := handler.NewComplaintHandler(complaintService)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
-    adminBookingHandler := handler.NewAdminBookingHandler(adminBookingService)
+	adminBookingHandler := handler.NewAdminBookingHandler(adminBookingService)
 	payoutHandler := handler.NewPayoutHandler(payoutService)
-    settlementHandler := handler.NewSettlementHandler(settlementService)
+	settlementHandler := handler.NewSettlementHandler(settlementService)
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
@@ -71,11 +72,10 @@ func main() {
 		transactionHandler,
 		userAdminHandler,
 		providerAdminHandler,
-		adminBookingHandler ,
+		adminBookingHandler,
 		payoutHandler,
-        settlementHandler,
+		settlementHandler,
 	)
-	
 
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,

@@ -3,15 +3,16 @@ package service
 import (
 	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type PayoutService struct {
@@ -230,7 +231,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 		serviceNet := service.FinalPrice - serviceCommission - serviceGST
 
 		serviceData := map[string]any{
-			"id": service.ID,
+			"id":                 service.ID,
 			"booking_id":         fmt.Sprintf("BK%d", service.InternalID),
 			"amc_id":             "amc",
 			"provider_id":        payout.ProviderID.Hex(),
@@ -242,9 +243,9 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			"net_amount":         serviceNet,
 			"partial_amount":     "₹",
 			"payout_id":          fmt.Sprintf("SET%d", payout.PayoutID),
-			"is_settled":     service.IsSettled,
-			"settlement_id":  service.SettlementID,
-			"settled_at":     service.SettledAt,
+			"is_settled":         service.IsSettled,
+			"settlement_id":      service.SettlementID,
+			"settled_at":         service.SettledAt,
 		}
 
 		services = append(services, serviceData)
@@ -270,7 +271,7 @@ func (s *PayoutService) GetPayoutProviderData(ctx context.Context, payoutID stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch payout: %v", err)
 	}
-    log.Println("payoutDataaa",payouts);
+	log.Println("payoutDataaa", payouts)
 	if len(payouts) == 0 {
 		return nil, mongo.ErrNoDocuments
 	}
@@ -285,7 +286,6 @@ func (s *PayoutService) GetPayoutProviderData(ctx context.Context, payoutID stri
 			continue
 		}
 
-		
 		serviceData := map[string]any{
 			"booking_id":         fmt.Sprintf("BK%d", service.InternalID),
 			"amc_id":             "amc",

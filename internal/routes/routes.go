@@ -18,7 +18,7 @@ func SetupRoutes(
 	providerAdminHandler *handler.ProviderAdminHandler,
 	bookingAdminHandler *handler.AdminBookingHandler,
 	payoutHandler *handler.PayoutHandler,
-    settlementHandler *handler.SettlementHandler,
+	settlementHandler *handler.SettlementHandler,
 ) {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
@@ -38,7 +38,7 @@ func SetupRoutes(
 			"Authorization",
 		},
 		AllowCredentials: true,
-		MaxAge: 12 * time.Hour,
+		MaxAge:           12 * time.Hour,
 	}))
 	r.GET("/complaints", complaintHandler.GetAll)
 	r.GET("/complaints/:id", complaintHandler.GetByID)
@@ -60,18 +60,25 @@ func SetupRoutes(
 	r.PATCH("/admin/providers/commission/:id", providerAdminHandler.UpdateCommission)
 
 	r.GET("/admin/bookings", bookingAdminHandler.GetAllBookings)
-    r.GET("/admin/bookings/stats", bookingAdminHandler.GetBookingStats)
-    r.GET("/admin/bookings/:bookingId", bookingAdminHandler.GetBookingByID)
-    r.PUT("/admin/bookings/:bookingId/cancel",bookingAdminHandler.CancelBooking)
-    r.PUT("/admin/bookings/:bookingId/complete", bookingAdminHandler.MarkBookingCompleted)
-    r.GET("/admin/bookings/get-invoice/:serviceId", bookingAdminHandler.GetInvoiceData)
+	r.GET("/admin/bookings/stats", bookingAdminHandler.GetBookingStats)
+	r.GET("/admin/bookings/:bookingId", bookingAdminHandler.GetBookingByID)
+	r.PUT("/admin/bookings/:bookingId/cancel", bookingAdminHandler.CancelBooking)
+	r.PUT("/admin/bookings/:bookingId/complete", bookingAdminHandler.MarkBookingCompleted)
+	r.GET("/admin/bookings/get-invoice/:serviceId", bookingAdminHandler.GetInvoiceData)
 
-	r.POST("/admin/payouts/6hour",payoutHandler.Create6HourPayout)
-    r.GET("/admin/payouts", payoutHandler.GetPayouts)
-    r.GET("/admin/payouts/:id/services", payoutHandler.GetPayoutServices)
-    r.GET("/admin/payouts/:id/provider", payoutHandler.GetPayoutProviderData)
+	r.POST("/admin/payouts/6hour", payoutHandler.Create6HourPayout)
+	r.GET("/admin/payouts", payoutHandler.GetPayouts)
+	r.GET("/admin/payouts/:id/services", payoutHandler.GetPayoutServices)
+	r.GET("/admin/payouts/:id/provider", payoutHandler.GetPayoutProviderData)
 
-    r.POST("/admin/settlements", settlementHandler.CreateSettlement)
-    r.GET("/admin/allsettlements", settlementHandler.GetSettlements)
+	r.POST("/admin/settlements", settlementHandler.CreateSettlement)
+	r.GET("/admin/allsettlements", settlementHandler.GetSettlements)
 
+	r.GET("/complaints", complaintHandler.GetAll)
+	r.GET("/complaints/stats", complaintHandler.GetStats)
+	r.GET("/complaints/:id", complaintHandler.GetByID)
+	r.POST("/complaints", complaintHandler.Create)
+	r.PATCH("/complaints/:id/status", complaintHandler.UpdateStatus)
+	r.POST("/complaints/:id/assessment", complaintHandler.PostAssessment)
+	r.POST("/complaints/:id/notes", complaintHandler.AddNote)
 }
