@@ -20,12 +20,20 @@ func NewTransactionHandler(svc *service.TransactionService, log *logger.Logger) 
 }
 
 func (h *TransactionHandler) GetAll(c *gin.Context) {
-	res, err := h.svc.ListTransactions(c)
+	page := c.DefaultQuery("page", "1")
+	limit := c.DefaultQuery("limit", "10")
+	search := c.Query("search")
+
+	res, total, err := h.svc.ListTransactions(c, page, limit, search)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
 		return
 	}
-	c.JSON(http.StatusOK, res)
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  res,
+		"total": total,
+	})
 }
 
 func (h *TransactionHandler) GetByID(c *gin.Context) {
