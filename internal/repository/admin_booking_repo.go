@@ -114,14 +114,14 @@ func (r *AdminBookingRepo) FindAcceptedServiceByID(ctx context.Context, id strin
 }
 
 func (r *AdminBookingRepo) FindAcceptedServiceByServiceRequestID(
-    ctx context.Context,
-    srID primitive.ObjectID,
+	ctx context.Context,
+	srID primitive.ObjectID,
 ) (*domain.AcceptedService, error) {
-    var svc domain.AcceptedService
-    err := r.acceptedServiceColl.FindOne(ctx, bson.M{
-        "serviceRequest": srID,
-    }).Decode(&svc)
-    return &svc, err
+	var svc domain.AcceptedService
+	err := r.acceptedServiceColl.FindOne(ctx, bson.M{
+		"serviceRequest": srID,
+	}).Decode(&svc)
+	return &svc, err
 }
 
 func (r *AdminBookingRepo) UpdateAcceptedService(ctx context.Context, id string, update bson.M) (*domain.AcceptedService, error) {
@@ -199,16 +199,15 @@ func (r *AdminBookingRepo) FindServiceRequestByID(ctx context.Context, id string
 }
 
 func (r *AdminBookingRepo) FindServiceRequestByInternalID(
-    ctx context.Context,
-    internalID int64,
+	ctx context.Context,
+	internalID int64,
 ) (*domain.ServiceRequest, error) {
-    var sr domain.ServiceRequest
-	log.Println("wkdejewbd",sr);
-    err := r.serviceRequestColl.FindOne(ctx, bson.M{"id": internalID}).Decode(&sr)
-	log.Println("wkdejewbd",err);
-    return &sr, err
+	var sr domain.ServiceRequest
+	log.Println("wkdejewbd", sr)
+	err := r.serviceRequestColl.FindOne(ctx, bson.M{"id": internalID}).Decode(&sr)
+	log.Println("wkdejewbd", err)
+	return &sr, err
 }
-
 
 func (r *AdminBookingRepo) FindUserByID(ctx context.Context, id string) (*domain.User, error) {
 	var user domain.User
@@ -264,7 +263,7 @@ func (r *AdminBookingRepo) FindProviderByID(ctx context.Context, id string) (*do
 	if err != nil {
 		return nil, err
 	}
-    log.Println("Looking for provider with ID:", objID.Hex())
+	log.Println("Looking for provider with ID:", objID.Hex())
 	err = r.providerColl.FindOne(ctx, bson.M{"_id": objID}).Decode(&provider)
 	if err != nil {
 		return nil, err
@@ -272,7 +271,6 @@ func (r *AdminBookingRepo) FindProviderByID(ctx context.Context, id string) (*do
 
 	return &provider, nil
 }
-
 
 func (r *AdminBookingRepo) FindProviderByInternalID(ctx context.Context, internalID int64) (*domain.Provider, error) {
 	var provider domain.Provider
@@ -409,108 +407,108 @@ func (r *AdminBookingRepo) FindServiceRequestsByInternalID(ctx context.Context, 
 }
 
 func (r *AdminBookingRepo) FindProviderByProviderID(ctx context.Context, providerID string) (*domain.Provider, error) {
-    var provider domain.Provider
-    
-    filter := bson.M{"providerId": providerID}
-    err := r.providerColl.FindOne(ctx, filter).Decode(&provider)
-    if err == nil {
-        return &provider, nil
-    }
-    
-    if primitive.IsValidObjectID(providerID) {
-        objID, _ := primitive.ObjectIDFromHex(providerID)
-        filter = bson.M{"_id": objID}
-        err = r.providerColl.FindOne(ctx, filter).Decode(&provider)
-        if err == nil {
-            return &provider, nil
-        }
-    }
-    
-    return nil, err
+	var provider domain.Provider
+
+	filter := bson.M{"providerId": providerID}
+	err := r.providerColl.FindOne(ctx, filter).Decode(&provider)
+	if err == nil {
+		return &provider, nil
+	}
+
+	if primitive.IsValidObjectID(providerID) {
+		objID, _ := primitive.ObjectIDFromHex(providerID)
+		filter = bson.M{"_id": objID}
+		err = r.providerColl.FindOne(ctx, filter).Decode(&provider)
+		if err == nil {
+			return &provider, nil
+		}
+	}
+
+	return nil, err
 }
 
 func (r *AdminBookingRepo) FindUsersByInternalID(ctx context.Context, internalID int64) ([]domain.User, error) {
-    filter := bson.M{"id": internalID}
-    cursor, err := r.userColl.Find(ctx, filter)
-    if err != nil {
-        return nil, err
-    }
-    defer cursor.Close(ctx)
-    
-    var users []domain.User
-    if err := cursor.All(ctx, &users); err != nil {
-        return nil, err
-    }
-    
-    return users, nil
+	filter := bson.M{"id": internalID}
+	cursor, err := r.userColl.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []domain.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
 func (r *AdminBookingRepo) FindUsersBySearch(ctx context.Context, search string) ([]domain.User, error) {
-    filter := bson.M{
-        "$or": []bson.M{
-            {"name": bson.M{"$regex": search, "$options": "i"}},
-            {"phone": bson.M{"$regex": search, "$options": "i"}},
-            {"email": bson.M{"$regex": search, "$options": "i"}},
-        },
-    }
-    
-    cursor, err := r.userColl.Find(ctx, filter)
-    if err != nil {
-        return nil, err
-    }
-    defer cursor.Close(ctx)
-    
-    var users []domain.User
-    if err := cursor.All(ctx, &users); err != nil {
-        return nil, err
-    }
-    
-    return users, nil
+	filter := bson.M{
+		"$or": []bson.M{
+			{"name": bson.M{"$regex": search, "$options": "i"}},
+			{"phone": bson.M{"$regex": search, "$options": "i"}},
+			{"email": bson.M{"$regex": search, "$options": "i"}},
+		},
+	}
+
+	cursor, err := r.userColl.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []domain.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+
+	return users, nil
 }
 
 func (r *AdminBookingRepo) FindProvidersBySearch(ctx context.Context, search string) ([]domain.Provider, error) {
-    filter := bson.M{
-        "$or": []bson.M{
-            {"name": bson.M{"$regex": search, "$options": "i"}},
-            {"phone": bson.M{"$regex": search, "$options": "i"}},
-            {"providerId": bson.M{"$regex": search, "$options": "i"}},
-            {"_id": search},
-        },
-    }
-    
-    cursor, err := r.providerColl.Find(ctx, filter)
-    if err != nil {
-        return nil, err
-    }
-    defer cursor.Close(ctx)
-    
-    var providers []domain.Provider
-    if err := cursor.All(ctx, &providers); err != nil {
-        return nil, err
-    }
-    
-    return providers, nil
+	filter := bson.M{
+		"$or": []bson.M{
+			{"name": bson.M{"$regex": search, "$options": "i"}},
+			{"phone": bson.M{"$regex": search, "$options": "i"}},
+			{"providerId": bson.M{"$regex": search, "$options": "i"}},
+			{"_id": search},
+		},
+	}
+
+	cursor, err := r.providerColl.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var providers []domain.Provider
+	if err := cursor.All(ctx, &providers); err != nil {
+		return nil, err
+	}
+
+	return providers, nil
 }
 
 func (r *AdminBookingRepo) FindServiceRequestByInternalIDs(ctx context.Context, internalID int64) (*domain.ServiceRequest, error) {
-    var sr domain.ServiceRequest
-    err := r.serviceRequestColl.FindOne(ctx, bson.M{"id": internalID}).Decode(&sr)
-    if err != nil {
-        return nil, err
-    }
-    return &sr, nil
+	var sr domain.ServiceRequest
+	err := r.serviceRequestColl.FindOne(ctx, bson.M{"id": internalID}).Decode(&sr)
+	if err != nil {
+		return nil, err
+	}
+	return &sr, nil
 }
 
 func (r *AdminBookingRepo) UpdateProviderIsAssigned(ctx context.Context, providerID string, isAssigned bool) error {
-    objID, err := primitive.ObjectIDFromHex(providerID)
-    if err != nil {
-        return err
-    }
-    
-    _, err = r.providerColl.UpdateOne(
-        ctx,
-        bson.M{"_id": objID},
-        bson.M{"$set": bson.M{"isAssigned": isAssigned}},
-    )
-    return err
+	objID, err := primitive.ObjectIDFromHex(providerID)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.providerColl.UpdateOne(
+		ctx,
+		bson.M{"_id": objID},
+		bson.M{"$set": bson.M{"isAssigned": isAssigned}},
+	)
+	return err
 }

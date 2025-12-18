@@ -82,7 +82,7 @@ type VehicleInfo struct {
 	VehicleNumber string `json:"vehicleNumber"`
 	Brand         string `json:"brand"`
 	Model         string `json:"model"`
-	Year          string    `json:"year"`
+	Year          string `json:"year"`
 	FuelType      string `json:"fuelType"`
 	VehicleType   string `json:"vehicleType"`
 }

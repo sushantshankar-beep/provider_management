@@ -3,13 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
 	"strconv"
 	"strings"
 	"time"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type SettlementRequest struct {
@@ -28,16 +28,16 @@ type SettlementService struct {
 }
 
 type GetSettlementsRequest struct {
-	ProviderID   string `form:"provider_id"`
-	PayoutID     string `form:"payout_id"`
-	Status       string `form:"status"`
-	PaymentMode  string `form:"payment_mode"`
-	StartDate    string `form:"start_date"`
-	EndDate      string `form:"end_date"`
-	Page         int64  `form:"page,default=1"`
-	Limit        int64  `form:"limit,default=10"`
-	SortField    string `form:"sort_field,default=createdAt"`
-	SortOrder    string `form:"sort_order,default=desc"`
+	ProviderID  string `form:"provider_id"`
+	PayoutID    string `form:"payout_id"`
+	Status      string `form:"status"`
+	PaymentMode string `form:"payment_mode"`
+	StartDate   string `form:"start_date"`
+	EndDate     string `form:"end_date"`
+	Page        int64  `form:"page,default=1"`
+	Limit       int64  `form:"limit,default=10"`
+	SortField   string `form:"sort_field,default=createdAt"`
+	SortOrder   string `form:"sort_order,default=desc"`
 }
 
 func NewSettlementService(
@@ -133,9 +133,6 @@ func (s *SettlementService) CreateSettlement(
 
 	return settlement, nil
 }
-
-
-
 
 func (s *SettlementService) GetSettlements(
 	ctx context.Context,

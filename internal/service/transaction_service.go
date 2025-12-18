@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"provider_management/internal/repository"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type TransactionService struct {
@@ -23,19 +23,19 @@ func NewTransactionService(t *repository.TransactionRepo, s *repository.Accepted
 }
 
 type TransactionResponse struct {
-	ID           string  `json:"_id"`
-	UserID       string  `json:"user_id"`
-	UserName     string  `json:"user_name,omitempty"`
-	BookingID    string  `json:"booking_id,omitempty"`
-	TxnID        string  `json:"txnid"`
-	Amount       float64 `json:"amount"`
-	Currency     string  `json:"currency"`
-	Status       string  `json:"status"`
-	Method       string  `json:"method,omitempty"`
-	PaymentSource string `json:"payment_source,omitempty"`
-	CreatedAt    string  `json:"created_at"`
-	UpdatedAt    string  `json:"updated_at"`
-	BookingNo    string  `json:"booking_no,omitempty"`
+	ID            string  `json:"_id"`
+	UserID        string  `json:"user_id"`
+	UserName      string  `json:"user_name,omitempty"`
+	BookingID     string  `json:"booking_id,omitempty"`
+	TxnID         string  `json:"txnid"`
+	Amount        float64 `json:"amount"`
+	Currency      string  `json:"currency"`
+	Status        string  `json:"status"`
+	Method        string  `json:"method,omitempty"`
+	PaymentSource string  `json:"payment_source,omitempty"`
+	CreatedAt     string  `json:"created_at"`
+	UpdatedAt     string  `json:"updated_at"`
+	BookingNo     string  `json:"booking_no,omitempty"`
 }
 
 func (s *TransactionService) ListTransactions(ctx context.Context) ([]TransactionResponse, error) {
@@ -47,15 +47,15 @@ func (s *TransactionService) ListTransactions(ctx context.Context) ([]Transactio
 	var result []TransactionResponse
 	for _, txn := range txns {
 		resp := TransactionResponse{
-			ID:           txn.ID.Hex(),
-			TxnID:        txn.TxnID,
-			Amount:       txn.Amount,
-			Currency:     txn.Currency,
-			Status:       txn.Status,
-			Method:       txn.Method,
+			ID:            txn.ID.Hex(),
+			TxnID:         txn.TxnID,
+			Amount:        txn.Amount,
+			Currency:      txn.Currency,
+			Status:        txn.Status,
+			Method:        txn.Method,
 			PaymentSource: txn.PaymentSource,
-			CreatedAt:    txn.CreatedAt.Format("2006-01-02 15:04:05"),
-			UpdatedAt:    txn.UpdatedAt.Format("2006-01-02 15:04:05"),
+			CreatedAt:     txn.CreatedAt.Format("2006-01-02 15:04:05"),
+			UpdatedAt:     txn.UpdatedAt.Format("2006-01-02 15:04:05"),
 		}
 
 		if txn.UserID != primitive.NilObjectID {
@@ -92,15 +92,15 @@ func (s *TransactionService) GetTransaction(ctx context.Context, id string) (*Tr
 	}
 
 	resp := &TransactionResponse{
-		ID:           txn.ID.Hex(),
-		TxnID:        txn.TxnID,
-		Amount:       txn.Amount,
-		Currency:     txn.Currency,
-		Status:       txn.Status,
-		Method:       txn.Method,
+		ID:            txn.ID.Hex(),
+		TxnID:         txn.TxnID,
+		Amount:        txn.Amount,
+		Currency:      txn.Currency,
+		Status:        txn.Status,
+		Method:        txn.Method,
 		PaymentSource: txn.PaymentSource,
-		CreatedAt:    txn.CreatedAt.Format("2006-01-02 15:04:05"),
-		UpdatedAt:    txn.UpdatedAt.Format("2006-01-02 15:04:05"),
+		CreatedAt:     txn.CreatedAt.Format("2006-01-02 15:04:05"),
+		UpdatedAt:     txn.UpdatedAt.Format("2006-01-02 15:04:05"),
 	}
 
 	if txn.UserID != primitive.NilObjectID {

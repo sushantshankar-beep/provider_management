@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
 	"provider_management/internal/service"
-	"github.com/gin-gonic/gin"
 	"strconv"
-	"go.mongodb.org/mongo-driver/mongo"
 	"strings"
 )
 
@@ -31,7 +31,6 @@ func (h *PayoutHandler) Create6HourPayout(c *gin.Context) {
 		"message": "Payouts created successfully",
 	})
 }
-
 
 func (h *PayoutHandler) GetPayouts(c *gin.Context) {
 	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
@@ -92,85 +91,85 @@ func (h *PayoutHandler) GetPayouts(c *gin.Context) {
 }
 
 func (h *PayoutHandler) GetPayoutServices(c *gin.Context) {
-    payoutID := c.Param("id")
-    if payoutID == "" {
-        c.JSON(http.StatusBadRequest, gin.H{
-            "error":   true,
-            "message": "Payout ID is required",
-        })
-        return
-    }
+	payoutID := c.Param("id")
+	if payoutID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Payout ID is required",
+		})
+		return
+	}
 
-    services, err := h.svc.GetPayoutServices(c.Request.Context(), payoutID)
-    if err != nil {
-        if err == mongo.ErrNoDocuments {
-            c.JSON(http.StatusNotFound, gin.H{
-                "error":   true,
-                "message": "Payout not found",
-            })
-            return
-        }
-        
-        if strings.Contains(err.Error(), "invalid payout ID") {
-            c.JSON(http.StatusBadRequest, gin.H{
-                "error":   true,
-                "message": "Invalid payout ID format. Expected format: SET1765957752215",
-            })
-            return
-        }
-        
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "error":   true,
-            "message": "Failed to fetch payout services: " + err.Error(),
-        })
-        return
-    }
+	services, err := h.svc.GetPayoutServices(c.Request.Context(), payoutID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   true,
+				"message": "Payout not found",
+			})
+			return
+		}
 
-    c.JSON(http.StatusOK, gin.H{
-        "error":   false,
-        "message": "Payout services fetched successfully",
-        "data":    services,
-    })
+		if strings.Contains(err.Error(), "invalid payout ID") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   true,
+				"message": "Invalid payout ID format. Expected format: SET1765957752215",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to fetch payout services: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Payout services fetched successfully",
+		"data":    services,
+	})
 }
 
-func (h *PayoutHandler) GetPayoutProviderData(c *gin.Context) {
-    payoutID := c.Param("id")
-    if payoutID == "" {
-        c.JSON(http.StatusBadRequest, gin.H{
-            "error":   true,
-            "message": "Payout ID is required",
-        })
-        return
-    }
+func (h *PayoutHandler) GetProviderPayoutDetails(c *gin.Context) {
+	payoutID := c.Param("id")
+	if payoutID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Payout ID is required",
+		})
+		return
+	}
 
-    services, err := h.svc.GetPayoutProviderData(c.Request.Context(), payoutID)
-    if err != nil {
-        if err == mongo.ErrNoDocuments {
-            c.JSON(http.StatusNotFound, gin.H{
-                "error":   true,
-                "message": "Payout not found",
-            })
-            return
-        }
-        
-        if strings.Contains(err.Error(), "invalid payout ID") {
-            c.JSON(http.StatusBadRequest, gin.H{
-                "error":   true,
-                "message": "Invalid payout ID format. Expected format: SET1765957752215",
-            })
-            return
-        }
-        
-        c.JSON(http.StatusInternalServerError, gin.H{
-            "error":   true,
-            "message": "Failed to fetch payout services: " + err.Error(),
-        })
-        return
-    }
+	details, err := h.svc.GetProviderPayoutDetails(c.Request.Context(), payoutID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   true,
+				"message": "Payout not found",
+			})
+			return
+		}
 
-    c.JSON(http.StatusOK, gin.H{
-        "error":   false,
-        "message": "Payout services fetched successfully",
-        "data":    services,
-    })
+		if strings.Contains(err.Error(), "invalid payout ID") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   true,
+				"message": "Invalid payout ID format",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to fetch payout details: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Payout details fetched successfully",
+		"data":    details,
+	})
 }

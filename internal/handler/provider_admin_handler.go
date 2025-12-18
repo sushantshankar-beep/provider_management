@@ -2,7 +2,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"log"
+
 	"net/http"
 	"provider_management/internal/service"
 )
@@ -16,6 +16,7 @@ func NewProviderAdminHandler(svc *service.ProviderAdminService) *ProviderAdminHa
 }
 
 func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
+
 	page := c.DefaultQuery("page", "1")
 	limit := c.DefaultQuery("limit", "10")
 	sort := c.DefaultQuery("sort", "-createdAt")
@@ -36,7 +37,6 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 	)
 
 	if err != nil {
-		log.Printf("Error fetching providers: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": "Failed to fetch providers",

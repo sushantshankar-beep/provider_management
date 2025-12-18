@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"github.com/gin-gonic/gin"
 	"net/http"
 	"provider_management/internal/service"
-	"github.com/gin-gonic/gin"
 )
 
 type AdminBookingHandler struct {

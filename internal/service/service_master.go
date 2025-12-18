@@ -1,0 +1,229 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"provider_management/internal/domain"
+	"provider_management/internal/repository"
+
+	"go.mongodb.org/mongo-driver/bson"
+)
+
+type ServiceService struct {
+	ServiceMasterRepo  *repository.ServiceMasterRepo
+}
+
+func NewServiceMaster(ServiceMasterRepo *repository.ServiceMasterRepo) *ServiceService {
+	return &ServiceService{
+		ServiceMasterRepo:  ServiceMasterRepo,
+	}
+}
+
+func (s *ServiceService) CreateService(ctx context.Context, service *domain.ServiceMaster) error {
+	if service.ServiceName == "" {
+		return fmt.Errorf("service name is required")
+	}
+	if service.Category == "" {
+		return fmt.Errorf("category is required")
+	}
+	if len(service.VehicleType) == 0 {
+		return fmt.Errorf("vehicle type is required")
+	}
+	if service.Location == "" {
+		return fmt.Errorf("location is required")
+	}
+
+	if service.Status == "" {
+		service.Status = "active"
+	}
+
+	return s.ServiceMasterRepo.Create(ctx, service)
+}
+
+func (s *ServiceService) GetServices(
+	ctx context.Context,
+	page, limit int64,
+	search, category, vehicleType, location, status, sortBy, sortOrder string,
+) ([]map[string]any, int64, int64, error) {
+	skip := (page - 1) * limit
+	filter := bson.M{}
+
+	if category != "" {
+		filter["category"] = category
+	}
+
+	if vehicleType != "" {
+		filter["vehicleType"] = vehicleType
+	}
+
+	if location != "" {
+		filter["location"] = location
+	}
+
+	if status != "" {
+		filter["status"] = status
+	}
+
+	if search != "" {
+		filter["$or"] = []bson.M{
+			{"serviceName": bson.M{"$regex": search, "$options": "i"}},
+			{"tag": bson.M{"$regex": search, "$options": "i"}},
+		}
+	}
+
+	order := -1
+	if sortOrder == "asc" {
+		order = 1
+	}
+
+	if sortBy == "" {
+		sortBy = "updatedAt"
+	} else {
+		switch sortBy {
+		case "service_name":
+			sortBy = "serviceName"
+		case "min_cost":
+			sortBy = "minCost"
+		case "display_order":
+			sortBy = "displayOrder"
+		case "created_at":
+			sortBy = "createdAt"
+		case "updated_at":
+			sortBy = "updatedAt"
+		}
+	}
+
+	services, total, err := s.ServiceMasterRepo.GetServices(ctx, filter, skip, limit, sortBy, order)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	responseData := make([]map[string]any, len(services))
+	for i, svc := range services {
+		responseData[i] = map[string]any{
+			"id":                 svc.ID,
+			"service_name":       svc.ServiceName,
+			"category":           svc.Category,
+			"vehicle_type":       svc.VehicleType,
+			"brand_scope":        svc.BrandScope,
+			"sub_brand_scope":    svc.SubBrandScope,
+			"fuel_type_scope":    svc.FuelTypeScope,
+			"location":           svc.Location,
+			"requires_otp":       svc.RequiresOTP,
+			"status":             svc.Status,
+			"display_order":      svc.DisplayOrder,
+			"tag":                svc.Tag,
+			"min_cost":           svc.MinCost,
+			"short_description":  svc.ShortDesc,
+			"created_at":         svc.CreatedAt,
+			"updated_at":         svc.UpdatedAt,
+		}
+	}
+
+	totalPages := total / limit
+	if total%limit > 0 {
+		totalPages++
+	}
+
+	return responseData, total, totalPages, nil
+}
+
+func (s *ServiceService) GetServiceByID(ctx context.Context, id string) (map[string]any, error) {
+	service, err := s.ServiceMasterRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"id":                 service.ID.Hex(),
+		"service_name":       service.ServiceName,
+		"category":           service.Category,
+		"vehicle_type":       service.VehicleType,
+		"brand_scope":        service.BrandScope,
+		"sub_brand_scope":    service.SubBrandScope,
+		"fuel_type_scope":    service.FuelTypeScope,
+		"location":           service.Location,
+		"requires_otp":       service.RequiresOTP,
+		"status":             service.Status,
+		"display_order":      service.DisplayOrder,
+		"tag":                service.Tag,
+		"min_cost":           service.MinCost,
+		"short_description":  service.ShortDesc,
+		"created_at":         service.CreatedAt,
+		"updated_at":         service.UpdatedAt,
+	}, nil
+}
+
+func (s *ServiceService) UpdateService(ctx context.Context, id string, updateData map[string]any) error {
+	if len(updateData) == 0 {
+		return fmt.Errorf("no update data provided")
+	}
+
+	update := bson.M{}
+	if val, ok := updateData["service_name"]; ok {
+		update["serviceName"] = val
+	}
+	if val, ok := updateData["category"]; ok {
+		update["category"] = val
+	}
+	if val, ok := updateData["vehicle_type"]; ok {
+		update["vehicleType"] = val
+	}
+	if val, ok := updateData["brand_scope"]; ok {
+		update["brandScope"] = val
+	}
+	if val, ok := updateData["sub_brand_scope"]; ok {
+		update["subBrandScope"] = val
+	}
+	if val, ok := updateData["fuel_type_scope"]; ok {
+		update["fuelTypeScope"] = val
+	}
+	if val, ok := updateData["location"]; ok {
+		update["location"] = val
+	}
+	if val, ok := updateData["requires_otp"]; ok {
+		update["requiresOtp"] = val
+	}
+	if val, ok := updateData["status"]; ok {
+		update["status"] = val
+	}
+	if val, ok := updateData["display_order"]; ok {
+		update["displayOrder"] = val
+	}
+	if val, ok := updateData["tag"]; ok {
+		update["tag"] = val
+	}
+	if val, ok := updateData["min_cost"]; ok {
+		update["minCost"] = val
+	}
+	if val, ok := updateData["short_description"]; ok {
+		update["shortDesc"] = val
+	}
+
+	return s.ServiceMasterRepo.Update(ctx, id, update)
+}
+
+func (s *ServiceService) UpdateServiceStatus(ctx context.Context, id string, status string) error {
+	if status != "active" && status != "inactive" {
+		return fmt.Errorf("invalid status: must be 'active' or 'inactive'")
+	}
+
+	return s.ServiceMasterRepo.UpdateStatus(ctx, id, status)
+}
+
+func (s *ServiceService) DeleteService(ctx context.Context, id string) error {
+	return s.ServiceMasterRepo.Delete(ctx, id)
+}
+
+func (s *ServiceService) GetServiceStats(ctx context.Context) (map[string]any, error) {
+
+	filter := bson.M{"status": "active"}
+	activeServices, _, err := s.ServiceMasterRepo.GetServices(ctx, filter, 0, 1, "createdAt", -1)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"active_services":   len(activeServices),
+	}, nil
+}

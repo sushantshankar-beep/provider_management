@@ -12,7 +12,7 @@ type SavedVehicle struct {
 	VehicleNumber string             `bson:"vehicleNumber" json:"vehicleNumber"`
 	Brand         string             `bson:"brand" json:"brand"`
 	Model         string             `bson:"model" json:"model"`
-	Year          string                `bson:"year" json:"year"`
+	Year          string             `bson:"year" json:"year"`
 	FuelType      string             `bson:"fuelType" json:"fuelType"`
 	VehicleType   string             `bson:"vehicleType" json:"vehicleType"`
 	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`

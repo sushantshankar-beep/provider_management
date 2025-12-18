@@ -19,11 +19,6 @@ func NewTransactionHandler(svc *service.TransactionService, log *logger.Logger) 
 	}
 }
 
-func (h *TransactionHandler) RegisterRoutes(r *gin.Engine) {
-	r.GET("/transactions", h.GetAll)
-	r.GET("/transactions/:id", h.GetByID)
-}
-
 func (h *TransactionHandler) GetAll(c *gin.Context) {
 	res, err := h.svc.ListTransactions(c)
 	if err != nil {

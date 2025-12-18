@@ -23,13 +23,14 @@ func Load() Config {
 	if origins != "" {
 		allowedOrigins = strings.Split(origins, ",")
 	}
-
+	
 	return Config{
 		MongoURI:       mustEnv("MONGO_URI"),
 		MongoDBName:    mustEnv("MONGO_DB"),
 		HTTPAddr:       ":" + port,
 		AllowedOrigins: allowedOrigins,
 	}
+	
 }
 
 func mustEnv(key string) string {

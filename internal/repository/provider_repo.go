@@ -61,20 +61,19 @@ func (r *ProviderRepo) FindAll(
 }
 
 func (r *ProviderRepo) FindByID(ctx context.Context, id string) (*domain.Provider, error) {
-    objectID, err := primitive.ObjectIDFromHex(id)
-    if err != nil {
-        return nil, fmt.Errorf("invalid provider id")
-    }
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider id")
+	}
 
-    var provider domain.Provider
-    err = r.col.FindOne(ctx, bson.M{"_id": objectID}).Decode(&provider)
-    if err != nil {
-        return nil, err
-    }
+	var provider domain.Provider
+	err = r.col.FindOne(ctx, bson.M{"_id": objectID}).Decode(&provider)
+	if err != nil {
+		return nil, err
+	}
 
-    return &provider, nil
+	return &provider, nil
 }
-
 
 func (r *ProviderRepo) FindOne(ctx context.Context, query bson.M) (*domain.Provider, error) {
 	var provider domain.Provider
@@ -235,4 +234,32 @@ func (r *ProviderRepo) GetProviderByObjectID(ctx context.Context, id primitive.O
 		return nil, err
 	}
 	return &provider, nil
+}
+
+func (r *ProviderRepo) CountInactive(ctx context.Context, query bson.M) (int64, error) {
+
+	finalQuery := bson.M{}
+	for k, v := range query {
+		finalQuery[k] = v
+	}
+
+	finalQuery["$and"] = []bson.M{
+		query,
+		{
+			"isActive": bson.M{
+				"$nin": []interface{}{
+					domain.AccountStatusActive,
+					true,
+					domain.AccountStatusSuspended,
+					domain.AccountStatusBlacklisted,
+				},
+			},
+		},
+	}
+
+	count, err := r.col.CountDocuments(ctx, finalQuery)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count inactive providers: %v", err)
+	}
+	return count, nil
 }
