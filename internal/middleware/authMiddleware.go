@@ -24,9 +24,9 @@ func NewAuthMiddleware(adminRepo *repository.AdminRepository) *AuthMiddleware {
 func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		// ✅ VERY IMPORTANT: allow preflight
+		// ✅ Allow CORS preflight
 		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(204)
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
@@ -37,7 +37,9 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 			return
 		}
 
-		tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer"))
+		tokenString := strings.TrimSpace(
+			strings.TrimPrefix(authHeader, "Bearer "),
+		)
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(os.Getenv("JWT_SECRET_KEY")), nil
@@ -94,6 +96,7 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 
 
 func GetAdminFromContext(c *gin.Context) *domain.Admin {
