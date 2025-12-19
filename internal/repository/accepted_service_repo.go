@@ -3,13 +3,15 @@ package repository
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
+
+	"provider_management/internal/domain"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"provider_management/internal/domain"
 )
 
 type AcceptedServiceRepo struct {
@@ -271,6 +273,7 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 	}
 
 	var services []domain.AcceptedService
+	log.Println("servicesss",services)
 	if err := cursor.All(ctx, &services); err != nil {
 		return nil, err
 	}
@@ -278,8 +281,22 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 	return services, nil
 }
 
-func (r *AcceptedServiceRepo) MarkAsSettled(ctx context.Context, serviceIDs []primitive.ObjectID, settlementID primitive.ObjectID) error {
+func (r *AcceptedServiceRepo) MarkAsSettled(
+	ctx context.Context,
+	serviceIDs []primitive.ObjectID,
+	settlementID primitive.ObjectID,
+) error {
+
 	now := time.Now()
+
+	filter := bson.M{
+		"_id": bson.M{"$in": serviceIDs},
+		"$or": []bson.M{
+			{"isSettled": false},
+			{"isSettled": bson.M{"$exists": false}},
+		},
+	}
+
 	update := bson.M{
 		"$set": bson.M{
 			"isSettled":    true,
@@ -288,9 +305,21 @@ func (r *AcceptedServiceRepo) MarkAsSettled(ctx context.Context, serviceIDs []pr
 			"updatedAt":    now,
 		},
 	}
-	filter := bson.M{"_id": bson.M{"$in": serviceIDs}}
-	_, err := r.col.UpdateMany(ctx, filter, update)
-	return err
+
+	res, err := r.col.UpdateMany(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+
+	if res.MatchedCount == 0 {
+		return fmt.Errorf("no unsettled services found to settle")
+	}
+
+	if res.MatchedCount != int64(len(serviceIDs)) {
+		return fmt.Errorf("some services are already settled or not found")
+	}
+
+	return nil
 }
 
 func (r *AcceptedServiceRepo) FindCompletedPaidByProvider(ctx context.Context, providerID primitive.ObjectID) ([]*domain.AcceptedService, error) {
@@ -330,4 +359,32 @@ func (r *AcceptedServiceRepo) FindUnsettledByProvider(ctx context.Context, provi
 		return nil, err
 	}
 	return services, nil
+}
+
+func (r *AcceptedServiceRepo) CountUnsettledByIDs(
+	ctx context.Context,
+	serviceIDs []primitive.ObjectID,
+) (int64, error) {
+	log.Println("service idsss", serviceIDs)
+	filter := bson.M{
+		"_id": bson.M{"$in": serviceIDs},
+		"$or": []bson.M{
+			{"isSettled": false},
+			{"isSettled": bson.M{"$exists": false}},
+		},
+	}
+
+	return r.col.CountDocuments(ctx, filter)
+}
+
+func (r *AcceptedServiceRepo) CountSettledByIDs(
+	ctx context.Context,
+	serviceIDs []primitive.ObjectID,
+) (int64, error) {
+	filter := bson.M{
+		"_id":       bson.M{"$in": serviceIDs},
+		"isSettled": true,
+	}
+
+	return r.col.CountDocuments(ctx, filter)
 }

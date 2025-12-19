@@ -1082,3 +1082,44 @@ func getProviderName(provider *domain.Provider) string {
 	}
 	return provider.Name
 }
+
+
+func (s *AdminBookingService) AddNote(
+	ctx context.Context,
+	bookingID string,
+	req AddNoteRequest,
+) error {
+
+	if req.Content == "" {
+		return fmt.Errorf("note content is required")
+	}
+	if req.AddedBy == "" {
+		return fmt.Errorf("addedBy is required")
+	}
+
+	// 🔥 BK123 → 123
+	cleanID := strings.TrimPrefix(bookingID, "BK")
+	internalID, err := strconv.ParseInt(cleanID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid booking id")
+	}
+
+	// Find booking
+	svcs, _, err := s.repo.FindAcceptedServices(
+		ctx,
+		bson.M{"id": internalID},
+		0, 1, "",
+	)
+	if err != nil || len(svcs) == 0 {
+		return fmt.Errorf("booking not found")
+	}
+
+	note := domain.BookingNote{
+		ID:        primitive.NewObjectID().Hex(),
+		Content:   req.Content,
+		AddedBy:   req.AddedBy,
+		CreatedAt: time.Now(),
+	}
+
+	return s.repo.AddBookingNote(ctx, svcs[0].ID, note)
+}

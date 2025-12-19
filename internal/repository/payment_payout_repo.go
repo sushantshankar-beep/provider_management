@@ -18,7 +18,7 @@ type PaymentPayoutRepo struct {
 }
 
 func NewPaymentPayoutRepo(db *mongo.Database) *PaymentPayoutRepo {
-	return &PaymentPayoutRepo{col: db.Collection("payment_payouts")}
+	return &PaymentPayoutRepo{col: db.Collection("paymentPayouts")}
 }
 
 func (r *PaymentPayoutRepo) Create(ctx context.Context, payout *domain.PaymentPayout) error {
@@ -122,4 +122,26 @@ func (r *PaymentPayoutRepo) FindByPayoutID(
 	}
 
 	return &payout, nil
+}
+
+func (r *PaymentPayoutRepo) UpdateStatus(
+	ctx context.Context,
+	payoutID primitive.ObjectID,
+	status domain.PaymentPayoutStatus,
+	settlementID *primitive.ObjectID,
+) error {
+
+	update := bson.M{
+		"$set": bson.M{
+			"status":    status,
+			"updatedAt": time.Now(),
+		},
+	}
+
+	if settlementID != nil {
+		update["$set"].(bson.M)["settlementId"] = settlementID
+	}
+
+	_, err := r.col.UpdateOne(ctx, bson.M{"_id": payoutID}, update)
+	return err
 }

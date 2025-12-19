@@ -214,14 +214,12 @@ func (r *ComplaintRepository) UpdateStatus(ctx context.Context, id string, statu
 func (r *ComplaintRepository) AddNote(ctx context.Context, complaintID string, note domain.ComplaintNote) error {
 	log.Printf("AddNote - Adding note to complaint _id: %s", complaintID)
 
-	// Convert string ID to ObjectID
 	objectID, err := primitive.ObjectIDFromHex(complaintID)
 	if err != nil {
 		log.Printf("AddNote - Invalid ObjectID format: %v", err)
 		return fmt.Errorf("invalid ObjectID format: %w", err)
 	}
 
-	// Create the update operation
 	update := bson.M{
 		"$push": bson.M{
 			"notes": note,
@@ -231,7 +229,6 @@ func (r *ComplaintRepository) AddNote(ctx context.Context, complaintID string, n
 		},
 	}
 
-	// Execute the update
 	result, err := r.collection.UpdateOne(
 		ctx,
 		bson.M{"_id": objectID},
@@ -239,22 +236,16 @@ func (r *ComplaintRepository) AddNote(ctx context.Context, complaintID string, n
 	)
 
 	if err != nil {
-		log.Printf("AddNote - Database error: %v", err)
 		return fmt.Errorf("database error: %w", err)
 	}
 
 	if result.MatchedCount == 0 {
-		log.Printf("AddNote - Complaint not found with _id: %s", complaintID)
 		return fmt.Errorf("complaint not found with ID: %s", complaintID)
 	}
 
 	if result.ModifiedCount == 0 {
-		log.Printf("AddNote - Failed to modify, but complaint exists")
 		return fmt.Errorf("failed to add note, complaint not modified")
 	}
-
-	log.Printf("AddNote - Note added successfully. Matched: %d, Modified: %d",
-		result.MatchedCount, result.ModifiedCount)
 
 	return nil
 }

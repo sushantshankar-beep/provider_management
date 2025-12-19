@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 	"provider_management/internal/repository"
+	"time"
 )
 
 type TransactionService struct {
@@ -64,6 +65,7 @@ func (s *TransactionService) ListTransactions(
 	var result []TransactionResponse
 
 	for _, txn := range txns {
+		indianTime := txn.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 		resp := TransactionResponse{
 			ID:            txn.ID.Hex(),
 			TxnID:         txn.TxnID,
@@ -72,8 +74,8 @@ func (s *TransactionService) ListTransactions(
 			Status:        txn.Status,
 			Method:        txn.Method,
 			PaymentSource: txn.PaymentSource,
-			CreatedAt:     txn.CreatedAt.Format("2006-01-02 15:04:05"),
-			UpdatedAt:     txn.UpdatedAt.Format("2006-01-02 15:04:05"),
+			CreatedAt:         indianTime.Format("2006-01-02 15:04:05"), 
+			UpdatedAt:     indianTime.Format("2006-01-02 15:04:05"), 
 		}
 
 		if txn.UserID != primitive.NilObjectID {
@@ -96,12 +98,13 @@ func (s *TransactionService) ListTransactions(
 	return result, total, nil
 }
 
-
 func (s *TransactionService) GetTransaction(ctx context.Context, id string) (*TransactionResponse, error) {
 	txn, err := s.transactions.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+
+	indianTime := txn.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 
 	resp := &TransactionResponse{
 		ID:            txn.ID.Hex(),
@@ -111,8 +114,9 @@ func (s *TransactionService) GetTransaction(ctx context.Context, id string) (*Tr
 		Status:        txn.Status,
 		Method:        txn.Method,
 		PaymentSource: txn.PaymentSource,
-		CreatedAt:     txn.CreatedAt.Format("2006-01-02 15:04:05"),
-		UpdatedAt:     txn.UpdatedAt.Format("2006-01-02 15:04:05"),
+		CreatedAt:     indianTime.Format("2006-01-02 15:04:05"), 
+		UpdatedAt:     indianTime.Format("2006-01-02 15:04:05"), 
+
 	}
 
 	if txn.UserID != primitive.NilObjectID {

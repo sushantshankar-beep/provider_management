@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"provider_management/internal/logger"
 	"provider_management/internal/service"
+	"strconv"
 )
 
 type TransactionHandler struct {
@@ -30,9 +31,31 @@ func (h *TransactionHandler) GetAll(c *gin.Context) {
 		return
 	}
 
+	pageInt, _ := strconv.ParseInt(page, 10, 64)
+	limitInt, _ := strconv.ParseInt(limit, 10, 64)
+	
+	if pageInt < 1 {
+		pageInt = 1
+	}
+	if limitInt < 1 {
+		limitInt = 10
+	}
+
+	totalPages := int64(0)
+	if total > 0 {
+		totalPages = (total + limitInt - 1) / limitInt
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data":  res,
-		"total": total,
+		"data": res,
+		"pagination": gin.H{
+			"has_next":     pageInt < totalPages,
+			"has_previous": pageInt > 1,
+			"limit":        limitInt,
+			"page":         pageInt,
+			"total_items":  total,
+			"total_pages":  totalPages,
+		},
 	})
 }
 
