@@ -45,6 +45,7 @@ func main() {
 	settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
     serviceMasterRepo := repository.NewServiceMasterRepo(mongoDB)
 	adminRepo := repository.NewAdminRepository(mongoDB)
+	refundRepo := repository.NewRefundRepository(mongoDB)
 	authMiddleware := middleware.NewAuthMiddleware(adminRepo)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
@@ -53,7 +54,7 @@ func main() {
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo , settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
-	refundService := service.NewRefundService(userRepo, transactionRepo)
+	refundService := service.NewRefundService(refundRepo)
 	complaintService := service.NewComplaintService(complaintRepo,acceptedServiceRepo,userRepo,providerRepo,refundService,payoutService)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo)
@@ -69,8 +70,8 @@ func main() {
 	adminHandler := handler.NewAdminHandler(adminService)
 
 	r := gin.Default()
-	r.SetTrustedProxies(nil)
-	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
+	// r.SetTrustedProxies(nil)
+	//r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
 
 	routes.SetupRoutes(
 		r,

@@ -19,6 +19,7 @@ type PaymentPayout struct {
 	ProviderID        primitive.ObjectID   `bson:"providerId" json:"provider_id"`
 	ServiceIDs        []primitive.ObjectID `bson:"serviceIds" json:"service_ids"`
 	BaseAmount        float64              `bson:"baseAmount" json:"base_amount"`
+	PartialAmount        float64              `bson:"partialAmount" json:"partial_amount"`
 	CommissionPercent float64              `bson:"commissionPercent" json:"commission_percent"`
 	CommissionAmount  float64              `bson:"commissionAmount" json:"commission_amount"`
 	GSTPercent        float64              `bson:"gstPercent" json:"gst_percent"`

@@ -140,14 +140,13 @@ func (s *ComplaintService) ListComplaints(ctx context.Context, filter domain.Com
 }
 
 func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID string, req AssessComplaintRequest) error {
-
 	complaint, err := s.GetComplaint(ctx, complaintID)
 	if err != nil {
 		return fmt.Errorf("failed to get complaint: %w", err)
 	}
 
-	if complaint.Status != "initiated" {
-		return fmt.Errorf("complaint must be in initiated status to assess, current status: %s", complaint.Status)
+	if complaint.Status != "initiated"  {
+		return fmt.Errorf("complaint must be in initiated or in_review status to assess, current status: %s", complaint.Status)
 	}
 
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount <= 0 {
@@ -174,42 +173,53 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		return fmt.Errorf("failed to save assessment: %w", err)
 	}
 
-	log.Printf("AssessComplaint - Updating status to resolved")
-	if err := s.complaintRepo.UpdateStatus(ctx, complaint.ID, "resolved"); err != nil {
+	log.Printf("AssessComplaint - Updating status to in_review")
+	if err := s.complaintRepo.UpdateStatus(ctx, complaint.ID, "in_review"); err != nil {
 		log.Printf("AssessComplaint - Failed to update status: %v", err)
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
+	actions := []string{}
+
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount > 0 {
 		log.Printf("AssessComplaint - Processing refund of %.2f for user %s", req.RefundAmount, complaint.UserID)
 		if err := s.refundService.ProcessRefund(ctx, RefundRequest{
-			UserID:      complaint.UserID,
-			Amount:      req.RefundAmount,
-			Reason:      fmt.Sprintf("Complaint ID %d - %s", complaint.InternalID, req.Remarks),
-			ComplaintID: complaint.ID,
+			UserID:              complaint.UserID,
+			BookingID:           complaint.AcceptedServiceID,
+			BookingInternalID:   complaint.AcceptedServiceNo,
+			ComplaintID:         complaint.ID,
+			ComplaintInternalID: complaint.InternalID,
+			Amount:              req.RefundAmount,
+			Reason:              fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks),
 		}); err != nil {
 			log.Printf("Warning: Failed to process refund: %v", err)
+		} else {
+			actions = append(actions, "Refund sent to Refund Management module")
 		}
 	}
 
-	// if req.PayoutToProvider != domain.PayoutTypeNone && req.PayoutAmount > 0 {
-	// 	log.Printf("AssessComplaint - Processing payout of %.2f for provider %s", req.PayoutAmount, complaint.ProviderID)
-	// 	if err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
-	// 		ProviderID:  complaint.ProviderID,
-	// 		Amount:      req.PayoutAmount,
-	// 		Reason:      fmt.Sprintf("Complaint ID %d - %s", complaint.InternalID, req.Remarks),
-	// 		ComplaintID: complaint.ID,
-	// 	}); err != nil {
-	// 		log.Printf("Warning: Failed to process payout: %v", err)
-	// 	}
-	// }
-
-	actions := []string{}
-	if req.RefundToUser != domain.RefundTypeNone {
-		actions = append(actions, "Refund sent to Refund Management module")
-	}
-	if req.PayoutToProvider != domain.PayoutTypeNone {
-		actions = append(actions, "Payout sent to Settlement Management module")
+	if req.PayoutToProvider != domain.PayoutTypeNone && req.PayoutAmount > 0 {
+		acceptedService, err := s.acceptedServiceRepo.FindByID(ctx, complaint.AcceptedServiceID)
+		if err != nil {
+			log.Printf("Warning: Cannot fetch accepted service for payout: %v", err)
+		} else if acceptedService.ProviderID.IsZero() {
+			log.Printf("Warning: Cannot process payout - provider ID is empty in accepted service")
+		} else {
+			providerID := acceptedService.ProviderID.Hex()
+			log.Printf("AssessComplaint - Processing payout of %.2f for provider %s", req.PayoutAmount, providerID)
+			if err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
+				ProviderID:  providerID,
+				BookingID:   complaint.AcceptedServiceID,
+				Amount:        acceptedService.BasePrice,
+				PartialAmount: req.PayoutAmount,
+				Reason:      fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks),
+				ComplaintID: complaint.ID,
+			}); err != nil {
+				log.Printf("Warning: Failed to process payout: %v", err)
+			} else {
+				actions = append(actions, "Payout sent to Settlement Management module")
+			}
+		}
 	}
 
 	if len(actions) > 0 {
@@ -305,10 +315,14 @@ func (s *ComplaintService) GetComplaintStats(ctx context.Context) (*domain.Compl
 }
 
 type RefundRequest struct {
-	UserID      string
-	Amount      float64
-	Reason      string
-	ComplaintID string
+	UserID string
+	BookingID         string
+	BookingInternalID int64
+	ComplaintID         string
+	ComplaintInternalID int64
+	Amount float64
+	Reason string
+	TransactionID  string     
 }
 
 type PayoutRequest struct {
@@ -316,4 +330,6 @@ type PayoutRequest struct {
 	Amount      float64
 	Reason      string
 	ComplaintID string
+	BookingID     string
+	PartialAmount float64
 }

@@ -111,3 +111,15 @@ func (r *TransactionRepo) FindWithFilter(
 
 	return txns, total, nil
 }
+
+func (r *TransactionRepo) FindByServiceID(ctx context.Context, serviceID primitive.ObjectID) (*domain.Transaction, error) {
+	var transaction domain.Transaction
+	err := r.col.FindOne(ctx, bson.M{"serviceId": serviceID}).Decode(&transaction)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("transaction not found for service ID: %s", serviceID.Hex())
+		}
+		return nil, fmt.Errorf("failed to find transaction: %w", err)
+	}
+	return &transaction, nil
+}

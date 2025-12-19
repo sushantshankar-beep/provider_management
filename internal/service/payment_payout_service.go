@@ -258,7 +258,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			"gst_percent":        payout.GSTPercent,
 			"gst_amount":         serviceGST,
 			"net_amount":         serviceNet,
-			"partial_amount":     "₹",
+			"partial_amount":     payout.PartialAmount,
 			"payout_id":          fmt.Sprintf("SET%d", payout.PayoutID),
 			"is_settled":         service.IsSettled,
 			"settlement_id":      service.SettlementID,
@@ -459,4 +459,68 @@ func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID s
 		EarningSummary:    earningSummary,
 		SettlementHistory: settlementHistory,
 	}, nil
+}
+
+
+func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) error {
+	log.Printf("ProcessPayout - Starting payout for provider %s, amount: %.2f", req.ProviderID, req.Amount)
+
+	providerObjID, err := primitive.ObjectIDFromHex(req.ProviderID)
+	if err != nil {
+		return fmt.Errorf("invalid provider ID: %w", err)
+	}
+
+	serviceIDs := []primitive.ObjectID{}
+	if req.BookingID != "" {
+		bookingObjID, err := primitive.ObjectIDFromHex(req.BookingID)
+		if err != nil {
+			log.Printf("Warning: Invalid booking ID format: %v", err)
+		} else {
+			serviceIDs = append(serviceIDs, bookingObjID)
+		}
+	}
+   
+
+
+	baseAmount := req.Amount
+
+	partialAmount := req.PartialAmount 
+
+	commissionPercent := 20.0
+	commissionAmount := baseAmount * (commissionPercent / 100)
+	
+
+	gstPercent := 18.0
+	gstAmount := commissionAmount * (gstPercent / 100)
+
+	netPayable := baseAmount - commissionAmount - gstAmount
+
+	payoutID := time.Now().UnixMilli()
+
+
+	payout := &domain.PaymentPayout{
+		PayoutID:          payoutID,
+		ProviderID:        providerObjID,
+		ServiceIDs:        serviceIDs,
+		BaseAmount:        baseAmount,
+		CommissionPercent: commissionPercent,
+		CommissionAmount:  commissionAmount,
+		GSTPercent:        gstPercent,
+		GSTAmount:         gstAmount,
+		NetPayable:        netPayable,
+		PartialAmount:     partialAmount,
+		Status:            domain.PayoutStatusPending,
+		PeriodFrom:        time.Now().Add(-24 * time.Hour),
+		PeriodTo:          time.Now(),
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+	}
+
+	if err := s.payoutRepo.Create(ctx, payout); err != nil {
+		log.Printf("ProcessPayout - Failed to create payout: %v", err)
+		return fmt.Errorf("failed to create payout: %w", err)
+	}
+
+	log.Printf("ProcessPayout - Payout created successfully with ID: %s, PayoutID: %d", payout.ID.Hex(), payout.PayoutID)
+	return nil
 }
