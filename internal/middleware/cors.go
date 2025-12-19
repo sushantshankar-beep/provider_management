@@ -12,7 +12,6 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	for _, o := range allowedOrigins {
 		allowed[strings.TrimSpace(o)] = true
 	}
-
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 
@@ -26,7 +25,7 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
 
 		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(204)
+			c.Status(http.StatusNoContent)
 			return
 		}
 
