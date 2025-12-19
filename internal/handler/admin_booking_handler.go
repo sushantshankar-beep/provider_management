@@ -147,3 +147,45 @@ func (h *AdminBookingHandler) GetInvoiceData(c *gin.Context) {
 		"data":    invoiceData,
 	})
 }
+
+func (h *AdminBookingHandler) AddNote(c *gin.Context) {
+	bookingID := c.Param("bookingId")
+
+	var req service.AddNoteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Invalid request body: " + err.Error(),
+		})
+		return
+	}
+
+	if req.Content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Note content is required",
+		})
+		return
+	}
+
+	if req.AddedBy == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "AddedBy field is required",
+		})
+		return
+	}
+
+	if err := h.svc.AddNote(c.Request.Context(), bookingID, req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to add note: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Note added successfully",
+	})
+}

@@ -91,6 +91,7 @@ type Complaint struct {
 
 type UserDetails struct {
 	ID         string `json:"id"`
+	InternalID string `json:"internal_id"`
 	Name       string `json:"name"`
 	Email      string `json:"email"`
 	Phone      string `json:"phone"`
@@ -99,6 +100,7 @@ type UserDetails struct {
 
 type ProviderDetails struct {
 	ID          string `json:"id"`
+	InternalID  string `json:"internal_id"`
 	Name        string `json:"name"`
 	Email       string `json:"email"`
 	Phone       string `json:"phone"`

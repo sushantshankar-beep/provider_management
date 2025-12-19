@@ -108,6 +108,7 @@ func (s *ComplaintService) GetComplaintWithDetails(ctx context.Context, id strin
 		} else {
 			complaintWithDetails.UserDetails = &domain.UserDetails{
 				ID:    user.ID,
+				InternalID: fmt.Sprintf("VW%d", user.InternalID),
 				Name:  user.Name,
 				Email: user.Email,
 				Phone: user.Phone,
@@ -122,6 +123,7 @@ func (s *ComplaintService) GetComplaintWithDetails(ctx context.Context, id strin
 		} else {
 			complaintWithDetails.ProviderDetails = &domain.ProviderDetails{
 				ID:          provider.ID.Hex(),
+				InternalID:  fmt.Sprintf("PRO%d", provider.InternalID),
 				Name:        provider.Name,
 				Email:       provider.Email,
 				Phone:       provider.Phone,
@@ -269,7 +271,6 @@ func (s *ComplaintService) UpdateComplaintStatus(ctx context.Context, complaintI
 }
 
 func (s *ComplaintService) AddNote(ctx context.Context, complaintID string, req AddNoteRequest) error {
-	log.Printf("AddNote - Complaint ID: %s, Request: %+v", complaintID, req)
 
 	if _, err := primitive.ObjectIDFromHex(complaintID); err != nil {
 		return fmt.Errorf("invalid complaint ID format: %w", err)
@@ -289,8 +290,6 @@ func (s *ComplaintService) AddNote(ctx context.Context, complaintID string, req 
 		AddedBy:   req.AddedBy,
 		CreatedAt: time.Now(),
 	}
-
-	log.Printf("Creating note: %+v", note)
 
 	err := s.complaintRepo.AddNote(ctx, complaintID, note)
 	if err != nil {

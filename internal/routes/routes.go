@@ -71,6 +71,7 @@ func SetupRoutes(
 			bookings.GET("/get-invoice/:serviceId", bookingAdminHandler.GetInvoiceData)
 			bookings.PUT("/:bookingId/cancel", bookingAdminHandler.CancelBooking)
 			bookings.PUT("/:bookingId/complete", bookingAdminHandler.MarkBookingCompleted)
+			bookings.POST("/:bookingId/notes", bookingAdminHandler.AddNote)
 		}
 
 		complaints := admin.Group("/complaints")

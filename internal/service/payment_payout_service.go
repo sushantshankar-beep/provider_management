@@ -42,7 +42,8 @@ func NewPayoutService(serviceRepo *repository.AcceptedServiceRepo, payoutRepo *r
 func (s *PayoutService) CreatePayoutLast6Hours(ctx context.Context) error {
 
 	to := time.Now()
-	from := to.Add(-30 * 24 * time.Hour)
+	from := to.Add(-6 * time.Hour)
+
 
 	services, err := s.serviceRepo.FindCompletedPaidBetween(ctx, from, to)
 	if err != nil {
@@ -181,7 +182,7 @@ func (s *PayoutService) GetPayouts(
 	for i, p := range payouts {
 		responseData[i] = map[string]any{
 			"id":                 p.ID.Hex(),
-			"payout_id":          "SET" + strconv.FormatInt(p.PayoutID, 10),
+			"payout_id":          "PAY" + strconv.FormatInt(p.PayoutID, 10),
 			"provider_id":        p.ProviderID.Hex(),
 			"service_ids":        p.ServiceIDs,
 			"base_amount":        p.BaseAmount,
@@ -208,7 +209,7 @@ func (s *PayoutService) GetPayouts(
 
 func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) ([]map[string]any, error) {
 	numericID := payoutID
-	if strings.HasPrefix(strings.ToUpper(payoutID), "SET") {
+	if strings.HasPrefix(strings.ToUpper(payoutID), "PAY") {
 		numericID = payoutID[3:]
 	}
 
@@ -235,6 +236,10 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 		service, err := s.serviceRepo.FindByID(ctx, serviceID.Hex())
 		if err != nil {
 			log.Printf("Error fetching service %s: %v", serviceID.Hex(), err)
+			continue
+		}
+
+		if service.IsSettled {
 			continue
 		}
 
@@ -268,7 +273,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 
 func (s *PayoutService) GetPayoutProviderData(ctx context.Context, payoutID string) ([]map[string]any, error) {
 	numericID := payoutID
-	if strings.HasPrefix(strings.ToUpper(payoutID), "SET") {
+	if strings.HasPrefix(strings.ToUpper(payoutID), "PAY") {
 		numericID = payoutID[3:]
 	}
 
@@ -317,7 +322,7 @@ func (s *PayoutService) GetPayoutProviderData(ctx context.Context, payoutID stri
 
 func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID string) (*ProviderPayoutDetails, error) {
 	numericID := payoutID
-	if strings.HasPrefix(strings.ToUpper(payoutID), "SET") {
+	if strings.HasPrefix(strings.ToUpper(payoutID), "PAY") {
 		numericID = payoutID[3:]
 	}
 

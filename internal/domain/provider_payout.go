@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+type PaymentPayoutStatus string
+
+const (
+	PayoutStatusPending           PaymentPayoutStatus = "pending"
+	PayoutStatusPartiallySettled  PaymentPayoutStatus = "partially settled"
+	PayoutStatusSettled           PaymentPayoutStatus = "settled"
+)
+
 type PaymentPayout struct {
 	ID                primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
 	PayoutID          int64                `bson:"payoutId,omitempty" json:"payout_id"`
@@ -17,9 +25,12 @@ type PaymentPayout struct {
 	GSTAmount         float64              `bson:"gstAmount" json:"gst_amount"`
 	NetPayable        float64              `bson:"netPayable" json:"net_payable"`
 	SettlementID      *primitive.ObjectID  `bson:"settlementId,omitempty" json:"settlement_id,omitempty"`
-	Status            string               `bson:"status" json:"status"`
+	Status            PaymentPayoutStatus  `bson:"status" json:"status"`
 	PeriodFrom        time.Time            `bson:"periodFrom" json:"period_from"`
 	PeriodTo          time.Time            `bson:"periodTo" json:"period_to"`
 	CreatedAt         time.Time            `bson:"createdAt" json:"created_at"`
 	UpdatedAt         time.Time            `bson:"updatedAt" json:"updated_at"`
 }
+
+
+

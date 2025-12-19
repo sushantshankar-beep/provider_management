@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
+	"time"
 	"provider_management/internal/domain"
 )
 
@@ -19,6 +20,7 @@ type AdminBookingRepo struct {
 	ratingColl          *mongo.Collection
 	transactionColl     *mongo.Collection
 	complaintColl       *mongo.Collection
+	collection *mongo.Collection 
 }
 
 func NewAdminBookingRepo(db *mongo.Database) *AdminBookingRepo {
@@ -510,5 +512,27 @@ func (r *AdminBookingRepo) UpdateProviderIsAssigned(ctx context.Context, provide
 		bson.M{"_id": objID},
 		bson.M{"$set": bson.M{"isAssigned": isAssigned}},
 	)
+	return err
+}
+
+func (r *AdminBookingRepo) AddBookingNote(
+	ctx context.Context,
+	serviceID primitive.ObjectID,
+	note domain.BookingNote,
+) error {
+
+	_, err := r.acceptedServiceColl.UpdateOne(
+		ctx,
+		bson.M{"_id": serviceID},
+		bson.M{
+			"$push": bson.M{
+				"notes": note,
+			},
+			"$set": bson.M{
+				"updatedAt": time.Now(),
+			},
+		},
+	)
+
 	return err
 }

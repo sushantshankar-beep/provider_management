@@ -52,6 +52,14 @@ type AcceptedService struct {
 	Issues              []string            `bson:"issues,omitempty" json:"issues,omitempty"`
 	ProviderLocation    ProviderLocation    `bson:"providerLocation,omitempty" json:"provider_location,omitempty"`
 	ServiceLocation     ServiceLocation     `bson:"serviceLocation,omitempty" json:"service_location,omitempty"`
+	Notes               []BookingNote      `bson:"notes,omitempty" json:"notes,omitempty"`
 	CreatedAt           time.Time           `bson:"createdAt" json:"created_at"`
 	UpdatedAt           time.Time           `bson:"updatedAt" json:"updated_at"`
+}
+
+type BookingNote struct {
+	ID        string    `bson:"_id,omitempty" json:"id"`
+	Content   string    `bson:"content" json:"content"`
+	AddedBy   string    `bson:"addedBy" json:"added_by"`
+	CreatedAt time.Time `bson:"createdAt" json:"created_at"`
 }

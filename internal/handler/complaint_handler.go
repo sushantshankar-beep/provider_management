@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
+    "time"
 	"provider_management/internal/domain"
 	"provider_management/internal/service"
 
@@ -77,6 +77,7 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 
 	limitedData := make([]ComplaintListItem, len(complaints))
 	for i, complaint := range complaints {
+		indianTime := complaint.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 		limitedData[i] = ComplaintListItem{
 			ID:                complaint.ID,
 			InternalID:        "CMP" + strconv.FormatInt(complaint.InternalID, 10),
@@ -84,7 +85,7 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 			RaisedBy:          complaint.RaisedBy,
 			Problem:           complaint.Problem,
 			Status:            complaint.Status,
-			CreatedAt:         complaint.CreatedAt.Format("2006-01-02 15:04:05"),
+			CreatedAt:         indianTime.Format("2006-01-02 15:04:05"), 
 		}
 	}
 
@@ -248,7 +249,6 @@ func (h *ComplaintHandler) UpdateStatus(c *gin.Context) {
 }
 
 func (h *ComplaintHandler) AddNote(c *gin.Context) {
-	// Get the MongoDB ObjectID directly from the URL
 	complaintID := c.Param("id")
 	log.Printf("Adding note to complaint ID: %s", complaintID)
 
@@ -261,7 +261,6 @@ func (h *ComplaintHandler) AddNote(c *gin.Context) {
 		return
 	}
 
-	// Validate required fields
 	if req.Content == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,

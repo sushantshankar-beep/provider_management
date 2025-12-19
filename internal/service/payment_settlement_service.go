@@ -3,13 +3,15 @@ package service
 import (
 	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
 	"strconv"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type SettlementRequest struct {
@@ -55,7 +57,7 @@ func NewSettlementService(
 }
 
 func parsePayoutID(payoutIDStr string) (int64, error) {
-	numStr := strings.TrimPrefix(payoutIDStr, "SET")
+	numStr := strings.TrimPrefix(payoutIDStr, "PAY")
 	return strconv.ParseInt(numStr, 10, 64)
 }
 
@@ -105,6 +107,15 @@ func (s *SettlementService) CreateSettlement(
 		}
 	}
 
+	alreadySettledCount, err := s.serviceRepo.CountSettledByIDs(ctx, serviceObjIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	if alreadySettledCount > 0 {
+		return nil, fmt.Errorf("some services are already settled")
+	}
+
 	now := time.Now()
 
 	settlement := &domain.ProviderSettlement{
@@ -126,10 +137,36 @@ func (s *SettlementService) CreateSettlement(
 	if err := s.settlementRepo.Create(ctx, settlement); err != nil {
 		return nil, fmt.Errorf("failed to create settlement")
 	}
+
 	if err := s.serviceRepo.MarkAsSettled(ctx, serviceObjIDs, settlement.ID); err != nil {
 		return nil, err
 	}
-	_ = s.payoutRepo.MarkSettled(ctx, payout.ID, settlement.ID)
+
+	unsettledCount, err := s.serviceRepo.CountUnsettledByIDs(ctx, payout.ServiceIDs)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("unsettledCount", unsettledCount)
+
+	if unsettledCount == 0 {
+		err = s.payoutRepo.UpdateStatus(
+			ctx,
+			payout.ID,
+			domain.PayoutStatusSettled,
+			&settlement.ID,
+		)
+	} else {
+		err = s.payoutRepo.UpdateStatus(
+			ctx,
+			payout.ID,
+			domain.PayoutStatusPartiallySettled,
+			nil,
+		)
+	}
+
+	if err != nil {
+		return nil, err
+	}
 
 	return settlement, nil
 }
