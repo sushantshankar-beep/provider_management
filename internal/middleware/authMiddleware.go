@@ -26,7 +26,7 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 
 		// ✅ Allow CORS preflight
 		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(http.StatusNoContent)
+			c.AbortWithStatus(204)
 			return
 		}
 
