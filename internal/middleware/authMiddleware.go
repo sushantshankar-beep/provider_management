@@ -64,6 +64,8 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 			return
 		}
 
+		
+
 		admin, err := m.adminRepo.FindByID(context.Background(), adminID)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})

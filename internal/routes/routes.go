@@ -21,6 +21,9 @@ func SetupRoutes(
 	serviceHandler *handler.ServiceHandler,
 	adminHandler *handler.AdminHandler,
 	authMiddleware *middleware.AuthMiddleware,
+	activityLogMiddleware *middleware.ActivityLogMiddleware,
+	activityLogHandler *handler.ActivityLogHandler,
+	amcPlanHandler *handler.AMCPlanHandler,
 ) {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
@@ -43,12 +46,16 @@ func SetupRoutes(
 		MaxAge:           12 * time.Hour,
 	}))
 
+	r.POST("/admin/panel/login", adminHandler.Login)
 	admin := r.Group("/admin")
+	admin.Use(authMiddleware.AdminAuth())
+	admin.Use(activityLogMiddleware.LogActivity())
 	{
 		users := admin.Group("/users")
 		{
 			users.GET("", userAdminHandler.GetAllUsers)
 			users.GET("/:id", userAdminHandler.GetByID)
+			users.GET("/:id/activity-logs", activityLogHandler.GetUserActivityLogs)
 			users.PATCH("/:id/status", userAdminHandler.UpdateStatus)
 		}
 
@@ -56,6 +63,7 @@ func SetupRoutes(
 		{
 			providers.GET("", providerAdminHandler.GetAll)
 			providers.GET("/:id", providerAdminHandler.GetByID)
+			providers.GET("/:id/activity-logs", activityLogHandler.GetProviderActivityLogs)
 			providers.PATCH("/status/:id", providerAdminHandler.UpdateStatus)
 			providers.PATCH("/kyc/:id", providerAdminHandler.UpdateKYC)
 			providers.PATCH("/verify-document/:id", providerAdminHandler.VerifyDocument)
@@ -68,6 +76,7 @@ func SetupRoutes(
 			bookings.GET("", bookingAdminHandler.GetAllBookings)
 			bookings.GET("/stats", bookingAdminHandler.GetBookingStats)
 			bookings.GET("/:bookingId", bookingAdminHandler.GetBookingByID)
+			bookings.GET("/:bookingId/activity-logs", activityLogHandler.GetBookingActivityLogs)
 			bookings.GET("/get-invoice/:serviceId", bookingAdminHandler.GetInvoiceData)
 			bookings.PUT("/:bookingId/cancel", bookingAdminHandler.CancelBooking)
 			bookings.PUT("/:bookingId/complete", bookingAdminHandler.MarkBookingCompleted)
@@ -79,6 +88,7 @@ func SetupRoutes(
 			complaints.GET("", complaintHandler.GetAll)
 			complaints.GET("/stats", complaintHandler.GetStats)
 			complaints.GET("/:id", complaintHandler.GetByID)
+			complaints.GET("/:id/activity-logs", activityLogHandler.GetComplaintActivityLogs)
 			complaints.POST("/:id/assessment", complaintHandler.PostAssessment)
 			complaints.POST("/:id/notes", complaintHandler.AddNote)
 			complaints.PATCH("/:id/status", complaintHandler.UpdateStatus)
@@ -110,27 +120,41 @@ func SetupRoutes(
 			services.GET("", serviceHandler.GetServices)
 			services.GET("/stats", serviceHandler.GetServiceStats)
 			services.GET("/:id", serviceHandler.GetServiceByID)
+			services.GET("/:id/activity-logs", activityLogHandler.GetServiceActivityLogs)
 			services.PUT("/:id", serviceHandler.UpdateService)
 			services.PATCH("/:id/status", serviceHandler.UpdateServiceStatus)
 			services.DELETE("/:id", serviceHandler.DeleteService)
 		}
 
-		admin := admin.Group("/panel")
+		panel := admin.Group("/panel")
 		{
-			admin.POST("/login", adminHandler.Login)
-			admin.POST("/logout", authMiddleware.AdminAuth(), adminHandler.Logout)
-			admin.POST("/logout-all", authMiddleware.AdminAuth(), adminHandler.LogoutAll)
-			admin.GET("/profile", authMiddleware.AdminAuth(), adminHandler.GetProfile)
-			admin.POST("/change-password", authMiddleware.AdminAuth(), adminHandler.ChangeOwnPassword)
+			panel.POST("/logout", adminHandler.Logout)
+			panel.POST("/logout-all", adminHandler.LogoutAll)
+			panel.GET("/profile", adminHandler.GetProfile)
+			panel.POST("/change-password", adminHandler.ChangeOwnPassword)
 			
-			admin.POST("/create", authMiddleware.AdminAuth(), adminHandler.CreateAdmin)
-			admin.GET("/all", authMiddleware.AdminAuth(), adminHandler.GetAllAdmins)
-			admin.GET("/stats", authMiddleware.AdminAuth(), adminHandler.GetDashboardStats)
-			admin.GET("/:id", authMiddleware.AdminAuth(), adminHandler.GetAdminByID)
-			admin.PUT("/:id", authMiddleware.AdminAuth(), adminHandler.UpdateAdmin)
-			admin.PATCH("/:id/toggle-status", authMiddleware.AdminAuth(), adminHandler.ToggleAdminStatus)
-			admin.DELETE("/:id", authMiddleware.AdminAuth(), adminHandler.DeleteAdmin)
-			admin.POST("/:id/reset-password", authMiddleware.AdminAuth(), adminHandler.ResetPasswordBySuperAdmin)
+			panel.POST("/create", adminHandler.CreateAdmin)
+			panel.GET("/all", adminHandler.GetAllAdmins)
+			panel.GET("/stats", adminHandler.GetDashboardStats)
+			panel.GET("/:id", adminHandler.GetAdminByID)
+			panel.PUT("/:id", adminHandler.UpdateAdmin)
+			panel.PATCH("/:id/toggle-status", adminHandler.ToggleAdminStatus)
+			panel.DELETE("/:id", adminHandler.DeleteAdmin)
+			panel.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
+		}
+
+		activityLogs := admin.Group("/activity-logs")
+		{
+			activityLogs.GET("", activityLogHandler.GetAllActivityLogs)
+		}
+		amcPlans := admin.Group("/amc-plans")
+		{
+			amcPlans.POST("/create", amcPlanHandler.CreateAMC)
+			amcPlans.GET("", amcPlanHandler.GetAllAMC)
+			amcPlans.GET("/:id", amcPlanHandler.GetAMCByID)
+			amcPlans.PUT("/:id", amcPlanHandler.UpdateAMC)
+			amcPlans.DELETE("/:id", amcPlanHandler.DeleteAMC)
+			amcPlans.PATCH("/:id/toggle-status", amcPlanHandler.ToggleAMCStatus)
 		}
 	}
 }

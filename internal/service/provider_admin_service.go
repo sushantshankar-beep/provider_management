@@ -221,16 +221,13 @@ func (s *ProviderAdminService) GetAllProviders(
 		query["$and"] = conditions
 	}
 
-	log.Printf("Final query: %+v", query)
-	log.Printf("Pagination: page=%d, limit=%d, skip=%d, sort=%s", page, limit, skip, sort)
 
 	providers, total, err := s.providers.FindAll(ctx, query, skip, int64(limit), sort)
 	if err != nil {
-		log.Printf("Error in FindAll: %v", err)
 		return nil, fmt.Errorf("failed to fetch providers: %v", err)
 	}
 
-	log.Printf("Found %d providers out of total %d", len(providers), total)
+
 
 	countQuery := query
 	if andConditions, ok := countQuery["$and"].([]bson.M); ok && len(andConditions) == 1 {

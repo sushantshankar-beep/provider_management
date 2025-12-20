@@ -463,7 +463,7 @@ func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID s
 
 
 func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) error {
-	log.Printf("ProcessPayout - Starting payout for provider %s, amount: %.2f", req.ProviderID, req.Amount)
+
 
 	providerObjID, err := primitive.ObjectIDFromHex(req.ProviderID)
 	if err != nil {
@@ -517,10 +517,10 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 	}
 
 	if err := s.payoutRepo.Create(ctx, payout); err != nil {
-		log.Printf("ProcessPayout - Failed to create payout: %v", err)
+		
 		return fmt.Errorf("failed to create payout: %w", err)
 	}
 
-	log.Printf("ProcessPayout - Payout created successfully with ID: %s, PayoutID: %d", payout.ID.Hex(), payout.PayoutID)
+	
 	return nil
 }

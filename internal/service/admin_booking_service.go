@@ -243,6 +243,37 @@ type InvoicePricing struct {
 	Total         string `json:"total"`
 }
 
+const (
+	StatusNotStarted  = "not_started"
+	StatusStarted     = "started"
+	StatusReached     = "reached_location"
+	StatusOTPVerified = "otp_verified"
+	StatusInProgress  = "in_progress"
+	StatusCompleted   = "completed"
+	StatusCancelled   = "cancelled"
+)
+
+func mapStatusLabelToDB(label string) string {
+	switch label {
+	case "Pending":
+		return StatusNotStarted
+	case "Job Started":
+		return StatusStarted
+	case "Reached Location":
+		return StatusReached
+	case "OTP Verified":
+		return StatusOTPVerified
+	case "Service Started":
+		return StatusInProgress
+	case "Completed":
+		return StatusCompleted
+	case "Cancelled":
+		return StatusCancelled
+	default:
+		return label
+	}
+}
+
 func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[string]string) (*GetAllBookingsResponse, error) {
 	page, _ := strconv.Atoi(params["page"])
 	limit, _ := strconv.Atoi(params["limit"])
@@ -256,17 +287,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 	filter := bson.M{}
 
 	if status := params["status"]; status != "" {
-		if status == "Confirmed" {
-			filter["status"] = "not_started"
-		} else if status == "In Progress" {
-			filter["status"] = "started"
-		} else if status == "Completed" {
-			filter["status"] = "completed"
-		} else if status == "Cancelled" {
-			filter["status"] = "cancelled"
-		} else {
-			filter["status"] = status
-		}
+		filter["status"] = mapStatusLabelToDB(status)
 	}
 
 	if paymentStatus := params["paymentStatus"]; paymentStatus != "" {
@@ -301,21 +322,15 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 	}
 
 	if providerID := params["providerId"]; providerID != "" {
-
 		var providerObjectID primitive.ObjectID
-
 		if primitive.IsValidObjectID(providerID) {
-
 			providerObjectID, _ = primitive.ObjectIDFromHex(providerID)
 			filter["provider"] = providerObjectID
 		} else {
-
 			if provider, err := s.repo.FindProviderByProviderID(ctx, providerID); err == nil && provider != nil {
-
 				providerObjectID = provider.ID
 				filter["provider"] = providerObjectID
 			} else {
-
 				if internalID, err := strconv.ParseInt(providerID, 10, 64); err == nil {
 					if provider, err := s.repo.FindProviderByInternalID(ctx, internalID); err == nil && provider != nil {
 						providerObjectID = provider.ID
@@ -324,8 +339,6 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 				}
 			}
 		}
-
-		log.Printf("Provider filter: providerID=%s, filter.provider=%v", providerID, filter["provider"])
 	}
 
 	if bookingID := params["bookingId"]; bookingID != "" {
@@ -340,9 +353,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		cleanSearch := strings.ReplaceAll(search, "BK", "")
 
 		if bookingID, err := strconv.ParseInt(cleanSearch, 10, 64); err == nil {
-			searchConditions = append(searchConditions, bson.M{
-				"id": bookingID,
-			})
+			searchConditions = append(searchConditions, bson.M{"id": bookingID})
 		}
 
 		cleanSearch = strings.ReplaceAll(search, "VW", "")
@@ -353,9 +364,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 					objID, _ := primitive.ObjectIDFromHex(user.ID)
 					userIDs = append(userIDs, objID)
 				}
-				searchConditions = append(searchConditions, bson.M{
-					"user": bson.M{"$in": userIDs},
-				})
+				searchConditions = append(searchConditions, bson.M{"user": bson.M{"$in": userIDs}})
 			}
 		}
 
@@ -365,9 +374,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 				objID, _ := primitive.ObjectIDFromHex(user.ID)
 				userIDs = append(userIDs, objID)
 			}
-			searchConditions = append(searchConditions, bson.M{
-				"user": bson.M{"$in": userIDs},
-			})
+			searchConditions = append(searchConditions, bson.M{"user": bson.M{"$in": userIDs}})
 		}
 
 		if providers, err := s.repo.FindProvidersBySearch(ctx, search); err == nil && len(providers) > 0 {
@@ -375,9 +382,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 			for _, provider := range providers {
 				providerIDs = append(providerIDs, provider.ID)
 			}
-			searchConditions = append(searchConditions, bson.M{
-				"provider": bson.M{"$in": providerIDs},
-			})
+			searchConditions = append(searchConditions, bson.M{"provider": bson.M{"$in": providerIDs}})
 		}
 
 		if len(searchConditions) > 0 {
@@ -420,29 +425,71 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		return nil, err
 	}
 
-	bookings := make([]BookingResponse, 0, len(services))
+	if len(services) == 0 {
+		stats, _ := s.GetBookingStats(ctx, params)
+		return &GetAllBookingsResponse{
+			Bookings:    []BookingResponse{},
+			TotalPages:  0,
+			CurrentPage: page,
+			Total:       total,
+			Stats:       *stats,
+		}, nil
+	}
+
+	userIDSet := make(map[string]bool)
+	providerIDSet := make(map[string]bool)
+	serviceRequestIDSet := make(map[string]bool)
 	serviceIDs := make([]string, 0, len(services))
 
 	for _, svc := range services {
+		userIDSet[svc.UserID] = true
+		providerIDSet[svc.ProviderID.Hex()] = true
+		serviceRequestIDSet[svc.ServiceRequestID.Hex()] = true
 		serviceIDs = append(serviceIDs, svc.ID.Hex())
 	}
 
-	ratingsMap := make(map[string][]*domain.Rating)
-	if len(serviceIDs) > 0 {
-		ratings, _ := s.repo.FindRatingsByServiceIDs(ctx, serviceIDs)
-		for i := range ratings {
-			ratingsMap[ratings[i].ServiceID] = append(ratingsMap[ratings[i].ServiceID], &ratings[i])
-		}
+	userIDs := make([]string, 0, len(userIDSet))
+	for id := range userIDSet {
+		userIDs = append(userIDs, id)
 	}
 
+	providerIDs := make([]string, 0, len(providerIDSet))
+	for id := range providerIDSet {
+		providerIDs = append(providerIDs, id)
+	}
+
+	serviceRequestIDs := make([]string, 0, len(serviceRequestIDSet))
+	for id := range serviceRequestIDSet {
+		serviceRequestIDs = append(serviceRequestIDs, id)
+	}
+
+	userMap := make(map[string]*domain.User)
+	users, _ := s.repo.FindUsersByIDs(ctx, userIDs)
+	for i := range users {
+		userMap[users[i].ID] = &users[i]
+	}
+
+	providerMap := make(map[string]*domain.Provider)
+	providers, _ := s.repo.FindProvidersByIDs(ctx, providerIDs)
+	for i := range providers {
+		providerMap[providers[i].ID.Hex()] = &providers[i]
+	}
+
+	serviceRequestMap := make(map[string]*domain.ServiceRequest)
+	serviceRequests, _ := s.repo.FindServiceRequestsByIDs(ctx, serviceRequestIDs)
+	for i := range serviceRequests {
+		serviceRequestMap[serviceRequests[i].ID.Hex()] = &serviceRequests[i]
+	}
+
+	ratingsMap := make(map[string][]*domain.Rating)
+	ratings, _ := s.repo.FindRatingsByServiceIDs(ctx, serviceIDs)
+	for i := range ratings {
+		ratingsMap[ratings[i].ServiceID] = append(ratingsMap[ratings[i].ServiceID], &ratings[i])
+	}
+
+	bookings := make([]BookingResponse, 0, len(services))
+
 	for _, svc := range services {
-
-		var sr *domain.ServiceRequest
-
-		if sreq, err := s.repo.FindServiceRequestByID(ctx, svc.ServiceRequestID.Hex()); err == nil {
-			sr = sreq
-		}
-
 		booking := BookingResponse{
 			ID:            svc.ID.Hex(),
 			BookingID:     fmt.Sprintf("BK%d", svc.InternalID),
@@ -454,7 +501,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 			BookingDate:   svc.CreatedAt,
 		}
 
-		if user, err := s.repo.FindUserByID(ctx, svc.UserID); err == nil {
+		if user, ok := userMap[svc.UserID]; ok {
 			booking.UserID = fmt.Sprintf("VW%d", user.InternalID)
 			booking.CustomerName = user.Name
 			booking.Phone = user.Phone
@@ -462,12 +509,12 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 			booking.Zone = user.SelectedCityName
 		}
 
-		if provider, err := s.repo.FindProviderByID(ctx, svc.ProviderID.Hex()); err == nil {
+		if provider, ok := providerMap[svc.ProviderID.Hex()]; ok {
 			booking.ProviderName = provider.Name
 			booking.ProviderPhone = provider.Phone
 		}
 
-		if sr != nil {
+		if sr, ok := serviceRequestMap[svc.ServiceRequestID.Hex()]; ok {
 			booking.VehicleType = sr.VehicleType
 			booking.ServiceBidType = sr.ServiceBidType
 			booking.Problems = sr.Problems
@@ -600,19 +647,7 @@ func (s *AdminBookingService) GetBookingByID(
 		sr = &domain.ServiceRequest{}
 	}
 
-	status := "Confirmed"
-	switch svc.Status {
-	case "not_started":
-		status = "Confirmed"
-	case "started":
-		status = "In Progress"
-	case "completed":
-		status = "Completed"
-	case "cancelled":
-		status = "Cancelled"
-	default:
-		status = "Cancelled by Provider"
-	}
+	status := s.mapStatus(svc.Status)
 
 	booking := &DetailedBookingResponse{
 		ID:            svc.ID.Hex(),
@@ -945,19 +980,26 @@ func (s *AdminBookingService) MarkBookingCompleted(ctx context.Context, bookingI
 }
 
 func (s *AdminBookingService) mapStatus(status string) string {
-	statusMap := map[string]string{
-		"pending":     "Pending",
-		"accepted":    "Accepted",
-		"reached":     "Reached",
-		"in_progress": "In Progress",
-		"completed":   "Completed",
-		"cancelled":   "Cancelled",
+	switch status {
+	case StatusNotStarted:
+		return "Pending"
+	case StatusStarted:
+		return "Job Started"
+	case StatusReached:
+		return "Reached Location"
+	case StatusOTPVerified:
+		return "OTP Verified"
+	case StatusInProgress:
+		return "Service Started"
+	case StatusCompleted:
+		return "Completed"
+	case StatusCancelled:
+		return "Cancelled"
+	default:
+		return status
 	}
-	if mapped, ok := statusMap[status]; ok {
-		return mapped
-	}
-	return status
 }
+
 
 func (s *AdminBookingService) mapPaymentStatus(status string) string {
 	if status == "success" || status == "paid" {

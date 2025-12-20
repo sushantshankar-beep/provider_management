@@ -21,7 +21,7 @@ func NewRefundService(refundRepo *repository.RefundRepository) *RefundService {
 }
 
 func (s *RefundService) ProcessRefund(ctx context.Context, req RefundRequest) error {
-	log.Printf("ProcessRefund - Starting refund for user %s, amount: %.2f", req.UserID, req.Amount)
+
     
 	var complaintID *primitive.ObjectID
 	var complaintNo *int64
@@ -68,11 +68,10 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req RefundRequest) er
 	}
 
 	if err := s.refundRepo.Create(ctx, refund); err != nil {
-		log.Printf("ProcessRefund - Failed to create refund: %v", err)
 		return fmt.Errorf("failed to create refund: %w", err)
 	}
 
-	log.Printf("ProcessRefund - Refund created successfully with ID: %s", refund.RefundID)
+	
 
 	go func() {
 		bgCtx := context.Background()

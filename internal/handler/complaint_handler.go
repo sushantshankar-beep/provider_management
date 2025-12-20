@@ -50,6 +50,7 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 		filter.Category = &category
 	}
 
+	
 	if search := c.Query("search"); search != "" {
 		filter.SearchQuery = &search
 	}
@@ -250,7 +251,6 @@ func (h *ComplaintHandler) UpdateStatus(c *gin.Context) {
 
 func (h *ComplaintHandler) AddNote(c *gin.Context) {
 	complaintID := c.Param("id")
-	log.Printf("Adding note to complaint ID: %s", complaintID)
 
 	var req service.AddNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -278,7 +278,6 @@ func (h *ComplaintHandler) AddNote(c *gin.Context) {
 	}
 
 	if err := h.complaintService.AddNote(c.Request.Context(), complaintID, req); err != nil {
-		log.Printf("Error adding note: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": "Failed to add note: " + err.Error(),
