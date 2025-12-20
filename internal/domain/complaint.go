@@ -54,7 +54,6 @@ type ComplaintAssessment struct {
 	AssessedBy       string     `bson:"assessedBy" json:"assessed_by"`
 	AssessedAt       time.Time  `bson:"assessedAt" json:"assessed_at"`
 }
-
 type ComplaintNote struct {
 	ID        string    `bson:"_id,omitempty" json:"id"`
 	Content   string    `bson:"content" json:"content"`

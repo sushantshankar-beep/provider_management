@@ -118,6 +118,14 @@ func (s *SettlementService) CreateSettlement(
 
 	now := time.Now()
 
+	settlementAmount := payout.NetPayable
+
+	if payout.PartialAmount > 0 {
+
+		settlementAmount = payout.PartialAmount
+
+	}
+
 	settlement := &domain.ProviderSettlement{
 		SettlementID:  time.Now().UnixMilli(),
 		PayoutID:      payout.ID,
@@ -125,7 +133,7 @@ func (s *SettlementService) CreateSettlement(
 		ProviderName:  provider.Name,
 		AccountNo:     provider.BankDetails.AccountNumber,
 		IfscCode:      provider.BankDetails.IfscCode,
-		TotalAmount:   payout.NetPayable,
+		TotalAmount:   settlementAmount,
 		PaymentMode:   req.PaymentMode,
 		PaymentMethod: req.PaymentMethod,
 		Justification: req.Justification,

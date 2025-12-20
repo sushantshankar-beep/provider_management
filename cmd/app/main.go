@@ -45,7 +45,11 @@ func main() {
 	settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
     serviceMasterRepo := repository.NewServiceMasterRepo(mongoDB)
 	adminRepo := repository.NewAdminRepository(mongoDB)
+	refundRepo := repository.NewRefundRepository(mongoDB)
+	activityLogRepo := repository.NewActivityLogRepository(mongoDB)
 	authMiddleware := middleware.NewAuthMiddleware(adminRepo)
+	activityLogMiddleware := middleware.NewActivityLogMiddleware(activityLogRepo)
+	amcPlanRepo := repository.NewAMCPlanRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
@@ -53,10 +57,12 @@ func main() {
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo , settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
-	refundService := service.NewRefundService(userRepo, transactionRepo)
+	refundService := service.NewRefundService(refundRepo)
 	complaintService := service.NewComplaintService(complaintRepo,acceptedServiceRepo,userRepo,providerRepo,refundService,payoutService)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo)
+	activityLogService := service.NewActivityLogService(activityLogRepo)
+	amcPlanService := service.NewAMCPlanService(amcPlanRepo)
 
 	complaintHandler := handler.NewComplaintHandler(complaintService)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
@@ -67,6 +73,8 @@ func main() {
 	settlementHandler := handler.NewSettlementHandler(settlementService)
 	serviceMasterHandler := handler.NewServiceHandler(serviceMasterService)
 	adminHandler := handler.NewAdminHandler(adminService)
+	activityLogHandler := handler.NewActivityLogHandler(activityLogService)
+	amcPlanHandler := handler.NewAMCPlanHandler(amcPlanService)
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
@@ -85,6 +93,9 @@ func main() {
 		serviceMasterHandler,
 		adminHandler,
 		authMiddleware,
+		activityLogMiddleware,
+		activityLogHandler,
+		amcPlanHandler,
 	)
 
 	srv := &http.Server{
