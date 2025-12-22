@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"provider_management/internal/logger"
 	"provider_management/internal/service"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
 type TransactionHandler struct {
@@ -33,7 +34,7 @@ func (h *TransactionHandler) GetAll(c *gin.Context) {
 
 	pageInt, _ := strconv.ParseInt(page, 10, 64)
 	limitInt, _ := strconv.ParseInt(limit, 10, 64)
-	
+
 	if pageInt < 1 {
 		pageInt = 1
 	}

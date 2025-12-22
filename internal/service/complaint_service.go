@@ -351,12 +351,8 @@ func (s *ComplaintService) UpdateComplaintStatus(ctx context.Context, complaintI
 	return nil
 }
 
-func (s *ComplaintService) AddNote(ctx context.Context, complaintID string, req AddNoteRequest) error {
-
-	if _, err := primitive.ObjectIDFromHex(complaintID); err != nil {
-		return fmt.Errorf("invalid complaint ID format: %w", err)
-	}
-
+func (s *ComplaintService) AddNote(ctx context.Context, internalID int64, req AddNoteRequest) error {
+	
 	if req.Content == "" {
 		return fmt.Errorf("note content cannot be empty")
 	}
@@ -371,8 +367,8 @@ func (s *ComplaintService) AddNote(ctx context.Context, complaintID string, req 
 		AddedBy:   req.AddedBy,
 		CreatedAt: time.Now(),
 	}
-
-	err := s.complaintRepo.AddNote(ctx, complaintID, note)
+	
+	err := s.complaintRepo.AddNote(ctx, internalID, note)
 	if err != nil {
 		return fmt.Errorf("failed to add note to complaint: %w", err)
 	}

@@ -7,6 +7,7 @@ type Transaction struct {
 	ID            primitive.ObjectID `json:"_id" bson:"_id,omitempty"`
 	UserID        primitive.ObjectID `json:"user_id" bson:"userId"`
 	ServiceID     primitive.ObjectID `json:"service_id" bson:"serviceId"`
+	AMCPurchaseID primitive.ObjectID `json:"amc_purchase_id" bson:"AMCPurchaseId,omitempty"`
 	InternalID    int64              `json:"id" bson:"id"`
 	TxnID         string             `json:"txnid" bson:"txnid"`
 	Amount        float64            `json:"amount" bson:"amount"`

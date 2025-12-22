@@ -213,3 +213,17 @@ func (r *UserRepo) GetByID(ctx context.Context, id string) (*domain.User, error)
 	}
 	return &user, nil
 }
+
+func (r *UserRepo) FindByFilter(ctx context.Context, filter bson.M) ([]domain.User, error) {
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []domain.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+	return users, nil
+}

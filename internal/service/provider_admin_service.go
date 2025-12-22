@@ -59,11 +59,8 @@ type ProviderResponse struct {
 type ProviderCounts struct {
 	Total       int64 `json:"total"`
 	Active      int64 `json:"active"`
-	Suspended   int64 `json:"suspended"`
-	Blacklisted int64 `json:"blacklisted"`
+	Inactive    int64  `json:"inactive"`
 	PendingKYC  int64 `json:"pending_kyc"`
-	ActiveKYC   int64 `json:"active_kyc"`
-	RejectedKYC int64 `json:"rejected_kyc"`
 }
 
 type ProviderDetailResponse struct {
@@ -106,9 +103,11 @@ type ProviderDetailResponse struct {
 func (s *ProviderAdminService) GetAllProviders(
 	ctx context.Context,
 	pageStr, limitStr, sort, search, status, name, mobile,
-	providerID, kycStatus, accountStatus, vehicleType, zone string,
+	providerID, kycStatus, accountStatus, vehicleType, zone, filter string,
 ) (*ProviderListResponse, error) {
-
+    log.Println("status",status)
+	log.Println("kycstatus",kycStatus)
+	log.Println("kjedncdkj",filter)
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
 		page = 1
@@ -127,6 +126,26 @@ func (s *ProviderAdminService) GetAllProviders(
 	query := bson.M{}
 	var conditions []bson.M
 
+	inactiveStatuses := []string{
+        string(domain.AccountStatusSuspended),
+        string(domain.AccountStatusBlacklisted),
+        string(domain.AccountStatusDeactivated),
+    }
+	if filter == "inactive" {
+        conditions = append(conditions, bson.M{"isActive": bson.M{"$in": inactiveStatuses}})
+    }
+
+
+    if filter != "" {
+        switch (filter) {
+        case "Pending":
+            conditions = append(conditions, bson.M{"status": domain.StatusPending})
+        case "verified", "active":
+            conditions = append(conditions, bson.M{"status": domain.StatusActive})
+        case "rejected":
+            conditions = append(conditions, bson.M{"status": domain.StatusRejected})
+        }
+    }
 	if search != "" {
 		searchConditions := []bson.M{
 			{"name": bson.M{"$regex": search, "$options": "i"}},
@@ -238,11 +257,9 @@ func (s *ProviderAdminService) GetAllProviders(
 	}
 
 	activeCount, _ := s.providers.CountByStatus(ctx, countQuery, "isActive", domain.AccountStatusActive)
-	suspendedCount, _ := s.providers.CountByStatus(ctx, countQuery, "isActive", domain.AccountStatusSuspended)
-	blacklistedCount, _ := s.providers.CountByStatus(ctx, countQuery, "isActive", domain.AccountStatusBlacklisted)
-	pendingKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusPending)
-	activeKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusActive)
-	rejectedKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusRejected)
+    
+    inactiveCount, _ := s.providers.CountByMultipleStatuses(ctx, countQuery, "isActive", inactiveStatuses)
+    pendingKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusPending)
 
 	formattedProviders := make([]ProviderResponse, len(providers))
 	for i, p := range providers {
@@ -320,11 +337,8 @@ func (s *ProviderAdminService) GetAllProviders(
 		Counts: ProviderCounts{
 			Total:       total,
 			Active:      activeCount,
-			Suspended:   suspendedCount,
-			Blacklisted: blacklistedCount,
+			Inactive:    inactiveCount,
 			PendingKYC:  pendingKycCount,
-			ActiveKYC:   activeKycCount,
-			RejectedKYC: rejectedKycCount,
 		},
 		Pagination: Pagination{
 			CurrentPage: page,

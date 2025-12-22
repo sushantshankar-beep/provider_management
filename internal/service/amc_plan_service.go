@@ -111,7 +111,6 @@ func (s *AMCPlanService) GetAllAMC(
 			"plan_base_price":         plan.PlanBasePrice,
 			"created_at":              plan.CreatedAt,
 			"is_active":               plan.IsActive,
-			"plan_status":             plan.PlanStatus,
 		}
 	}
 
@@ -163,7 +162,6 @@ func (s *AMCPlanService) GetAMCByID(ctx context.Context, id string) (map[string]
 		"plan_tags":                   plan.PlanTags,
 		"plan_features":               plan.PlanFeatures,
 		"sorting":                     plan.Sorting,
-		"plan_status":                 plan.PlanStatus,
 		"is_active":                   plan.IsActive,
 		"created_by":                  plan.CreatedBy.Hex(),
 		"last_modified_by":            plan.LastModifiedBy.Hex(),

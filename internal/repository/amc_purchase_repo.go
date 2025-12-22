@@ -75,3 +75,16 @@ func (r *AMCPurchaseRepo) FindActiveAMCs(ctx context.Context) ([]domain.AMCPurch
 
 	return amcs, nil
 }
+
+func (r *AMCPurchaseRepo) FindByID(ctx context.Context, id string) (*domain.AMCPurchase, error) {
+	var res domain.AMCPurchase
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	err = r.col.FindOne(ctx, bson.M{"_id": objID}).Decode(&res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
