@@ -25,16 +25,16 @@ const (
 type RefundType string
 
 const (
-	RefundTypeFull    RefundType = "full"
-	RefundTypePartial RefundType = "partial"
+	RefundTypeFull    RefundType = "Full Refund"
+	RefundTypePartial RefundType = "Partial Refund"
 	RefundTypeNone    RefundType = "none"
 )
 
 type PayoutType string
 
 const (
-	PayoutTypeFull    PayoutType = "full"
-	PayoutTypePartial PayoutType = "partial"
+	PayoutTypeFull    PayoutType = "Full Payout"
+	PayoutTypePartial PayoutType = "Partial Payout"
 	PayoutTypeNone    PayoutType = "none"
 )
 
@@ -111,6 +111,7 @@ type ComplaintWithDetails struct {
 	Complaint
 	UserDetails     *UserDetails     `json:"user_details,omitempty"`
 	ProviderDetails *ProviderDetails `json:"provider_details,omitempty"`
+	BookingDetails  *BookingDetails  `json:"booking_details,omitempty"`
 }
 
 type ComplaintFilter struct {
@@ -128,4 +129,11 @@ type ComplaintStats struct {
 	TotalComplaints    int64 `json:"total_complaints"`
 	UserComplaints     int64 `json:"user_complaints"`
 	ProviderComplaints int64 `json:"provider_complaints"`
+}
+
+type BookingDetails struct {
+	ID         string  `json:"id"`
+	InternalID int64   `json:"internal_id"`
+	BasePrice  float64 `json:"base_price"`
+	FinalPrice float64 `json:"final_price"`
 }

@@ -129,6 +129,21 @@ func (s *ComplaintService) GetComplaintWithDetails(ctx context.Context, id strin
 		}
 	}
 
+	if complaint.AcceptedServiceID != "" {
+		booking, err := s.acceptedServiceRepo.FindByID(ctx, complaint.AcceptedServiceID)
+		if err != nil {
+			log.Printf("Warning: Could not fetch booking details for ID %s: %v", complaint.AcceptedServiceID, err)
+		} else {
+			complaintWithDetails.BookingDetails = &domain.BookingDetails{
+				ID:         booking.ID.Hex(),
+				InternalID: booking.InternalID,
+				BasePrice:  booking.BasePrice,
+				FinalPrice: booking.FinalPrice,
+			}
+		}
+	}
+
+
 	return complaintWithDetails, nil
 }
 
@@ -141,12 +156,13 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	if err != nil {
 		return fmt.Errorf("failed to get complaint: %w", err)
 	}
+
+
    
 	if complaint.Status != "initiated" {
 		return fmt.Errorf("complaint must be in initiated status to assess, current status: %s", complaint.Status)
 	}
 
-	// Fetch accepted service to get original amount
 	acceptedService, err := s.acceptedServiceRepo.FindByID(ctx, complaint.AcceptedServiceID)
 	if err != nil {
 		log.Printf("ERROR: Failed to get accepted service: %v", err)
@@ -163,17 +179,27 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		return fmt.Errorf("invalid original booking amount: %.2f", originalAmount)
 	}
 
-	// Handle full refund - use original amount
+	log.Println("refund type full",domain.RefundTypeFull);
 	if req.RefundToUser == domain.RefundTypeFull {
 		req.RefundAmount = originalAmount
 		log.Printf("AssessComplaint - Full refund selected, setting refund amount to: %.2f", req.RefundAmount)
 	}
 
-	if req.PayoutToProvider != domain.PayoutTypeNone && req.PayoutAmount <= 0 {
-		return fmt.Errorf("payout_amount must be greater than 0 when payout_to_provider is not 'none'")
+	
+	if req.PayoutToProvider == domain.PayoutTypeFull {
+		req.PayoutAmount = originalAmount
+		log.Printf("AssessComplaint - Full payout selected, setting payout amount to: %.2f", req.PayoutAmount)
 	}
 
-	// Create assessment
+
+	if req.RefundToUser == domain.RefundTypePartial && req.RefundAmount <= 0 {
+		return fmt.Errorf("refund_amount must be greater than 0 when refund_to_user is 'partial'")
+	}
+	
+	if req.PayoutToProvider == domain.PayoutTypePartial && req.PayoutAmount <= 0 {
+		return fmt.Errorf("payout_amount must be greater than 0 when payout_to_provider is 'partial'")
+	}
+	
 	assessment := domain.ComplaintAssessment{
 		FaultParty:       req.FaultParty,
 		RefundToUser:     req.RefundToUser,
@@ -200,6 +226,14 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount > 0 {
 		log.Printf("AssessComplaint - Processing refund of %.2f for user %s", req.RefundAmount, complaint.UserID)
+		refundReason := fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks)
+		
+		if req.RefundToUser == domain.RefundTypeFull {
+			refundReason = "Full Refund - " + refundReason
+		} else {
+			refundReason = fmt.Sprintf("Partial Refund (%.2f) - %s", req.RefundAmount, refundReason)
+		}
+		
 		if err := s.refundService.ProcessRefund(ctx, RefundRequest{
 			UserID:              complaint.UserID,
 			BookingID:           complaint.AcceptedServiceID,
@@ -207,11 +241,17 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 			ComplaintID:         complaint.ID,
 			ComplaintInternalID: complaint.InternalID,
 			Amount:              req.RefundAmount,
-			Reason:              fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks),
+			Reason:              refundReason,
 		}); err != nil {
 			log.Printf("Warning: Failed to process refund: %v", err)
 		} else {
-			actions = append(actions, "Refund sent to Refund Management module")
+			actionMsg := fmt.Sprintf("Refund of %.2f sent to Refund Management module", req.RefundAmount)
+			if req.RefundToUser == domain.RefundTypeFull {
+				actionMsg = "Full " + actionMsg
+			} else {
+				actionMsg = "Partial " + actionMsg
+			}
+			actions = append(actions, actionMsg)
 		}
 	}
 
@@ -224,6 +264,14 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		} else {
 			providerID := acceptedService.ProviderID.Hex()
 			log.Printf("AssessComplaint - Processing payout of %.2f for provider %s", req.PayoutAmount, providerID)
+			
+			payoutReason := fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks)
+			if req.PayoutToProvider == domain.PayoutTypeFull {
+				payoutReason = "Full Payout - " + payoutReason
+			} else {
+				payoutReason = fmt.Sprintf("Partial Payout (%.2f) - %s", req.PayoutAmount, payoutReason)
+			}
+			
 			if err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
 				ProviderID:  providerID,
 				BookingID:   complaint.AcceptedServiceID,
@@ -234,18 +282,26 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 			}); err != nil {
 				log.Printf("Warning: Failed to process payout: %v", err)
 			} else {
-				actions = append(actions, "Payout sent to Settlement Management module")
+				actionMsg := fmt.Sprintf("Payout of %.2f sent to Settlement Management module", req.PayoutAmount)
+				if req.PayoutToProvider == domain.PayoutTypeFull {
+					actionMsg = "Full " + actionMsg
+				} else {
+					actionMsg = "Partial " + actionMsg
+				}
+				actions = append(actions, actionMsg)
 			}
 		}
 	}
 
-	if len(actions) > 0 {
-		log.Printf("AssessComplaint - Updating triggered actions: %v", actions)
-		if err := s.complaintRepo.Update(ctx, complaint.ID, bson.M{
-			"actionsTriggered": actions,
-		}); err != nil {
-			log.Printf("Warning: Failed to update actions: %v", err)
-		}
+	if len(actions) == 0 {
+		actions = append(actions, "No financial actions triggered")
+	}
+
+	log.Printf("AssessComplaint - Updating triggered actions: %v", actions)
+	if err := s.complaintRepo.Update(ctx, complaint.ID, bson.M{
+		"actionsTriggered": actions,
+	}); err != nil {
+		log.Printf("Warning: Failed to update actions: %v", err)
 	}
 
 	log.Printf("AssessComplaint - Assessment completed successfully")
