@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"provider_management/internal/domain"
+	"provider_management/internal/repository"
 	"regexp"
 	"strconv"
 	"time"
-	"provider_management/internal/domain"
-	"provider_management/internal/repository"
+
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -271,11 +272,42 @@ func (s *AdminService) ChangeOwnPassword(ctx context.Context, admin *domain.Admi
 	})
 }
 
+
 func (s *AdminService) GetDashboardStats(ctx context.Context) (map[string]int64, error) {
-	totalAdmin, _ := s.repo.CountDocuments(ctx, bson.M{"role": domain.RoleAdmin})
-	totalSubAdmin, _ := s.repo.CountDocuments(ctx, bson.M{"role": domain.RoleSubAdmin})
-	totalActive, _ := s.repo.CountDocuments(ctx, bson.M{"status": domain.StatusActive})
-	totalDeactive, _ := s.repo.CountDocuments(ctx, bson.M{"status": domain.StatusDeactive})
+
+	totalAdmin, err := s.repo.CountDocuments(ctx, bson.M{
+		"role": bson.M{
+			"$in": []string{
+				domain.RoleSuperAdmin,
+				domain.RoleSubAdmin,
+				domain.RoleAdmin,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	totalSubAdmin, err := s.repo.CountDocuments(ctx, bson.M{
+		"role": domain.RoleSubAdmin,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	totalActive, err := s.repo.CountDocuments(ctx, bson.M{
+		"status": domain.StatusActive,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	totalDeactive, err := s.repo.CountDocuments(ctx, bson.M{
+		"status": domain.StatusDeactive,
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	return map[string]int64{
 		"totalAdmin":    totalAdmin,
@@ -284,6 +316,7 @@ func (s *AdminService) GetDashboardStats(ctx context.Context) (map[string]int64,
 		"totalDeactive": totalDeactive,
 	}, nil
 }
+
 
 func (s *AdminService) GetProfile(ctx context.Context, id primitive.ObjectID) (*domain.Admin, error) {
 	return s.repo.FindByID(ctx, id)

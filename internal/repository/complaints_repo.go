@@ -8,9 +8,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
-	"strings"
-	"strconv"
 	"provider_management/internal/domain"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -58,11 +58,10 @@ func (r *ComplaintRepository) GetByID(ctx context.Context, id string) (*domain.C
 		if err == mongo.ErrNoDocuments {
 			return nil, fmt.Errorf("complaint not found")
 		}
-		
+
 		return nil, fmt.Errorf("failed to get complaint: %w", err)
 	}
 
-	
 	return &complaint, nil
 }
 
@@ -79,7 +78,6 @@ func (r *ComplaintRepository) GetByInternalID(ctx context.Context, internalID in
 		return nil, fmt.Errorf("failed to get complaint: %w", err)
 	}
 
-	
 	return &complaint, nil
 }
 func (r *ComplaintRepository) List(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error) {
@@ -111,14 +109,14 @@ func (r *ComplaintRepository) List(ctx context.Context, filter domain.ComplaintF
 	if filter.SearchQuery != nil && *filter.SearchQuery != "" {
 		search := strings.TrimSpace(*filter.SearchQuery)
 		searchUpper := strings.ToUpper(search)
-	
+
 		orConditions := []bson.M{
 			{"problem": bson.M{"$regex": search, "$options": "i"}},
 			{"status": bson.M{"$regex": search, "$options": "i"}},
 			{"raisedBy": bson.M{"$regex": search, "$options": "i"}},
 			{"category": bson.M{"$regex": search, "$options": "i"}},
 		}
-	
+
 		if strings.HasPrefix(searchUpper, "CMP") {
 			id := strings.TrimPrefix(searchUpper, "CMP")
 			if num, err := strconv.ParseInt(id, 10, 64); err == nil {
@@ -131,7 +129,6 @@ func (r *ComplaintRepository) List(ctx context.Context, filter domain.ComplaintF
 				"id": num,
 			})
 		}
-	
 
 		if strings.HasPrefix(searchUpper, "BK") {
 			id := strings.TrimPrefix(searchUpper, "BK")
@@ -141,7 +138,7 @@ func (r *ComplaintRepository) List(ctx context.Context, filter domain.ComplaintF
 				})
 			}
 		}
-	
+
 		query["$or"] = orConditions
 	}
 
@@ -197,10 +194,9 @@ func (r *ComplaintRepository) Update(ctx context.Context, id string, update inte
 	}
 
 	if result.MatchedCount == 0 {
-		
+
 		return fmt.Errorf("complaint not found")
 	}
-
 
 	return nil
 }
@@ -216,10 +212,10 @@ func (r *ComplaintRepository) UpdateStatus(ctx context.Context, id string, statu
 	switch status {
 	case "in_review":
 		update["timeline.inReview"] = now
-		
+
 	case "resolved":
 		update["timeline.resolved"] = now
-		
+
 	}
 
 	err := r.Update(ctx, id, update)
@@ -231,14 +227,13 @@ func (r *ComplaintRepository) UpdateStatus(ctx context.Context, id string, statu
 	return err
 }
 
-func (r *ComplaintRepository) AddNote(ctx context.Context, complaintID string, note domain.ComplaintNote) error {
-	
+func (r *ComplaintRepository) AddNote(
+	ctx context.Context,
+	internalID int64,
+	note domain.ComplaintNote,
+) error {
 
-	objectID, err := primitive.ObjectIDFromHex(complaintID)
-	if err != nil {
-		
-		return fmt.Errorf("invalid ObjectID format: %w", err)
-	}
+	log.Println("addNote internalID:", internalID)
 
 	update := bson.M{
 		"$push": bson.M{
@@ -251,20 +246,18 @@ func (r *ComplaintRepository) AddNote(ctx context.Context, complaintID string, n
 
 	result, err := r.collection.UpdateOne(
 		ctx,
-		bson.M{"_id": objectID},
+		bson.M{"id": internalID},
 		update,
 	)
+
+	log.Println("Result:", result)
 
 	if err != nil {
 		return fmt.Errorf("database error: %w", err)
 	}
 
 	if result.MatchedCount == 0 {
-		return fmt.Errorf("complaint not found with ID: %s", complaintID)
-	}
-
-	if result.ModifiedCount == 0 {
-		return fmt.Errorf("failed to add note, complaint not modified")
+		return fmt.Errorf("complaint not found with id: %d", internalID)
 	}
 
 	return nil

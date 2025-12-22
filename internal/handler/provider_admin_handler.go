@@ -30,10 +30,11 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 	vehicleType := c.Query("vehicleType")
 	zone := c.Query("zone")
 
+	filter := c.Query("filter")
 	res, err := h.svc.GetAllProviders(
 		c.Request.Context(),
 		page, limit, sort, search, status, name, mobile,
-		providerID, kycStatus, accountStatus, vehicleType, zone,
+		providerID, kycStatus, accountStatus, vehicleType, zone, filter,
 	)
 
 	if err != nil {

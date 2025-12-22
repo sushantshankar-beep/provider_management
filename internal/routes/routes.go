@@ -24,6 +24,9 @@ func SetupRoutes(
 	activityLogMiddleware *middleware.ActivityLogMiddleware,
 	activityLogHandler *handler.ActivityLogHandler,
 	amcPlanHandler *handler.AMCPlanHandler,
+	amcTransactionHandler *handler.AMCTransactionHandler,
+	amcOrderHandler *handler.OrderHandler,
+	
 ) {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
@@ -164,5 +167,20 @@ func SetupRoutes(
 			amcPlans.DELETE("/:id", amcPlanHandler.DeleteAMC)
 			amcPlans.PATCH("/:id/toggle-status", amcPlanHandler.ToggleAMCStatus)
 		}
-	}
+
+		amcTransaction := admin.Group("/amc-transaction")
+		{
+			amcTransaction.GET("", amcTransactionHandler.GetAll)
+			amcTransaction.GET("/:id",amcTransactionHandler.GetByID)
+		}
+		
+		amcOrder := admin.Group("/amc-order")
+		{
+			amcOrder.GET("",amcOrderHandler.GetAll)
+			amcOrder.GET("/export",amcOrderHandler.ExportToCSV)
+		    amcOrder.GET("/:id", amcOrderHandler.GetByID)
+		    amcOrder.PATCH("/:id/status", amcOrderHandler.UpdateStatus)
 }
+		}
+	}
+	

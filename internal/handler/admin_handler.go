@@ -1,14 +1,14 @@
 package handler
 
 import (
-	"net/http"
-	"strconv"
-	"provider_management/internal/domain"
-    "provider_management/internal/middleware"
-	"provider_management/internal/service"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"net/http"
+	"provider_management/internal/domain"
+	"provider_management/internal/middleware"
+	"provider_management/internal/service"
+	"strconv"
 )
 
 type AdminHandler struct {
@@ -23,17 +23,15 @@ type LoginRequest struct {
 	Email    string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
-
 type CreateAdminRequestBody struct {
-	Name          string   `json:"name" binding:"required"`
-	Email         string   `json:"email" binding:"required"`
-	Phone         string   `json:"phone" binding:"required"`
-	Password      string   `json:"password" binding:"required"`
-	Role          string   `json:"role" binding:"required"`
-	ServiceZones  []string `json:"serviceZones"`
-	AccessModules []string `json:"accessModules"`
+	Name          string   `form:"name" binding:"required"`
+	Email         string   `form:"email" binding:"required,email"`
+	Phone         string   `form:"phone" binding:"required"`
+	Password      string   `form:"password" binding:"required,min=8"`
+	Role          string   `form:"role" binding:"required"`
+	ServiceZones  []string `form:"serviceZones"`
+	AccessModules []string `form:"accessModules"`
 }
-
 type UpdateAdminRequestBody struct {
 	Name          string   `json:"name"`
 	Email         string   `json:"email"`
@@ -110,19 +108,29 @@ func (h *AdminHandler) LogoutAll(c *gin.Context) {
 }
 
 func (h *AdminHandler) CreateAdmin(c *gin.Context) {
+
 	var req CreateAdminRequestBody
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
 
-	admin := middleware.GetAdminFromContext(c)
-	profileURL := c.GetString("profileUrl")
+	var profileURL string
+	file, err := c.FormFile("profile")
+	if err == nil {
+		dst := "./uploads/" + file.Filename
+		if err := c.SaveUploadedFile(file, dst); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to save file"})
+			return
+		}
+		profileURL = dst
+	}
 
 	var accessModules []primitive.ObjectID
 	for _, id := range req.AccessModules {
-		objID, _ := primitive.ObjectIDFromHex(id)
-		accessModules = append(accessModules, objID)
+		if objID, err := primitive.ObjectIDFromHex(id); err == nil {
+			accessModules = append(accessModules, objID)
+		}
 	}
 
 	serviceReq := service.CreateAdminRequest{
@@ -136,6 +144,7 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 		ProfileURL:    profileURL,
 	}
 
+	admin := middleware.GetAdminFromContext(c)
 	newAdmin, err := h.service.CreateAdmin(c.Request.Context(), serviceReq, admin.ID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})

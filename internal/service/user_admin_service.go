@@ -272,7 +272,7 @@ func (s *UserAdminService) GetUserByID(
 	vehicleInfos := make([]VehicleInfo, len(vehicles))
 	for i, v := range vehicles {
 		vehicleInfos[i] = VehicleInfo{
-			ID:            v.ID,
+			ID:            v.ID.Hex(),
 			VehicleNumber: v.VehicleNumber,
 			Brand:         v.Brand,
 			Model:         v.Model,

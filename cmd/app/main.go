@@ -43,26 +43,32 @@ func main() {
 	adminBookingRepo := repository.NewAdminBookingRepo(mongoDB)
 	paymentPayoutRepo := repository.NewPaymentPayoutRepo(mongoDB)
 	settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
-    serviceMasterRepo := repository.NewServiceMasterRepo(mongoDB)
+	serviceMasterRepo := repository.NewServiceMasterRepo(mongoDB)
 	adminRepo := repository.NewAdminRepository(mongoDB)
 	refundRepo := repository.NewRefundRepository(mongoDB)
 	activityLogRepo := repository.NewActivityLogRepository(mongoDB)
 	authMiddleware := middleware.NewAuthMiddleware(adminRepo)
 	activityLogMiddleware := middleware.NewActivityLogMiddleware(activityLogRepo)
 	amcPlanRepo := repository.NewAMCPlanRepo(mongoDB)
+	amcTransactionRepo := repository.NewAMCTransactionRepo(mongoDB)
+	amcOrderRepo := repository.NewOrderRepo(mongoDB)
+	savedVehicleRepo := repository.NewSavedVehiclesRepo(mongoDB)
+	zoneRepo := repository.NewZoneRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
 	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo)
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
-	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo , settlementRepo)
+	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
 	refundService := service.NewRefundService(refundRepo)
-	complaintService := service.NewComplaintService(complaintRepo,acceptedServiceRepo,userRepo,providerRepo,refundService,payoutService)
+	complaintService := service.NewComplaintService(complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo)
 	activityLogService := service.NewActivityLogService(activityLogRepo)
 	amcPlanService := service.NewAMCPlanService(amcPlanRepo)
+	amcTransactionService := service.NewAMCTransactionService(amcTransactionRepo, userRepo, amcRepo)
+	amcOrderService := service.NewOrderService(amcOrderRepo, userRepo, amcPlanRepo, savedVehicleRepo, zoneRepo)
 
 	complaintHandler := handler.NewComplaintHandler(complaintService)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
@@ -75,6 +81,8 @@ func main() {
 	adminHandler := handler.NewAdminHandler(adminService)
 	activityLogHandler := handler.NewActivityLogHandler(activityLogService)
 	amcPlanHandler := handler.NewAMCPlanHandler(amcPlanService)
+	amcTransactionHandler := handler.NewAMCTransactionHandler(amcTransactionService)
+	amcOrderHandler := handler.NewOrderHandler(amcOrderService)
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
@@ -96,6 +104,8 @@ func main() {
 		activityLogMiddleware,
 		activityLogHandler,
 		amcPlanHandler,
+		amcTransactionHandler,
+		amcOrderHandler,
 	)
 
 	srv := &http.Server{

@@ -41,3 +41,19 @@ func (r *SavedVehiclesRepo) FindByUserID(ctx context.Context, userID string) ([]
 func (r *SavedVehiclesRepo) Aggregate(ctx context.Context, pipeline []bson.M) (*mongo.Cursor, error) {
 	return r.col.Aggregate(ctx, pipeline)
 }
+
+
+func (r *SavedVehiclesRepo) FindByID(ctx context.Context, id string) (*domain.SavedVehicle, error) {
+	var vehicle domain.SavedVehicle
+
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+
+	err = r.col.FindOne(ctx, bson.M{"_id": objID}).Decode(&vehicle)
+	if err != nil {
+		return nil, err
+	}
+	return &vehicle, nil
+}

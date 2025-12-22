@@ -263,3 +263,19 @@ func (r *ProviderRepo) CountInactive(ctx context.Context, query bson.M) (int64, 
 	}
 	return count, nil
 }
+
+
+func (r *ProviderRepo) CountByMultipleStatuses(ctx context.Context, filter bson.M, field string, statuses []string) (int64, error) {
+    countFilter := bson.M{}
+    for k, v := range filter {
+        countFilter[k] = v
+    }
+
+    countFilter[field] = bson.M{"$in": statuses}
+
+    count, err := r.col.CountDocuments(ctx, countFilter)
+    if err != nil {
+        return 0, err
+    }
+    return count, nil
+}

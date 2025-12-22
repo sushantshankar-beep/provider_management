@@ -3,11 +3,11 @@ package handler
 import (
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
-    "time"
 	"provider_management/internal/domain"
 	"provider_management/internal/service"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -50,7 +50,6 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 		filter.Category = &category
 	}
 
-	
 	if search := c.Query("search"); search != "" {
 		filter.SearchQuery = &search
 	}
@@ -86,7 +85,7 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 			RaisedBy:          complaint.RaisedBy,
 			Problem:           complaint.Problem,
 			Status:            complaint.Status,
-			CreatedAt:         indianTime.Format("2006-01-02 15:04:05"), 
+			CreatedAt:         indianTime.Format("2006-01-02 15:04:05"),
 		}
 	}
 
@@ -124,25 +123,24 @@ func (h *ComplaintHandler) GetByID(c *gin.Context) {
 	}
 
 	response := gin.H{
-		"_id":              complaint.ID,
-		"complaint_id":     "CMP" + strconv.FormatInt(complaint.InternalID, 10),
-		"booking_id":       complaint.AcceptedServiceID,
-		"booking_no":       "BK" + strconv.FormatInt(complaint.AcceptedServiceNo, 10),
-		"user_id":          complaint.UserID,
-		"provider_id":      complaint.ProviderID,
-		"raised_by":        complaint.RaisedBy,
-		"problem":          complaint.Problem,
-		"photos":           complaint.Photos,
-		"status":           complaint.Status,
-		"timeline":         complaint.Timeline,
-		"assessment":       complaint.Assessment,
-		"notes":            complaint.Notes,
+		"_id":               complaint.ID,
+		"complaint_id":      "CMP" + strconv.FormatInt(complaint.InternalID, 10),
+		"booking_id":        complaint.AcceptedServiceID,
+		"booking_no":        "BK" + strconv.FormatInt(complaint.AcceptedServiceNo, 10),
+		"user_id":           complaint.UserID,
+		"provider_id":       complaint.ProviderID,
+		"raised_by":         complaint.RaisedBy,
+		"problem":           complaint.Problem,
+		"photos":            complaint.Photos,
+		"status":            complaint.Status,
+		"timeline":          complaint.Timeline,
+		"assessment":        complaint.Assessment,
+		"notes":             complaint.Notes,
 		"actions_triggered": complaint.ActionsTriggered,
-		"created_at":       complaint.CreatedAt,
-		"updated_at":       complaint.UpdatedAt,
-		"updated_by_admin": complaint.UpdatedByAdmin,
-		"admin_updated_at": complaint.AdminUpdatedAt,
-		
+		"created_at":        complaint.CreatedAt,
+		"updated_at":        complaint.UpdatedAt,
+		"updated_by_admin":  complaint.UpdatedByAdmin,
+		"admin_updated_at":  complaint.AdminUpdatedAt,
 	}
 
 	if complaint.UserDetails != nil {
@@ -258,6 +256,16 @@ func (h *ComplaintHandler) UpdateStatus(c *gin.Context) {
 func (h *ComplaintHandler) AddNote(c *gin.Context) {
 	complaintID := c.Param("id")
 
+	complaintID = strings.TrimPrefix(complaintID, "CMP")
+	internalID, err := strconv.ParseInt(complaintID, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Invalid complaint id",
+		})
+		return
+	}
+	log.Println("complaintID", complaintID)
 	var req service.AddNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -283,7 +291,7 @@ func (h *ComplaintHandler) AddNote(c *gin.Context) {
 		return
 	}
 
-	if err := h.complaintService.AddNote(c.Request.Context(), complaintID, req); err != nil {
+	if err := h.complaintService.AddNote(c.Request.Context(), internalID, req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": "Failed to add note: " + err.Error(),
@@ -313,5 +321,3 @@ func (h *ComplaintHandler) GetStats(c *gin.Context) {
 		"data":    stats,
 	})
 }
-
-
