@@ -137,10 +137,12 @@ func (h *ComplaintHandler) GetByID(c *gin.Context) {
 		"timeline":         complaint.Timeline,
 		"assessment":       complaint.Assessment,
 		"notes":            complaint.Notes,
+		"actions_triggered": complaint.ActionsTriggered,
 		"created_at":       complaint.CreatedAt,
 		"updated_at":       complaint.UpdatedAt,
 		"updated_by_admin": complaint.UpdatedByAdmin,
 		"admin_updated_at": complaint.AdminUpdatedAt,
+		
 	}
 
 	if complaint.UserDetails != nil {
@@ -149,6 +151,10 @@ func (h *ComplaintHandler) GetByID(c *gin.Context) {
 
 	if complaint.ProviderDetails != nil {
 		response["provider_details"] = complaint.ProviderDetails
+	}
+
+	if complaint.BookingDetails != nil {
+		response["booking_details"] = complaint.BookingDetails
 	}
 
 	c.JSON(http.StatusOK, gin.H{

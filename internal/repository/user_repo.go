@@ -115,8 +115,16 @@ func (r *UserRepo) GetStatistics(ctx context.Context, days int) (*UserStatistics
 					{"$match": bson.M{"isActive": domain.AccountStatusActive}},
 					{"$count": "count"},
 				},
-				"inactive_users": []bson.M{
-					{"$match": bson.M{"isActive": bson.M{"$ne": domain.AccountStatusActive}}},
+			"inactive_users": []bson.M{
+					{"$match": bson.M{
+						"isActive": bson.M{
+							"$in": []string{
+								domain.AccountStatusSuspended,
+								domain.AccountStatusBlacklisted,
+								domain.AccountStatusDeactivated,
+							},
+						},
+					}},
 					{"$count": "count"},
 				},
 				"new_users": []bson.M{

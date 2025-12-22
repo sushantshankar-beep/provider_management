@@ -46,7 +46,29 @@ func SetupRoutes(
 		MaxAge:           12 * time.Hour,
 	}))
 
-	r.POST("/admin/panel/login", adminHandler.Login)
+	adminPanel := r.Group("/admin/panel")
+	{
+		adminPanel.POST("/login", adminHandler.Login)
+		
+		authenticated := adminPanel.Group("")
+		authenticated.Use(authMiddleware.AdminAuth())
+		authenticated.Use(activityLogMiddleware.LogActivity())
+		{
+			authenticated.POST("/logout", adminHandler.Logout)
+			authenticated.POST("/logout-all", adminHandler.LogoutAll)
+			authenticated.GET("/profile", adminHandler.GetProfile)
+			authenticated.POST("/change-password", adminHandler.ChangeOwnPassword)
+			authenticated.POST("/create", adminHandler.CreateAdmin)
+			authenticated.GET("/all", adminHandler.GetAllAdmins)
+			authenticated.GET("/stats", adminHandler.GetDashboardStats)
+			authenticated.GET("/:id", adminHandler.GetAdminByID)
+			authenticated.PUT("/:id", adminHandler.UpdateAdmin)
+			authenticated.PATCH("/:id/toggle-status", adminHandler.ToggleAdminStatus)
+			authenticated.DELETE("/:id", adminHandler.DeleteAdmin)
+			authenticated.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
+		}
+	}
+
 	admin := r.Group("/admin")
 	admin.Use(authMiddleware.AdminAuth())
 	admin.Use(activityLogMiddleware.LogActivity())
@@ -126,27 +148,13 @@ func SetupRoutes(
 			services.DELETE("/:id", serviceHandler.DeleteService)
 		}
 
-		panel := admin.Group("/panel")
-		{
-			panel.POST("/logout", adminHandler.Logout)
-			panel.POST("/logout-all", adminHandler.LogoutAll)
-			panel.GET("/profile", adminHandler.GetProfile)
-			panel.POST("/change-password", adminHandler.ChangeOwnPassword)
-			
-			panel.POST("/create", adminHandler.CreateAdmin)
-			panel.GET("/all", adminHandler.GetAllAdmins)
-			panel.GET("/stats", adminHandler.GetDashboardStats)
-			panel.GET("/:id", adminHandler.GetAdminByID)
-			panel.PUT("/:id", adminHandler.UpdateAdmin)
-			panel.PATCH("/:id/toggle-status", adminHandler.ToggleAdminStatus)
-			panel.DELETE("/:id", adminHandler.DeleteAdmin)
-			panel.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
-		}
+
 
 		activityLogs := admin.Group("/activity-logs")
 		{
 			activityLogs.GET("", activityLogHandler.GetAllActivityLogs)
 		}
+		
 		amcPlans := admin.Group("/amc-plans")
 		{
 			amcPlans.POST("/create", amcPlanHandler.CreateAMC)

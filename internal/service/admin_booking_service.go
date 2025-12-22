@@ -102,7 +102,15 @@ type DetailedBookingResponse struct {
 	ProviderComplaint  *ComplaintInfo          `json:"providerComplaint"`
 	TransactionDetails *TransactionDetailsInfo `json:"transactionDetails"`
 	ProviderEarnings   *ProviderEarningsInfo   `json:"providerEarnings"`
+	Notes              []domain.BookingNote      `bson:"notes,omitempty" json:"notes,omitempty"`
 	AllBookings        []BookingSummary        `json:"allBookings"`
+}
+
+type BookingNote struct {
+	ID        string    `json:"id"`
+	Content   string    `json:"content"`
+	AddedBy   string    `json:"added_by"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type RatingsSummary struct {
@@ -667,6 +675,7 @@ func (s *AdminBookingService) GetBookingByID(
 		Problems:      sr.Problems,
 		Description:   sr.Description,
 		Location:      sr.Address,
+		Notes: svc.Notes,
 	}
 
 	addressParts := strings.Split(sr.Address, ",")

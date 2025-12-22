@@ -6,6 +6,7 @@ const (
     AccountStatusActive      = "active"
     AccountStatusSuspended   = "suspended"
     AccountStatusBlacklisted = "blacklisted"
+    AccountStatusDeactivated = "deactivated"
     StatusActive             = "active"
     StatusPending            = "pending"
     StatusRejected           = "rejected"
