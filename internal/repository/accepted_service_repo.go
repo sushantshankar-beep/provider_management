@@ -261,6 +261,10 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 	filter := bson.M{
 		"status":        "completed",
 		"paymentStatus": "paid",
+		"$or": []bson.M{
+			{"payoutCreated": bson.M{"$exists": false}},
+			{"payoutCreated": false},                   
+		},
 		"completedAt": bson.M{
 			"$gte": from,
 			"$lt":  to,
@@ -389,3 +393,22 @@ func (r *AcceptedServiceRepo) CountSettledByIDs(
 	return r.col.CountDocuments(ctx, filter)
 }
 
+
+func (r *AcceptedServiceRepo) MarkPayoutCreated(
+	ctx context.Context,
+	serviceIDs []primitive.ObjectID,
+) error {
+	filter := bson.M{
+		"_id": bson.M{"$in": serviceIDs},
+	}
+	
+	update := bson.M{
+		"$set": bson.M{
+			"payoutCreated": true,
+			"payoutCreatedAt": time.Now(),
+		},
+	}
+	
+	_, err := r.col.UpdateMany(ctx, filter, update)
+	return err
+}
