@@ -154,7 +154,7 @@ func (s *PayoutService) GetPayouts(
 	}
 
 	if sortBy == "" {
-		sortBy = "updatedAt"
+		sortBy = "createdAt"
 	} else {
 		switch sortBy {
 		case "payout_id":
