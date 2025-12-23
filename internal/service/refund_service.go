@@ -7,8 +7,8 @@ import (
 	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
+	"strconv"
 	"time"
-	
 )
 
 type RefundService struct {
@@ -27,30 +27,31 @@ type RefundListItem struct {
 	ID            primitive.ObjectID  `json:"id"`
 	RefundID      string              `json:"refund_id"`
 	UserID        string              `json:"user_id"`
-	BookingNo    string        `json:"booking_no"`
-	ComplaintNo  string        `json:"complaint_no"`
+	BookingNo     string              `json:"booking_no"`
+	ComplaintNo   string              `json:"complaint_no"`
 	TransactionID string              `json:"transaction_id`
 	GST           float64             `json:"gst"`
 	Mode          string              `json:"mode"`
 	Amount        float64             `json:"amount"`
+	Reason        string              `json:"reason"`
 	Status        domain.RefundStatus `json:"status"`
 	CreatedAt     time.Time           `json:"created_at"`
 }
 
 type RefundDetail struct {
-		ID            primitive.ObjectID  `json:"id"`
-	RefundID      string  `json:"refund_id"`
-	UserID        string  `json:"user_id"`
-	Amount        float64 `json:"amount"`
-	BookingNo     string  `json:"booking_no"`
-	ComplaintNo  string  `json:"complaint_no"`
-	TransactionID string  `json:"transaction_id`
-	GST           float64 `json:"gst"`
-	Mode          string  `json:"mode"`
-
-	Reason    string              `json:"reason"`
-	Status    domain.RefundStatus `json:"status"`
-	CreatedAt time.Time           `json:"created_at"`
+	ID            primitive.ObjectID  `json:"id"`
+	RefundID      string              `json:"refund_id"`
+	UserID        string              `json:"user_id"`
+	Amount        float64             `json:"amount"`
+	BookingNo     string              `json:"booking_no"`
+	ComplaintNo   string              `json:"complaint_no"`
+	ComplaintID   *primitive.ObjectID `json:"complaint_id"`
+	TransactionID string              `json:"transaction_id`
+	GST           float64             `json:"gst"`
+	Mode          string              `json:"mode"`
+	Reason        string              `json:"reason"`
+	Status        domain.RefundStatus `json:"status"`
+	CreatedAt     time.Time           `json:"created_at"`
 }
 
 type RefundListResponse struct {
@@ -104,7 +105,7 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req RefundRequest) er
 	gstAmount := req.Amount * 0.18
 	refund := &domain.Refund{
 		UserID:        req.UserID,
-		BookingID:      bookingID,
+		BookingID:     bookingID,
 		BookingNo:     bookingNo,
 		ComplaintID:   complaintID,
 		ComplaintNo:   complaintNo,
@@ -152,16 +153,17 @@ func (s *RefundService) GetAllRefunds(
 	items := make([]RefundListItem, 0, len(refunds))
 	for _, r := range refunds {
 		items = append(items, RefundListItem{
-			ID:  r.ID,
+			ID:            r.ID,
 			RefundID:      r.RefundID,
 			UserID:        r.UserID,
-			BookingNo:     fmt.Sprintf("BK%06d", r.BookingNo),
-			ComplaintNo:   fmt.Sprintf("CMP%06d", r.ComplaintNo),
+			BookingNo:     formatWithPrefix("BK", r.BookingNo),
+			ComplaintNo:   formatWithPrefix("CMP", r.ComplaintNo),
 			TransactionID: r.TransactionID,
 			GST:           r.GST,
 			Mode:          r.Mode,
 			Amount:        r.Amount,
 			Status:        r.Status,
+			Reason:        r.Reason,
 			CreatedAt:     r.CreatedAt,
 		})
 	}
@@ -187,12 +189,13 @@ func (s *RefundService) GetRefundByID(
 	}
 
 	return &RefundDetail{
-		ID:  r.ID,
+		ID:            r.ID,
 		RefundID:      r.RefundID,
 		UserID:        r.UserID,
 		Amount:        r.Amount,
-		BookingNo:     fmt.Sprintf("BK%06d", r.BookingNo),
-		ComplaintNo:   fmt.Sprintf("CMP%06d", r.ComplaintNo),
+		BookingNo:     formatWithPrefix("BK", r.BookingNo),
+		ComplaintNo:   formatWithPrefix("CMP", r.ComplaintNo),
+		ComplaintID:   r.ComplaintID,
 		TransactionID: r.TransactionID,
 		GST:           r.GST,
 		Mode:          r.Mode,
@@ -200,4 +203,11 @@ func (s *RefundService) GetRefundByID(
 		Status:        r.Status,
 		CreatedAt:     r.CreatedAt,
 	}, nil
+}
+
+func formatWithPrefix(prefix string, v *int64) string {
+	if v == nil {
+		return ""
+	}
+	return prefix + strconv.FormatInt(*v, 10)
 }

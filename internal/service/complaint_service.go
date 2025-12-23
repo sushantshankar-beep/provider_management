@@ -228,7 +228,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
     }
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount > 0 {
 		log.Printf("AssessComplaint - Processing refund of %.2f for user %s", req.RefundAmount, complaint.UserID)
-		refundReason := fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks)
+		refundReason := req.Remarks
 		
 		if req.RefundToUser == domain.RefundTypeFull {
 			refundReason = "Full Refund - " + refundReason
@@ -280,7 +280,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 				BookingID:     complaint.AcceptedServiceID,
 				Amount:        acceptedService.BasePrice,
 				PartialAmount: req.PayoutAmount,
-				Reason:        fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks),
+				Reason:        req.Remarks,
 				ComplaintID:   complaint.ID,
 			}); err != nil {
 				log.Printf("Warning: Failed to process payout: %v", err)

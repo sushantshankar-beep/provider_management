@@ -295,8 +295,20 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 	filter := bson.M{}
 
 	if status := params["status"]; status != "" {
-		filter["status"] = mapStatusLabelToDB(status)
+		if status == "InProgress" || status == "in_progress_group" {
+			filter["status"] = bson.M{
+				"$in": []string{
+					StatusStarted,
+					StatusReached,
+					StatusOTPVerified,
+					StatusInProgress,
+				},
+			}
+		} else {
+			filter["status"] = mapStatusLabelToDB(status)
+		}
 	}
+
 
 	if paymentStatus := params["paymentStatus"]; paymentStatus != "" {
 		filter["paymentStatus"] = paymentStatus
@@ -584,39 +596,47 @@ func (s *AdminBookingService) GetBookingStats(ctx context.Context, params map[st
 
 	total, _ := s.repo.CountAcceptedServices(ctx, baseFilter)
 
+
 	pendingFilter := bson.M{}
 	for k, v := range baseFilter {
 		pendingFilter[k] = v
 	}
-	pendingFilter["status"] = bson.M{"$in": []string{"pending", "accepted", "reached"}}
+	pendingFilter["status"] = StatusNotStarted
 	pending, _ := s.repo.CountAcceptedServices(ctx, pendingFilter)
-
-	inProgressFilter := bson.M{}
+ 
+   inProgressFilter := bson.M{}
 	for k, v := range baseFilter {
 		inProgressFilter[k] = v
 	}
-	inProgressFilter["status"] = "in_progress"
+	inProgressFilter["status"] = bson.M{
+		"$in": []string{
+			StatusStarted,
+			StatusReached,
+			StatusOTPVerified,
+			StatusInProgress,
+		},
+	}
 	inProgress, _ := s.repo.CountAcceptedServices(ctx, inProgressFilter)
 
 	completedFilter := bson.M{}
 	for k, v := range baseFilter {
 		completedFilter[k] = v
 	}
-	completedFilter["status"] = "completed"
+	completedFilter["status"] = StatusCompleted
 	completed, _ := s.repo.CountAcceptedServices(ctx, completedFilter)
 
 	cancelledFilter := bson.M{}
 	for k, v := range baseFilter {
 		cancelledFilter[k] = v
 	}
-	cancelledFilter["status"] = "cancelled"
+	cancelledFilter["status"] = StatusCancelled
 	cancelled, _ := s.repo.CountAcceptedServices(ctx, cancelledFilter)
 
 	revenueFilter := bson.M{}
 	for k, v := range baseFilter {
 		revenueFilter[k] = v
 	}
-	revenueFilter["status"] = "completed"
+	revenueFilter["status"] = StatusCompleted
 	revenueFilter["paymentStatus"] = "success"
 	revenue, _ := s.repo.AggregateRevenue(ctx, revenueFilter)
 
