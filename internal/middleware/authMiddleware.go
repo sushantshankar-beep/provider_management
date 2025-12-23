@@ -72,8 +72,6 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 			return
 		}
 
-		
-
 		admin, err := m.adminRepo.FindByID(context.Background(), adminID)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
@@ -87,7 +85,24 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 			return
 		}
 
-		if c.Request.Method != http.MethodGet && admin.Role != domain.RoleSuperAdmin {
+		allowedForAllAdmins := []string{
+			"/admin/panel/logout",
+			"/admin/panel/logout-all",
+			"/admin/panel/profile",
+			"/admin/panel/change-password",
+		}
+
+		path := c.FullPath()
+		isAllowedForAll := false
+		for _, allowedPath := range allowedForAllAdmins {
+			if path == allowedPath {
+				isAllowedForAll = true
+				break
+			}
+		}
+
+	
+		if !isAllowedForAll && c.Request.Method != http.MethodGet && admin.Role != domain.RoleSuperAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"message": "Only superAdmin can perform this action"})
 			c.Abort()
 			return
