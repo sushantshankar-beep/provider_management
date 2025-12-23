@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"provider_management/internal/domain"
 	"time"
-
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -58,7 +58,7 @@ func (r *RefundRepository) GenerateRefundID(ctx context.Context) (string, error)
 	}
 
 	timestamp := time.Now().Unix()
-	return fmt.Sprintf("RF%d%d", timestamp, result.SequenceValue), nil
+	return fmt.Sprintf("REFUND%d%d", timestamp, result.SequenceValue), nil
 }
 
 func (r *RefundRepository) UpdateStatus(ctx context.Context, refundID string, status domain.RefundStatus, failureReason string) error {
@@ -90,4 +90,63 @@ func (r *RefundRepository) UpdateStatus(ctx context.Context, refundID string, st
 	}
 
 	return nil
+}
+
+func (r *RefundRepository) FindAll(
+	ctx context.Context,
+	filter domain.RefundFilter,
+	skip, limit int,
+) ([]domain.Refund, int64, error) {
+
+	query := bson.M{}
+
+	if filter.Status != "" {
+		query["status"] = filter.Status
+	}
+
+	// userId stored as ObjectId ✅
+	if filter.UserID != "" {
+		userObjID, err := primitive.ObjectIDFromHex(filter.UserID)
+		if err != nil {
+			return nil, 0, err
+		}
+		query["userId"] = userObjID
+	}
+
+	total, err := r.collection.CountDocuments(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	skipInt64 := int64(skip)
+	limitInt64 := int64(limit)
+
+	cursor, err := r.collection.Find(
+		ctx,
+		query,
+		&options.FindOptions{
+			Skip:  &skipInt64,
+			Limit: &limitInt64,
+			Sort:  bson.M{"createdAt": -1},
+		},
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var refunds []domain.Refund
+	if err := cursor.All(ctx, &refunds); err != nil {
+		return nil, 0, err
+	}
+
+	return refunds, total, nil
+}
+func (r *RefundRepository) FindByRefundID(ctx context.Context, refundID string) (*domain.Refund, error) {
+	var refund domain.Refund
+	err := r.collection.FindOne(ctx, bson.M{"refundId": refundID}).Decode(&refund)
+	if err != nil {
+		return nil, err
+	}
+	return &refund, nil
 }

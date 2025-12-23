@@ -17,6 +17,7 @@ type Transaction struct {
 	PaymentSource string             `json:"payment_source" bson:"paymentSource"`
 	MihPayID      string             `json:"mihpayid,omitempty" bson:"mihpayid,omitempty"`
 	TxnResponse   any                `json:"txn_response,omitempty" bson:"txnResponse,omitempty"`
+	RefundID      *primitive.ObjectID `json:"refund_id,omitempty" bson:"refundId,omitempty"`
 	CreatedAt     time.Time          `json:"created_at" bson:"createdAt"`
 	UpdatedAt     time.Time          `json:"updated_at" bson:"updatedAt"`
 }

@@ -38,6 +38,7 @@ type AssessComplaintRequest struct {
 	PayoutAmount     float64           `json:"payout_amount,omitempty"`
 	Remarks          string            `json:"remarks,omitempty"`
 	AssessedBy       string            `json:"assessed_by"`
+	TxnID             string `json:"-"`
 }
 
 type AddNoteRequest struct {
@@ -157,8 +158,6 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		return fmt.Errorf("failed to get complaint: %w", err)
 	}
 
-
-   
 	if complaint.Status != "initiated" {
 		return fmt.Errorf("complaint must be in initiated status to assess, current status: %s", complaint.Status)
 	}
@@ -179,18 +178,15 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		return fmt.Errorf("invalid original booking amount: %.2f", originalAmount)
 	}
 
-	log.Println("refund type full",domain.RefundTypeFull);
 	if req.RefundToUser == domain.RefundTypeFull {
 		req.RefundAmount = originalAmount
 		log.Printf("AssessComplaint - Full refund selected, setting refund amount to: %.2f", req.RefundAmount)
 	}
 
-	
 	if req.PayoutToProvider == domain.PayoutTypeFull {
 		req.PayoutAmount = originalAmount
 		log.Printf("AssessComplaint - Full payout selected, setting payout amount to: %.2f", req.PayoutAmount)
 	}
-
 
 	if req.RefundToUser == domain.RefundTypePartial && req.RefundAmount <= 0 {
 		return fmt.Errorf("refund_amount must be greater than 0 when refund_to_user is 'partial'")
@@ -223,7 +219,13 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	}
 
 	actions := []string{}
-
+	var userObjID primitive.ObjectID
+    if complaint.UserID != "" {
+        userObjID, err = primitive.ObjectIDFromHex(complaint.UserID)
+        if err != nil {
+            log.Printf("Warning: Invalid UserID format: %s", complaint.UserID)
+        }
+    }
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount > 0 {
 		log.Printf("AssessComplaint - Processing refund of %.2f for user %s", req.RefundAmount, complaint.UserID)
 		refundReason := fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks)
@@ -235,7 +237,8 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		}
 		
 		if err := s.refundService.ProcessRefund(ctx, RefundRequest{
-			UserID:              complaint.UserID,
+			UserID:              userObjID.Hex(),
+			TxnID:               req.TxnID,
 			BookingID:           complaint.AcceptedServiceID,
 			BookingInternalID:   complaint.AcceptedServiceNo,
 			ComplaintID:         complaint.ID,
@@ -273,12 +276,12 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 			}
 			
 			if err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
-				ProviderID:  providerID,
-				BookingID:   complaint.AcceptedServiceID,
+				ProviderID:    providerID,
+				BookingID:     complaint.AcceptedServiceID,
 				Amount:        acceptedService.BasePrice,
 				PartialAmount: req.PayoutAmount,
-				Reason:      fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks),
-				ComplaintID: complaint.ID,
+				Reason:        fmt.Sprintf("Complaint CMP%d - %s", complaint.InternalID, req.Remarks),
+				ComplaintID:   complaint.ID,
 			}); err != nil {
 				log.Printf("Warning: Failed to process payout: %v", err)
 			} else {
@@ -307,7 +310,6 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	log.Printf("AssessComplaint - Assessment completed successfully")
 	return nil
 }
-
 func (s *ComplaintService) UpdateComplaintStatus(ctx context.Context, complaintID string, status string, adminID string) error {
 
 	complaint, err := s.GetComplaint(ctx, complaintID)
@@ -388,7 +390,7 @@ type RefundRequest struct {
 	ComplaintInternalID int64
 	Amount float64
 	Reason string
-	TransactionID  string     
+	TxnID  string     
 }
 
 type PayoutRequest struct {

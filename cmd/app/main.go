@@ -61,7 +61,7 @@ func main() {
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
-	refundService := service.NewRefundService(refundRepo)
+	refundService := service.NewRefundService(refundRepo,transactionRepo)
 	complaintService := service.NewComplaintService(complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo)
@@ -70,7 +70,7 @@ func main() {
 	amcTransactionService := service.NewAMCTransactionService(amcTransactionRepo, userRepo, amcRepo)
 	amcOrderService := service.NewOrderService(amcOrderRepo, userRepo, amcPlanRepo, savedVehicleRepo, zoneRepo)
 
-	complaintHandler := handler.NewComplaintHandler(complaintService)
+	complaintHandler := handler.NewComplaintHandler(complaintService,acceptedServiceRepo)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
@@ -83,8 +83,8 @@ func main() {
 	amcPlanHandler := handler.NewAMCPlanHandler(amcPlanService)
 	amcTransactionHandler := handler.NewAMCTransactionHandler(amcTransactionService)
 	amcOrderHandler := handler.NewOrderHandler(amcOrderService)
-
-	r := gin.Default()
+    refundHandler := handler.NewRefundHandler(refundService)
+	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
 
@@ -106,6 +106,7 @@ func main() {
 		amcPlanHandler,
 		amcTransactionHandler,
 		amcOrderHandler,
+		refundHandler,
 	)
 
 	srv := &http.Server{
