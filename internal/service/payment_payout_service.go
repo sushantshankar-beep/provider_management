@@ -103,6 +103,9 @@ func (s *PayoutService) CreatePayoutLast6Hours(ctx context.Context) error {
 		if err := s.payoutRepo.Create(ctx, payout); err != nil {
 			return err
 		}
+		if err := s.serviceRepo.MarkPayoutCreated(ctx, data.ServiceIDs); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -53,6 +53,8 @@ type AcceptedService struct {
 	ProviderLocation    ProviderLocation    `bson:"providerLocation,omitempty" json:"provider_location,omitempty"`
 	ServiceLocation     ServiceLocation     `bson:"serviceLocation,omitempty" json:"service_location,omitempty"`
 	Notes               []BookingNote      `bson:"notes,omitempty" json:"notes,omitempty"`
+	PayoutCreated   bool      `bson:"payoutCreated,omitempty" json:"payoutCreated,omitempty"`
+	PayoutCreatedAt time.Time `bson:"payoutCreatedAt,omitempty" json:"payoutCreatedAt,omitempty"`
 	CreatedAt           time.Time           `bson:"createdAt" json:"created_at"`
 	UpdatedAt           time.Time           `bson:"updatedAt" json:"updated_at"`
 }
