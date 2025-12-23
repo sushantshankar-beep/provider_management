@@ -64,7 +64,12 @@ func (r *TransactionRepo) FindWithFilter(
 	search string,
 ) ([]domain.Transaction, int64, error) {
 
-	filter := bson.M{}
+	filter := bson.M{
+		"$or": bson.A{
+			bson.M{"AMCPurchaseId": bson.M{"$exists": false}},
+			bson.M{"AMCPurchaseId": primitive.NilObjectID},
+		},
+	}
 
 	if search != "" {
 		or := bson.A{
