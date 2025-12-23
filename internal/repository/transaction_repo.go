@@ -5,6 +5,7 @@ import (
     "strings"
 	"strconv"
 	"fmt"
+	"time"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -127,4 +128,24 @@ func (r *TransactionRepo) FindByServiceID(ctx context.Context, serviceID primiti
 		return nil, fmt.Errorf("failed to find transaction: %w", err)
 	}
 	return &transaction, nil
+}
+
+func (r *TransactionRepo) FindByTxnID(ctx context.Context, txnID string) (*domain.Transaction, error) {
+	var transaction domain.Transaction
+	err := r.col.FindOne(ctx, bson.M{"txnid": txnID}).Decode(&transaction)
+	if err != nil {
+		return nil, err
+	}
+	return &transaction, nil
+}
+
+func (r *TransactionRepo) UpdateRefundID(ctx context.Context, transactionID primitive.ObjectID, refundID primitive.ObjectID) error {
+	update := bson.M{
+		"$set": bson.M{
+			"refundId":  refundID,
+			"updatedAt": time.Now(),
+		},
+	}
+	_, err := r.col.UpdateOne(ctx, bson.M{"_id": transactionID}, update)
+	return err
 }

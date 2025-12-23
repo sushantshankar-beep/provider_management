@@ -29,7 +29,7 @@ type Refund struct {
 	ID            primitive.ObjectID  `bson:"_id,omitempty" json:"id"`
 	TransactionID string             `bson:"transactionId,omitempty" json:"transaction_id,omitempty"`
 	RefundID      string              `bson:"refundId" json:"refund_id"`
-	UserID        string              `bson:"userId" json:"user_id"`
+	UserID        string  `bson:"userId" json:"user_id"`
 	BookingID     *primitive.ObjectID `bson:"bookingId,omitempty" json:"booking_id,omitempty"`
 	BookingNo     *int64              `bson:"bookingNo,omitempty" json:"booking_no,omitempty"`
 	ComplaintID   *primitive.ObjectID `bson:"complaintId,omitempty" json:"complaint_id,omitempty"`
@@ -43,4 +43,10 @@ type Refund struct {
 	FailureReason string              `bson:"failureReason,omitempty" json:"failure_reason,omitempty"`
 	CreatedAt     time.Time           `bson:"createdAt" json:"created_at"`
 	UpdatedAt     time.Time           `bson:"updatedAt" json:"updated_at"`
+}
+type RefundFilter struct {
+	Page   int
+	Limit  int
+	Status string
+	UserID string
 }

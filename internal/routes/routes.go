@@ -26,6 +26,7 @@ func SetupRoutes(
 	amcPlanHandler *handler.AMCPlanHandler,
 	amcTransactionHandler *handler.AMCTransactionHandler,
 	amcOrderHandler *handler.OrderHandler,
+	refundHandler *handler.RefundHandler,
 	
 ) {
 	r.Use(cors.New(cors.Config{
@@ -151,8 +152,6 @@ func SetupRoutes(
 			services.DELETE("/:id", serviceHandler.DeleteService)
 		}
 
-
-
 		activityLogs := admin.Group("/activity-logs")
 		{
 			activityLogs.GET("", activityLogHandler.GetAllActivityLogs)
@@ -180,7 +179,12 @@ func SetupRoutes(
 			amcOrder.GET("/export",amcOrderHandler.ExportToCSV)
 		    amcOrder.GET("/:id", amcOrderHandler.GetByID)
 		    amcOrder.PATCH("/:id/status", amcOrderHandler.UpdateStatus)
-}
+        }
+		userRefund := admin.Group("/user-refund")
+	{
+		userRefund.GET("", refundHandler.GetAllRefunds)
+		userRefund.GET("/:id", refundHandler.GetRefundByID)
+	}
 		}
 	}
 	

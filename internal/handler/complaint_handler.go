@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"provider_management/internal/domain"
 	"provider_management/internal/service"
+	"provider_management/internal/repository"
 	"strconv"
 	"strings"
 	"time"
@@ -14,11 +15,13 @@ import (
 
 type ComplaintHandler struct {
 	complaintService *service.ComplaintService
+	acceptedServiceRepo *repository.AcceptedServiceRepo
 }
 
-func NewComplaintHandler(complaintService *service.ComplaintService) *ComplaintHandler {
+func NewComplaintHandler(complaintService *service.ComplaintService,acceptedServiceRepo *repository.AcceptedServiceRepo) *ComplaintHandler {
 	return &ComplaintHandler{
 		complaintService: complaintService,
+		acceptedServiceRepo: acceptedServiceRepo,
 	}
 }
 
@@ -164,7 +167,6 @@ func (h *ComplaintHandler) GetByID(c *gin.Context) {
 
 func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 	id := c.Param("id")
-
 	id = strings.TrimPrefix(id, "CMP")
 
 	log.Println("Assessing complaint with ID:", id)
@@ -201,6 +203,38 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 		})
 		return
 	}
+
+	complaint, err := h.complaintService.GetComplaint(c.Request.Context(), id)
+	if err != nil {
+		log.Println("Failed to fetch complaint:", err)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   true,
+			"message": "Complaint not found",
+		})
+		return
+	}
+
+	acceptedService, err := h.acceptedServiceRepo.FindByID(c.Request.Context(), complaint.AcceptedServiceID)
+	if err != nil {
+		log.Println("Failed to fetch accepted service:", err)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   true,
+			"message": "Accepted service not found",
+		})
+		return
+	}
+
+	if acceptedService.OrderID == "" {
+		log.Println("No OrderID found in accepted service")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "No transaction associated with this booking",
+		})
+		return
+	}
+
+	req.TxnID = acceptedService.OrderID
+	log.Printf("Using TxnID from accepted service: %s", req.TxnID)
 
 	if err := h.complaintService.AssessComplaint(c.Request.Context(), id, req); err != nil {
 		log.Println("Assessment error:", err)
