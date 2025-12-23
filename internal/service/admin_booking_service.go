@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+    "math"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -737,11 +737,12 @@ func (s *AdminBookingService) GetBookingByID(
 	if basePrice > finalPrice {
 		discount = basePrice - finalPrice
 	}
+	
 
 	booking.PaymentDetails = &PaymentDetailsInfo{
 		ServiceCharge: basePrice,
 		Discount:      discount,
-		Subtotal:      subtotal,
+		Subtotal:      round2(subtotal),
 		GST:           gstAmount,
 		Total:         finalPrice,
 	}
@@ -1193,4 +1194,8 @@ func (s *AdminBookingService) AddNote(
 	}
 
 	return s.repo.AddBookingNote(ctx, svcs[0].ID, note)
+}
+
+func round2(val float64) float64 {
+	return math.Round(val*100) / 100
 }
