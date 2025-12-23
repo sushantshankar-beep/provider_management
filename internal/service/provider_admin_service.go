@@ -51,6 +51,9 @@ type ProviderResponse struct {
 	ProfileURL       string   `json:"profile_url"`
 	IsServiceOn      bool     `json:"is_service_on"`
 	IsActive         string   `json:"is_active"`
+	IdentityProof    []domain.Proof       `json:"identity_proof"`
+	AddressProof     []domain.Proof       `json:"address_proof"`
+	CancelCheque     *domain.CancelCheque `json:"cancel_cheque"`
 	Status           string   `json:"status"`
 	TotalJobs        int64    `json:"total_jobs"`
 	CompletedJobs    int64    `json:"completed_jobs"`
@@ -131,16 +134,25 @@ func (s *ProviderAdminService) GetAllProviders(
         string(domain.AccountStatusBlacklisted),
         string(domain.AccountStatusDeactivated),
     }
+
+	activeStatus := []string{
+		string(domain.AccountStatusActive),
+	}
+
 	if filter == "inactive" {
         conditions = append(conditions, bson.M{"isActive": bson.M{"$in": inactiveStatuses}})
     }
+
+	if filter == "active" {
+		conditions = append(conditions, bson.M{"isActive": bson.M{"$in": activeStatus }})
+	}
 
 
     if filter != "" {
         switch (filter) {
         case "Pending":
             conditions = append(conditions, bson.M{"status": domain.StatusPending})
-        case "verified", "active":
+        case "verified":
             conditions = append(conditions, bson.M{"status": domain.StatusActive})
         case "rejected":
             conditions = append(conditions, bson.M{"status": domain.StatusRejected})
@@ -320,6 +332,9 @@ func (s *ProviderAdminService) GetAllProviders(
 			DOJ:              formatDate(p.CreatedAt),
 			ProfileURL:       p.ProfileURL,
 			IsServiceOn:      p.IsServiceOn,
+			IdentityProof:    p.IdentityProof,
+			AddressProof:     p.AddressProof,
+			CancelCheque:     p.CancelCheque,
 			IsActive:         string(p.IsActive),
 			Status:           p.Status,
 			TotalJobs:        totalJobs,

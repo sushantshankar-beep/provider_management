@@ -186,8 +186,8 @@ func (s *OrderService) GetOrder(ctx context.Context, id string) (*OrderDetailRes
 	resp.ServicesIncluded = order.ServiceDetails
 
 	resp.PaymentDetails.PayuID = order.InternalID
-	resp.PaymentDetails.PaymentID = order.PaymentID
-	resp.PaymentDetails.PayuTransactionID = order.PayuTransactionID
+	resp.PaymentDetails.PaymentID = order.PayuTransactionID
+	resp.PaymentDetails.PayuTransactionID = order.PaymentID
 	resp.PaymentDetails.PaymentStatus = order.PaymentStatus
 	resp.PaymentDetails.PaymentSource = order.PaymentSource
 
