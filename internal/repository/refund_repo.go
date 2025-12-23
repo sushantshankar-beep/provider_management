@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"fmt"
+	"log"
 	"provider_management/internal/domain"
 	"time"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -58,7 +60,7 @@ func (r *RefundRepository) GenerateRefundID(ctx context.Context) (string, error)
 	}
 
 	timestamp := time.Now().Unix()
-	return fmt.Sprintf("REFUND%d%d", timestamp, result.SequenceValue), nil
+	return fmt.Sprintf("RF%d%d", timestamp, result.SequenceValue), nil
 }
 
 func (r *RefundRepository) UpdateStatus(ctx context.Context, refundID string, status domain.RefundStatus, failureReason string) error {
