@@ -5,11 +5,19 @@ import (
 	"strings"
 )
 
+
+type PayUConfig struct {
+	Key     string
+	Salt    string
+	BaseURL string
+}
+
 type Config struct {
 	MongoURI       string
 	MongoDBName    string
 	HTTPAddr       string
 	AllowedOrigins []string
+	PayU           PayUConfig 
 }
 
 func Load() Config {
@@ -29,6 +37,11 @@ func Load() Config {
 		MongoDBName:    mustEnv("MONGO_DB"),
 		HTTPAddr:       ":" + port,
 		AllowedOrigins: allowedOrigins,
+		PayU: PayUConfig{
+			Key:     mustEnv("PAYU_KEY"),
+			Salt:    mustEnv("PAYU_SALT"),
+			BaseURL: mustEnv("PAYU_BASE_URL"),
+		},
 	}
 	
 }

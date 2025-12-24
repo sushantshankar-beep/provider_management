@@ -2,14 +2,16 @@ package repository
 
 import (
 	"context"
+	
 
 	"fmt"
+	"provider_management/internal/domain"
+	"time"
+   "log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"provider_management/internal/domain"
-	"time"
 )
 
 type ProviderSettlementRepo struct {
@@ -84,4 +86,72 @@ func (r *ProviderSettlementRepo) FindByID(
 	}
 
 	return &settlement, nil
+}
+
+func (r *ProviderSettlementRepo) UpdateSettlementPostData(
+	ctx context.Context,
+	settlementID primitive.ObjectID,
+	data *domain.SettledPostData,
+	status domain.SettlementStatus,
+	settledAt time.Time,
+) error {
+
+	update := bson.M{
+		"$set": bson.M{
+			"settledPostData": data,
+			"status":          status,
+			"settledAt":       settledAt,
+			"updatedAt":       time.Now(),
+		},
+	}
+
+	_, err := r.coll.UpdateOne(
+		ctx,
+		bson.M{"_id": settlementID},
+		update,
+	)
+
+	return err
+}
+
+func (r *ProviderSettlementRepo) FindBySettlementIDs(
+	ctx context.Context,
+	ids []string,
+) ([]domain.ProviderSettlement, error) {
+	objectIDs := make([]primitive.ObjectID, 0, len(ids))
+	for _, id := range ids {
+		objID, err := primitive.ObjectIDFromHex(id)
+		if err != nil {
+			log.Printf("Invalid ObjectID: %s, error: %v", id, err)
+			return nil, err
+		}
+		objectIDs = append(objectIDs, objID)
+	}
+	
+	filter := bson.M{"_id": bson.M{"$in": objectIDs}}
+	
+	cursor, err := r.coll.Find(ctx, filter)
+	if err != nil {
+		log.Printf("Find error: %v", err)
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	
+	var settlements []domain.ProviderSettlement
+	for cursor.Next(ctx) {
+		var settlement domain.ProviderSettlement
+		if err := cursor.Decode(&settlement); err != nil {
+			log.Printf("Decode error: %v", err)
+			return nil, err
+		}
+		settlements = append(settlements, settlement)
+	}
+	
+	if err := cursor.Err(); err != nil {
+		log.Printf("Cursor error: %v", err)
+		return nil, err
+	}
+	
+	log.Printf("Found %d settlements", len(settlements))
+	return settlements, nil
 }

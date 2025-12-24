@@ -37,7 +37,7 @@ type AMCPlan struct {
 	PlanTotalAmount         float64               `bson:"planTotalAmount" json:"plan_total_amount"`
 	AllowedBrandModels      []AllowedBrandModel   `bson:"allowedBrandModels" json:"allowed_brand_models"`
 	PlanCity                []string              `bson:"planCity" json:"plan_city"`
-	PlanServicesIncluded    []PlanServiceIncluded `bson:"planServicesIncluded" json:"plan_services_included"`
+	PlanServicesIncluded  []PlanServiceIncluded `bson:"planServicesIncluded" json:"plan_services_included"`
 	PlanTags                string                `bson:"planTags" json:"plan_tags"` 
 	PlanFeatures            []string              `bson:"planFeatures" json:"plan_features"`
 	Sorting                 int                   `bson:"sorting" json:"sorting"`

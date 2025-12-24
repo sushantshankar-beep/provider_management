@@ -173,3 +173,4 @@ func (h *PayoutHandler) GetProviderPayoutDetails(c *gin.Context) {
 		"data":    details,
 	})
 }
+

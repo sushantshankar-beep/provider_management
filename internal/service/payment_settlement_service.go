@@ -30,6 +30,7 @@ type SettlementService struct {
 }
 
 type GetSettlementsRequest struct {
+	Tab         string `form:"tab"`
 	ProviderID  string `form:"provider_id"`
 	PayoutID    string `form:"payout_id"`
 	Status      string `form:"status"`
@@ -40,6 +41,49 @@ type GetSettlementsRequest struct {
 	Limit       int64  `form:"limit,default=10"`
 	SortField   string `form:"sort_field,default=createdAt"`
 	SortOrder   string `form:"sort_order,default=desc"`
+}
+
+type CreateSettlementRequest struct {
+	TransactionID string  `json:"transaction_id" binding:"required"`
+	Amount        float64 `json:"amount" binding:"required"`
+	Status        string  `json:"status" binding:"required"`
+	Note          string  `json:"note"`
+}
+
+
+type ProviderSettlementResponse struct {
+	ID               primitive.ObjectID `json:"_id"`
+	SettlementID     string             `json:"settlementId"`
+	ProviderID       primitive.ObjectID `json:"providerId"`
+	ProviderName     string             `json:"providerName"`
+	AccountNo        string             `json:"accountNo"`
+	IfscCode         string             `json:"ifscCode"`
+	TotalAmount      float64            `json:"totalAmount"`
+	PaymentMode      string             `json:"paymentMode"`
+	PaymentMethod    string             `json:"paymentMethod"`
+	Justification    string             `json:"justification"`
+	Status           domain.SettlementStatus          `json:"status"`
+	PayoutIdNumber   string           `json:"payoutId"`
+	SettledAt        *time.Time           `json:"settledAt"`
+	CreatedAt        time.Time           `json:"createdAt"`
+}
+
+type ProviderSettlementIDResponse  struct {
+	ID              primitive.ObjectID `json:"id"`
+	SettlementID    string            `json:"settlement_id"`
+	PayoutIdNumber  string            `json:"payout_id"`
+	ProviderID      primitive.ObjectID `json:"provider_id"`
+	ProviderName    string            `json:"provider_name"`
+	AccountNo       string            `json:"account_no"`
+	IfscCode        string            `json:"ifsc_code"`
+	TotalAmount     float64           `json:"total_amount"`
+	PaymentMode     string            `json:"payment_mode"`
+	PaymentMethod   string            `json:"payment_method"`
+	Justification   string            `json:"justification,omitempty"`
+	Status          domain.SettlementStatus `json:"status"`
+	SettledPostData *domain.SettledPostData `json:"settled_post_data,omitempty"`
+	SettledAt       *time.Time        `json:"settled_at,omitempty"`
+	CreatedAt       time.Time         `json:"created_at"`
 }
 
 func NewSettlementService(
@@ -182,9 +226,24 @@ func (s *SettlementService) CreateSettlement(
 func (s *SettlementService) GetSettlements(
 	ctx context.Context,
 	req *GetSettlementsRequest,
-) ([]domain.ProviderSettlement, int64, int64, error) {
+) ([]ProviderSettlementResponse, int64, int64, error) {
 
 	filter := bson.M{}
+
+	if req.Tab != "" {
+        switch strings.ToLower(req.Tab) {
+        case "pending":
+            filter["status"] = "pending"
+        case "settled":
+            filter["status"] = "settled"
+        default:
+            return nil, 0, 0, fmt.Errorf("invalid tab value. Use 'pending' or 'settled'")
+        }
+    }
+
+	if req.Status != "" {
+        filter["status"] = req.Status
+    }
 
 	if req.ProviderID != "" {
 		providerID, err := primitive.ObjectIDFromHex(req.ProviderID)
@@ -249,10 +308,145 @@ func (s *SettlementService) GetSettlements(
 		return nil, 0, 0, fmt.Errorf("failed to get settlements: %v", err)
 	}
 
+	var responses []ProviderSettlementResponse
+
+for _, settlement := range settlements {
+	resp := ProviderSettlementResponse{
+		ID:           settlement.ID,
+		SettlementID:  "SET" + strconv.FormatInt(settlement.SettlementID, 10),
+		ProviderID:   settlement.ProviderID,
+		ProviderName: settlement.ProviderName,
+		AccountNo:    settlement.AccountNo,
+		IfscCode:     settlement.IfscCode,
+		TotalAmount:  settlement.TotalAmount,
+		PaymentMode:  settlement.PaymentMode,
+		PaymentMethod: settlement.PaymentMethod,
+		Justification: settlement.Justification,
+		Status:        settlement.Status,
+		SettledAt:     settlement.SettledAt,
+		CreatedAt:     settlement.CreatedAt,
+	}
+
+	payout, err := s.payoutRepo.FindByID(ctx, settlement.PayoutID)
+	if err == nil && payout != nil {
+		resp.PayoutIdNumber = "PAY" + strconv.FormatInt(payout.PayoutID, 10)
+	}
+
+	responses = append(responses, resp)
+}
+
 	totalPages := total / req.Limit
 	if total%req.Limit > 0 {
 		totalPages++
 	}
 
-	return settlements, total, totalPages, nil
+	return responses, total, totalPages, nil
+}
+
+func (s *SettlementService) ChangeProviderSettlementStatus(
+	ctx context.Context,
+	settlementIDStr string,
+	req *CreateSettlementRequest,
+) (*domain.ProviderSettlement, error) {
+
+	settlementID, err := primitive.ObjectIDFromHex(settlementIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid settlement id")
+	}
+
+	settlement, err := s.settlementRepo.FindByID(ctx, settlementID)
+	if err != nil {
+		return nil, fmt.Errorf("payout not found")
+	}
+
+	if settlement.Status == domain.SettleStatusSettled {
+		return nil, fmt.Errorf("payout already settled")
+	}
+
+	now := time.Now()
+	settlement.SettledPostData = &domain.SettledPostData{
+		TransactionID: req.TransactionID,
+		Amount:        req.Amount,
+		Status:        string(domain.SettleStatusSettled),
+		Note:          req.Note,
+	}
+
+	settlement.Status = domain.SettleStatusSettled
+
+	if err := s.settlementRepo.UpdateSettlementPostData(
+		ctx,
+		settlement.ID,
+		settlement.SettledPostData,
+		domain.SettleStatusSettled,
+		now,
+	); err != nil {
+		return nil, fmt.Errorf("failed to update settlement: %w", err)
+	}
+	
+	err = s.payoutRepo.UpdateStatus(
+		ctx,
+		settlement.PayoutID,
+		domain.PayoutStatusSettled,
+		&settlement.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return settlement, nil
+}
+
+
+func (s *SettlementService) GetSettlementByID(
+	ctx context.Context,
+	settlementID string,
+) (*ProviderSettlementIDResponse, error) {
+
+	id, err := primitive.ObjectIDFromHex(settlementID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid settlement id: %w", err)
+	}
+
+	settlement, err := s.settlementRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find settlement: %w", err)
+	}
+
+	if settlement == nil {
+		return nil, fmt.Errorf("settlement not found")
+	}
+
+	resp := ProviderSettlementIDResponse{
+		ID:              settlement.ID,
+		SettlementID:    "SET" + strconv.FormatInt(settlement.SettlementID, 10),
+		ProviderID:      settlement.ProviderID,
+		ProviderName:    settlement.ProviderName,
+		AccountNo:       settlement.AccountNo,
+		IfscCode:        settlement.IfscCode,
+		TotalAmount:     settlement.TotalAmount,
+		PaymentMode:     settlement.PaymentMode,
+		PaymentMethod:   settlement.PaymentMethod,
+		Justification:   settlement.Justification,
+		Status:          settlement.Status,
+		SettledPostData: settlement.SettledPostData,
+		SettledAt:       settlement.SettledAt,
+		CreatedAt:       settlement.CreatedAt,
+	}
+
+	if !settlement.PayoutID.IsZero() {
+		payout, err := s.payoutRepo.FindByID(ctx, settlement.PayoutID)
+		if err == nil && payout != nil {
+			resp.PayoutIdNumber = "PAY" + strconv.FormatInt(payout.PayoutID, 10)
+		}
+	}
+
+	return &resp, nil
+}
+
+func (s *SettlementService) GetSettlementsByIDs(
+	ctx context.Context,
+	ids []string,
+) ([]domain.ProviderSettlement, error) {
+	log.Println("iddd",ids)
+	return s.settlementRepo.FindBySettlementIDs(ctx, ids)
 }

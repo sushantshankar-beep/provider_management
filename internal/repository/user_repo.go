@@ -227,3 +227,45 @@ func (r *UserRepo) FindByFilter(ctx context.Context, filter bson.M) ([]domain.Us
 	}
 	return users, nil
 }
+
+func (r *UserRepo) FindByInternalID(
+	ctx context.Context,
+	internalID int64,
+) (*domain.User, error) {
+
+	var user domain.User
+	err := r.col.FindOne(ctx, bson.M{
+		"internalId": internalID,
+	}).Decode(&user)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+
+func (r *UserRepo) SearchByName(
+	ctx context.Context,
+	name string,
+) ([]domain.User, error) {
+
+	cursor, err := r.col.Find(ctx, bson.M{
+		"name": bson.M{
+			"$regex":   name,
+			"$options": "i",
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []domain.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
