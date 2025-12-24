@@ -145,3 +145,15 @@ func (r *PaymentPayoutRepo) UpdateStatus(
 	_, err := r.col.UpdateOne(ctx, bson.M{"_id": payoutID}, update)
 	return err
 }
+
+func (r *PaymentPayoutRepo) FindByInternalID(ctx context.Context, id primitive.ObjectID) (*domain.PaymentPayout, error) {
+	var payout domain.PaymentPayout
+	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&payout)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &payout, nil
+}

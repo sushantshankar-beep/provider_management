@@ -412,3 +412,20 @@ func (r *AcceptedServiceRepo) MarkPayoutCreated(
 	_, err := r.col.UpdateMany(ctx, filter, update)
 	return err
 }
+
+func (r *AcceptedServiceRepo) FindByInternalID(
+	ctx context.Context,
+	internalID int64,
+) (*domain.AcceptedService, error) {
+
+	var svc domain.AcceptedService
+	err := r.col.FindOne(ctx, bson.M{
+		"internalId": internalID,
+	}).Decode(&svc)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &svc, nil
+}

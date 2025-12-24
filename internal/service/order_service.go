@@ -65,6 +65,10 @@ type OrderDetailResponse struct {
 		GST                float64 `json:"gst"`
 		PlanDiscountAmount float64 `json:"planDiscountAmount"`
 		TotalPrice         float64 `json:"totalPrice"`
+		PlanServicesIncluded  []domain.PlanServiceIncluded `json:"plan_services_included"`
+		PlanStartDate           time.Time          `json:"planStartDate"`
+	    PlanEndDate             time.Time          `json:"planEndDate"`
+		PlanStatus              string             `json:"planStatus"`
 	} `json:"planDetails"`
 	ServicesIncluded []domain.ServiceDetail `json:"servicesIncluded"`
 	Vehicle          domain.VehicleInfo     `json:"vehicle"`
@@ -167,7 +171,10 @@ func (s *OrderService) GetOrder(ctx context.Context, id string) (*OrderDetailRes
 
 	resp.PlanDetails.PlanName = order.PlanName
 	resp.PlanDetails.VehicleType = order.Vehicle.VehicleType
-	
+	resp.PlanDetails.PlanStatus = order.PlanStatus
+	resp.PlanDetails.PlanStartDate = order.PlanStartDate
+	resp.PlanDetails.PlanEndDate = order.PlanEndDate
+
 	if order.PlanID != primitive.NilObjectID {
 		if plan, err := s.plans.FindByID(ctx, order.PlanID.Hex()); err == nil {
 			if order.PlanName == "" {
@@ -178,6 +185,8 @@ func (s *OrderService) GetOrder(ctx context.Context, id string) (*OrderDetailRes
 			resp.PlanDetails.GST = plan.PlanGSTAmount
 			resp.PlanDetails.PlanDiscountAmount = plan.PlanDiscountAmount
 			resp.PlanDetails.TotalPrice = plan.PlanTotalAmount
+			resp.PlanDetails.PlanServicesIncluded = plan.PlanServicesIncluded
+
 		}
 	}
 

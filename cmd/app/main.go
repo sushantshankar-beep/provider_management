@@ -54,6 +54,9 @@ func main() {
 	amcOrderRepo := repository.NewOrderRepo(mongoDB)
 	savedVehicleRepo := repository.NewSavedVehiclesRepo(mongoDB)
 	zoneRepo := repository.NewZoneRepo(mongoDB)
+	amcPurchaseRepo := repository.NewAMCPurchaseRepo(mongoDB)
+    amcRefundRepo := repository.NewAMCRefundRepo(mongoDB)
+
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
@@ -69,7 +72,19 @@ func main() {
 	amcPlanService := service.NewAMCPlanService(amcPlanRepo)
 	amcTransactionService := service.NewAMCTransactionService(amcTransactionRepo, userRepo, amcRepo)
 	amcOrderService := service.NewOrderService(amcOrderRepo, userRepo, amcPlanRepo, savedVehicleRepo, zoneRepo)
-
+payUService := service.NewPayUService(
+	cfg.PayU.Key,
+	cfg.PayU.Salt,
+	cfg.PayU.BaseURL,
+)
+	amcRefundService := service.NewAMCRefundService(
+		amcRefundRepo,
+		amcPurchaseRepo,
+		userRepo,
+		amcPlanRepo,
+		payUService,
+	)
+	
 	complaintHandler := handler.NewComplaintHandler(complaintService,acceptedServiceRepo)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
@@ -84,6 +99,8 @@ func main() {
 	amcTransactionHandler := handler.NewAMCTransactionHandler(amcTransactionService)
 	amcOrderHandler := handler.NewOrderHandler(amcOrderService)
     refundHandler := handler.NewRefundHandler(refundService)
+	amcRefundHandler := handler.NewAMCRefundHandler(amcRefundService)
+
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
@@ -107,6 +124,7 @@ func main() {
 		amcTransactionHandler,
 		amcOrderHandler,
 		refundHandler,
+		amcRefundHandler,
 	)
 
 	srv := &http.Server{

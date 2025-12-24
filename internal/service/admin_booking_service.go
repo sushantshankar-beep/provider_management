@@ -739,6 +739,7 @@ func (s *AdminBookingService) GetBookingByID(
 	}
 	
 
+
 	booking.PaymentDetails = &PaymentDetailsInfo{
 		ServiceCharge: basePrice,
 		Discount:      discount,
@@ -1195,6 +1196,7 @@ func (s *AdminBookingService) AddNote(
 
 	return s.repo.AddBookingNote(ctx, svcs[0].ID, note)
 }
+
 
 func round2(val float64) float64 {
 	return math.Round(val*100) / 100

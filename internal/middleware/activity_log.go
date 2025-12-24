@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	
 	"io"
 	"log"
 	"provider_management/internal/domain"
@@ -78,7 +78,7 @@ func (m *ActivityLogMiddleware) LogActivity() gin.HandlerFunc {
 				UserAgent:  c.Request.UserAgent(),
 				Details:    details,
 			}
-			fmt.Printf("Activity log entry: %v\n", logEntry)
+			
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()

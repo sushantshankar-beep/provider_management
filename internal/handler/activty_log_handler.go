@@ -130,3 +130,24 @@ func (h *ActivityLogHandler) GetComplaintActivityLogs(c *gin.Context) {
 		"limit": limit,
 	})
 }
+
+
+
+func (h *ActivityLogHandler) GetAdminActivityLogs(c *gin.Context) {
+	adminID := c.Param("id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	logs, total, err := h.service.GetByEntityID(c.Request.Context(), "admin", adminID, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch admin activity logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":  logs,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}

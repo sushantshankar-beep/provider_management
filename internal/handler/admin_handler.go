@@ -1,14 +1,14 @@
 package handler
 
 import (
+	"net/http"
+	"strconv"
+	"provider_management/internal/domain"
+    "provider_management/internal/middleware"
+	"provider_management/internal/service"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"net/http"
-	"provider_management/internal/domain"
-	"provider_management/internal/middleware"
-	"provider_management/internal/service"
-	"strconv"
 )
 
 type AdminHandler struct {
@@ -24,13 +24,13 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 type CreateAdminRequestBody struct {
-	Name          string   `form:"name" binding:"required"`
-	Email         string   `form:"email" binding:"required,email"`
-	Phone         string   `form:"phone" binding:"required"`
-	Password      string   `form:"password" binding:"required,min=8"`
-	Role          string   `form:"role" binding:"required"`
-	ServiceZones  []string `form:"serviceZones"`
-	AccessModules []string `form:"accessModules"`
+    Name          string   `form:"name" binding:"required"`
+    Email         string   `form:"email" binding:"required,email"`
+    Phone         string   `form:"phone" binding:"required"`
+    Password      string   `form:"password" binding:"required,min=8"`
+    Role          string   `form:"role" binding:"required"`
+    ServiceZones  []string `form:"serviceZones"`
+    AccessModules []string `form:"accessModules"`
 }
 type UpdateAdminRequestBody struct {
 	Name          string   `json:"name"`
@@ -108,50 +108,51 @@ func (h *AdminHandler) LogoutAll(c *gin.Context) {
 }
 
 func (h *AdminHandler) CreateAdmin(c *gin.Context) {
+   
+    var req CreateAdminRequestBody
+    if err := c.ShouldBind(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+        return
+    }
 
-	var req CreateAdminRequestBody
-	if err := c.ShouldBind(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
+   
+    var profileURL string
+    file, err := c.FormFile("profile")
+    if err == nil {
+        dst := "./uploads/" + file.Filename 
+        if err := c.SaveUploadedFile(file, dst); err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to save file"})
+            return
+        }
+        profileURL = dst
+    }
 
-	var profileURL string
-	file, err := c.FormFile("profile")
-	if err == nil {
-		dst := "./uploads/" + file.Filename
-		if err := c.SaveUploadedFile(file, dst); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to save file"})
-			return
-		}
-		profileURL = dst
-	}
+    var accessModules []primitive.ObjectID
+    for _, id := range req.AccessModules {
+        if objID, err := primitive.ObjectIDFromHex(id); err == nil {
+            accessModules = append(accessModules, objID)
+        }
+    }
 
-	var accessModules []primitive.ObjectID
-	for _, id := range req.AccessModules {
-		if objID, err := primitive.ObjectIDFromHex(id); err == nil {
-			accessModules = append(accessModules, objID)
-		}
-	}
+    serviceReq := service.CreateAdminRequest{
+        Name:          req.Name,
+        Email:         req.Email,
+        Phone:         req.Phone,
+        Password:      req.Password,
+        Role:          req.Role,
+        ServiceZones:  req.ServiceZones,
+        AccessModules: accessModules,
+        ProfileURL:    profileURL, 
+    }
 
-	serviceReq := service.CreateAdminRequest{
-		Name:          req.Name,
-		Email:         req.Email,
-		Phone:         req.Phone,
-		Password:      req.Password,
-		Role:          req.Role,
-		ServiceZones:  req.ServiceZones,
-		AccessModules: accessModules,
-		ProfileURL:    profileURL,
-	}
+    admin := middleware.GetAdminFromContext(c)
+    newAdmin, err := h.service.CreateAdmin(c.Request.Context(), serviceReq, admin.ID)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+        return
+    }
 
-	admin := middleware.GetAdminFromContext(c)
-	newAdmin, err := h.service.CreateAdmin(c.Request.Context(), serviceReq, admin.ID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"message": "Admin created successfully", "admin": newAdmin})
+    c.JSON(http.StatusCreated, gin.H{"message": "Admin created successfully", "admin": newAdmin})
 }
 
 func (h *AdminHandler) GetAllAdmins(c *gin.Context) {

@@ -27,7 +27,7 @@ func SetupRoutes(
 	amcTransactionHandler *handler.AMCTransactionHandler,
 	amcOrderHandler *handler.OrderHandler,
 	refundHandler *handler.RefundHandler,
-	
+    amcRefundHandler *handler.AMCRefundHandler,
 ) {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
@@ -58,7 +58,7 @@ func SetupRoutes(
 		authenticated.Use(authMiddleware.AdminAuth())
 		authenticated.Use(activityLogMiddleware.LogActivity())
 		{
-			authenticated.POST("/logout", adminHandler.Logout)
+			authenticated.POST("/logout",adminHandler.Logout)
 			authenticated.POST("/logout-all", adminHandler.LogoutAll)
 			authenticated.GET("/profile", adminHandler.GetProfile)
 			authenticated.POST("/change-password", adminHandler.ChangeOwnPassword)
@@ -70,6 +70,7 @@ func SetupRoutes(
 			authenticated.PATCH("/:id/toggle-status", adminHandler.ToggleAdminStatus)
 			authenticated.DELETE("/:id", adminHandler.DeleteAdmin)
 			authenticated.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
+			authenticated.GET("/:id/activity-logs", activityLogHandler.GetAdminActivityLogs)
 		}
 	}
 
@@ -138,6 +139,9 @@ func SetupRoutes(
 		{
 			providerSettlement.GET("", settlementHandler.GetSettlements)
 			providerSettlement.POST("/create", settlementHandler.CreateSettlement)
+			providerSettlement.POST("/:id/settle", settlementHandler.ChangeProviderSettlementStatus)
+			providerSettlement.GET("/:id", settlementHandler.GetSettlementByID)
+			providerSettlement.POST("/export", settlementHandler.ExportSettlements)
 		}
 
 		services := admin.Group("/services")
@@ -156,7 +160,7 @@ func SetupRoutes(
 		{
 			activityLogs.GET("", activityLogHandler.GetAllActivityLogs)
 		}
-		
+
 		amcPlans := admin.Group("/amc-plans")
 		{
 			amcPlans.POST("/create", amcPlanHandler.CreateAMC)
@@ -170,21 +174,31 @@ func SetupRoutes(
 		amcTransaction := admin.Group("/amc-transaction")
 		{
 			amcTransaction.GET("", amcTransactionHandler.GetAll)
-			amcTransaction.GET("/:id",amcTransactionHandler.GetByID)
+			amcTransaction.GET("/:id", amcTransactionHandler.GetByID)
 		}
-		
+
 		amcOrder := admin.Group("/amc-order")
 		{
-			amcOrder.GET("",amcOrderHandler.GetAll)
-			amcOrder.GET("/export",amcOrderHandler.ExportToCSV)
-		    amcOrder.GET("/:id", amcOrderHandler.GetByID)
-		    amcOrder.PATCH("/:id/status", amcOrderHandler.UpdateStatus)
-        }
+			amcOrder.GET("", amcOrderHandler.GetAll)
+			amcOrder.GET("/export", amcOrderHandler.ExportToCSV)
+			amcOrder.GET("/:id", amcOrderHandler.GetByID)
+			amcOrder.PATCH("/:id/status", amcOrderHandler.UpdateStatus)
+		}
+
 		userRefund := admin.Group("/user-refund")
-	{
-		userRefund.GET("", refundHandler.GetAllRefunds)
-		userRefund.GET("/:id", refundHandler.GetRefundByID)
-	}
+		{
+			userRefund.GET("", refundHandler.GetAllRefunds)
+			userRefund.GET("/:id", refundHandler.GetRefundByID)
+		}
+
+		amcRefund := admin.Group("/amc-refund")
+		{
+           amcRefund.GET("", amcRefundHandler.GetAll)
+           amcRefund.GET("/:id", amcRefundHandler.GetDetails)
+		   amcRefund.PUT("/:id/approve",amcRefundHandler.Approve)
+		   amcRefund.PUT("/:id/reject",amcRefundHandler.Reject)
+		   amcRefund.GET("/:id/check-status",amcRefundHandler.CheckStatus)
+
 		}
 	}
-	
+}
