@@ -151,3 +151,19 @@ func (h *AMCRefundHandler) CheckStatus(c *gin.Context) {
 		"data":    res,
 	})
 }
+
+func (h *AMCRefundHandler) GetStats(c *gin.Context) {
+	stats, err := h.svc.GetRefundStats(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Failed to fetch refund stats",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    stats,
+	})
+}

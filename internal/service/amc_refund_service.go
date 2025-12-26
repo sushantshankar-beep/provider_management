@@ -433,3 +433,8 @@ func (s *AMCRefundService) CheckRefundStatus(ctx context.Context, id string) (*C
 		},
 	}, nil
 }
+
+
+func (s *AMCRefundService) GetRefundStats(ctx context.Context) (*repository.RefundStats, error) {
+	return s.refund.GetStats(ctx)
+}
