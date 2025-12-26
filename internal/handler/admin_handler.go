@@ -36,12 +36,13 @@ type CreateAdminRequestBody struct {
     AccessModules []string `form:"accessModules"`
 }
 type UpdateAdminRequestBody struct {
-	Name          string   `json:"name"`
-	Email         string   `json:"email"`
-	Phone         string   `json:"phone"`
-	Role          string   `json:"role"`
-	ServiceZones  []string `json:"serviceZones"`
-	AccessModules []string `json:"accessModules"`
+    Name          string   `form:"name"`
+    Email         string   `form:"email"`
+    Phone         string   `form:"phone"`
+    Password      string   `form:"password"`
+    Role          string   `form:"role"`
+    ServiceZones  []string `form:"serviceZones"`
+    AccessModules []string `form:"accessModules"`
 }
 
 type ChangePasswordRequest struct {

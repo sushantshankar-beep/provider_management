@@ -39,6 +39,7 @@ type UpdateAdminRequest struct {
 	Name          string
 	Email         string
 	Phone         string
+	Password      string
 	Role          string
 	ServiceZones  []string
 	AccessModules []primitive.ObjectID
