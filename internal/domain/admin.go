@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	AdminStatusActive   = "Active"
-	StatusDeactive = "Deactive"
+	AdminStatusActive   = "active"
+	StatusDeactive = "deactive"
 	RoleSubAdmin   = "subAdmin"
 	RoleAdmin      = "admin"
 	RoleSuperAdmin = "superAdmin"
@@ -16,8 +16,16 @@ const (
 	PowerLevelSuperAdmin = 3
 )
 
-type Token struct {
-	Token string `bson:"token" json:"token"`
+
+var AllowedRoles = map[string]bool{
+	RoleSubAdmin:   true,
+	RoleAdmin:      true,
+	RoleSuperAdmin: true,
+}
+
+func IsValidRole(role string) bool {
+	_, ok := AllowedRoles[role]
+	return ok
 }
 
 type Admin struct {
@@ -34,7 +42,7 @@ type Admin struct {
 	AccessModules []primitive.ObjectID `bson:"accessModules" json:"accessModules"`
 	Status        string               `bson:"status" json:"status"`
 	CreatedBy     primitive.ObjectID   `bson:"createdBy,omitempty" json:"createdBy,omitempty"`
-	Tokens        []Token              `bson:"tokens" json:"tokens,omitempty"`
+	Token         string  `bson:"token,omitempty" json:"token,omitempty"`
 	CreatedAt     time.Time            `bson:"createdAt" json:"createdAt"`
 	UpdatedAt     time.Time            `bson:"updatedAt" json:"updatedAt"`
 }

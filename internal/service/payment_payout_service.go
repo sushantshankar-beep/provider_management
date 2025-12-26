@@ -380,7 +380,7 @@ func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID s
 		"ifsc_code":           "",
 		"upi_id":              "",
 		"gst_number":          provider.GSTNumber,
-		"verified":            provider.Status,
+		"account_verified":            provider.Status,
 	}
 
 	if provider.BankDetails != nil {

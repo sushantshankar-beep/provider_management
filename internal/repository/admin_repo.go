@@ -92,9 +92,11 @@ func (r *AdminRepository) FindAll(ctx context.Context, query bson.M, limit, offs
 }
 
 func (r *AdminRepository) Update(ctx context.Context, id primitive.ObjectID, update bson.M) error {
-	update["updatedAt"] = time.Now()
-	_, err := r.collection.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": update})
-	return err
+    _, err := r.collection.UpdateOne(ctx,
+        bson.M{"_id": id},
+        update,
+    )
+    return err
 }
 
 func (r *AdminRepository) Delete(ctx context.Context, id primitive.ObjectID) error {

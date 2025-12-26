@@ -169,9 +169,6 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	}
 
 	originalAmount := acceptedService.BasePrice
-	log.Printf("AssessComplaint - Original booking amount: %.2f", originalAmount)
-	log.Printf("AssessComplaint - Request received - RefundToUser: %s, RefundAmount: %.2f, PayoutToProvider: %s, PayoutAmount: %.2f", 
-		req.RefundToUser, req.RefundAmount, req.PayoutToProvider, req.PayoutAmount)
 	
 	if originalAmount <= 0 {
 		log.Printf("ERROR: Original amount is invalid: %.2f", originalAmount)
@@ -188,12 +185,23 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		log.Printf("AssessComplaint - Full payout selected, setting payout amount to: %.2f", req.PayoutAmount)
 	}
 
-	if req.RefundToUser == domain.RefundTypePartial && req.RefundAmount <= 0 {
-		return fmt.Errorf("refund_amount must be greater than 0 when refund_to_user is 'partial'")
+	if req.RefundToUser == domain.RefundTypePartial {
+		if req.RefundAmount <= 0 {
+			return fmt.Errorf("refund_amount must be greater than 0 when refund_to_user is 'partial'")
+		}
+		if req.RefundAmount > originalAmount {
+			return fmt.Errorf("refund_amount cannot exceed original booking amount: %.2f", originalAmount)
+		}
+		log.Println("edciswhuiwhiu")
 	}
-	
-	if req.PayoutToProvider == domain.PayoutTypePartial && req.PayoutAmount <= 0 {
-		return fmt.Errorf("payout_amount must be greater than 0 when payout_to_provider is 'partial'")
+
+	if req.PayoutToProvider == domain.PayoutTypePartial {
+		if req.PayoutAmount <= 0 {
+			return fmt.Errorf("payout_amount must be greater than 0 when payout_to_provider is 'partial'")
+		}
+		if req.PayoutAmount > originalAmount {
+			return fmt.Errorf("payout_amount cannot exceed original booking amount: %.2f", originalAmount)
+		}
 	}
 	
 	assessment := domain.ComplaintAssessment{
@@ -206,15 +214,11 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		AssessedBy:       req.AssessedBy,
 	}
 
-	log.Printf("AssessComplaint - Saving assessment using MongoDB _id: %s", complaint.ID)
 	if err := s.complaintRepo.SaveAssessment(ctx, complaint.ID, assessment); err != nil {
-		log.Printf("AssessComplaint - Failed to save assessment: %v", err)
 		return fmt.Errorf("failed to save assessment: %w", err)
 	}
 
-	log.Printf("AssessComplaint - Updating status to in_review")
 	if err := s.complaintRepo.UpdateStatus(ctx, complaint.ID, "in_review"); err != nil {
-		log.Printf("AssessComplaint - Failed to update status: %v", err)
 		return fmt.Errorf("failed to update status: %w", err)
 	}
 
@@ -227,13 +231,12 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
         }
     }
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount > 0 {
-		log.Printf("AssessComplaint - Processing refund of %.2f for user %s", req.RefundAmount, complaint.UserID)
 		refundReason := req.Remarks
 		
 		if req.RefundToUser == domain.RefundTypeFull {
 			refundReason = "Full Refund - " + refundReason
 		} else {
-			refundReason = fmt.Sprintf("Partial Refund (%.2f) - %s", req.RefundAmount, refundReason)
+			refundReason = fmt.Sprintf("Partial Refund -" + refundReason)
 		}
 		
 		if err := s.refundService.ProcessRefund(ctx, RefundRequest{
@@ -272,7 +275,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 			if req.PayoutToProvider == domain.PayoutTypeFull {
 				payoutReason = "Full Payout - " + payoutReason
 			} else {
-				payoutReason = fmt.Sprintf("Partial Payout (%.2f) - %s", req.PayoutAmount, payoutReason)
+				payoutReason = fmt.Sprintf("Partial Payout" + payoutReason)
 			}
 			
 			if err := s.payoutService.ProcessPayout(ctx, PayoutRequest{

@@ -238,13 +238,14 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 
 	if err := h.complaintService.AssessComplaint(c.Request.Context(), id, req); err != nil {
 		log.Println("Assessment error:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
+	
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
-			"message": "Failed to assess complaint: " + err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
-
+	
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Complaint assessed successfully",

@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"log"
 	"net/http"
-	"strconv"
 	"provider_management/internal/domain"
-    "provider_management/internal/middleware"
+	"provider_management/internal/middleware"
 	"provider_management/internal/service"
+	"regexp"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -107,53 +110,70 @@ func (h *AdminHandler) LogoutAll(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out from all devices"})
 }
 
-func (h *AdminHandler) CreateAdmin(c *gin.Context) {
-   
-    var req CreateAdminRequestBody
-    if err := c.ShouldBind(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-        return
-    }
-
-   
-    var profileURL string
-    file, err := c.FormFile("profile")
-    if err == nil {
-        dst := "./uploads/" + file.Filename 
-        if err := c.SaveUploadedFile(file, dst); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to save file"})
-            return
-        }
-        profileURL = dst
-    }
-
-    var accessModules []primitive.ObjectID
-    for _, id := range req.AccessModules {
-        if objID, err := primitive.ObjectIDFromHex(id); err == nil {
-            accessModules = append(accessModules, objID)
-        }
-    }
-
-    serviceReq := service.CreateAdminRequest{
-        Name:          req.Name,
-        Email:         req.Email,
-        Phone:         req.Phone,
-        Password:      req.Password,
-        Role:          req.Role,
-        ServiceZones:  req.ServiceZones,
-        AccessModules: accessModules,
-        ProfileURL:    profileURL, 
-    }
-
-    admin := middleware.GetAdminFromContext(c)
-    newAdmin, err := h.service.CreateAdmin(c.Request.Context(), serviceReq, admin.ID)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-        return
-    }
-
-    c.JSON(http.StatusCreated, gin.H{"message": "Admin created successfully", "admin": newAdmin})
+func isValidPhoneNumber(phone string) bool {
+	re := regexp.MustCompile(`^[6-9]\d{9}$`)
+	return re.MatchString(phone)
 }
+
+
+func (h *AdminHandler) CreateAdmin(c *gin.Context) {
+	var req CreateAdminRequestBody
+	if err := c.ShouldBind(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	if req.Role != "" && !domain.IsValidRole(req.Role) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid role. Allowed roles: subAdmin, admin, superAdmin",
+		})
+		return
+	}
+
+	if !isValidPhoneNumber(req.Phone) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid phone number. Use format (e.g. +919876543210)",
+		})
+		return
+	}
+
+	var profileURL string
+	if url, exists := middleware.GetUploadedURL(c, "profileUrl"); exists {
+		profileURL = url
+	}
+
+	var accessModules []primitive.ObjectID
+	for _, id := range req.AccessModules {
+		if objID, err := primitive.ObjectIDFromHex(id); err == nil {
+			accessModules = append(accessModules, objID)
+		}
+	}
+
+	serviceReq := service.CreateAdminRequest{
+		Name:          req.Name,
+		Email:         req.Email,
+		Phone:         req.Phone,
+		Password:      req.Password,
+		Role:          req.Role,
+		ServiceZones:  req.ServiceZones,
+		AccessModules: accessModules,
+		ProfileURL:    profileURL,
+	}
+
+	admin := middleware.GetAdminFromContext(c)
+	newAdmin, err := h.service.CreateAdmin(c.Request.Context(), serviceReq, admin.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Admin created successfully",
+		"admin":   newAdmin,
+	})
+}
+
+
 
 func (h *AdminHandler) GetAllAdmins(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "10"), 10, 64)
@@ -197,6 +217,8 @@ func (h *AdminHandler) GetAdminByID(c *gin.Context) {
 }
 
 func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
+	log.Println("UpdateAdmin handler called")
+	
 	id, err := primitive.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid admin ID"})
@@ -204,17 +226,43 @@ func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
 	}
 
 	var req UpdateAdminRequestBody
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBind(&req); err != nil {
+		log.Println("Binding error:", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
 
-	profileURL := c.GetString("profileUrl")
+	log.Printf("Request data: %+v\n", req)
+
+	if req.Role != "" && !domain.IsValidRole(req.Role) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid role. Allowed roles: subAdmin, admin, superAdmin",
+		})
+		return
+	}
+
+	if req.Phone != "" && !isValidPhoneNumber(req.Phone) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Invalid phone number. Use format (e.g. +919876543210)",
+		})
+		return
+	}
+
+	var profileURL string
+	if url, exists := middleware.GetUploadedURL(c, "profileUrl"); exists {
+		profileURL = url
+		log.Println("Profile URL from S3:", profileURL)
+	} else {
+		log.Println("No profile image uploaded")
+	}
 
 	var accessModules []primitive.ObjectID
-	for _, id := range req.AccessModules {
-		objID, _ := primitive.ObjectIDFromHex(id)
-		accessModules = append(accessModules, objID)
+	for _, idStr := range req.AccessModules {
+		if objID, err := primitive.ObjectIDFromHex(idStr); err == nil {
+			accessModules = append(accessModules, objID)
+		} else {
+			log.Printf("Invalid access module ID: %s, error: %v\n", idStr, err)
+		}
 	}
 
 	serviceReq := service.UpdateAdminRequest{
@@ -227,8 +275,11 @@ func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
 		ProfileURL:    profileURL,
 	}
 
+	log.Printf("Service request: %+v\n", serviceReq)
+
 	admin, err := h.service.UpdateAdmin(c.Request.Context(), id, serviceReq)
 	if err != nil {
+		log.Println("Service error:", err)
 		if err.Error() == "Admin not found" {
 			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
 			return
@@ -237,7 +288,11 @@ func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Admin updated successfully", "admin": admin})
+	log.Println("Admin updated successfully")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Admin updated successfully",
+		"admin":   admin,
+	})
 }
 
 func (h *AdminHandler) ToggleAdminStatus(c *gin.Context) {

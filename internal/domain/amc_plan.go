@@ -9,12 +9,12 @@ import (
 type AllowedBrandModel struct {
 	Brand          string   `bson:"brand" json:"brand"`
 	Models         []string `bson:"models" json:"models"`
-	AllowAllModels bool     `bson:"allowAllModels" json:"allow_all_models"`
+	AllowAllModels bool     `bson:"allowAllModels" json:"allowAllModels"`
 }
 
 type PlanServiceIncluded struct {
-	ServiceName string      `bson:"serviceName" json:"service_name"`
-	ServiceType string      `bson:"serviceType" json:"service_type"`
+	ServiceName string      `bson:"serviceName" json:"serviceName"`
+	ServiceType string      `bson:"serviceType" json:"serviceType"`
 	Value       interface{} `bson:"value" json:"value"`
 	Info        string      `bson:"info" json:"info"`
 }
