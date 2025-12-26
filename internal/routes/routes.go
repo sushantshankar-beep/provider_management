@@ -207,10 +207,12 @@ func SetupRoutes(
 		amcRefund := admin.Group("/amc-refund")
 		{
 			amcRefund.GET("", amcRefundHandler.GetAll)
+			amcRefund.GET("/stats",amcRefundHandler.GetStats)
 			amcRefund.GET("/:id", amcRefundHandler.GetDetails)
 			amcRefund.PUT("/:id/approve", amcRefundHandler.Approve)
 			amcRefund.PUT("/:id/reject", amcRefundHandler.Reject)
 			amcRefund.GET("/:id/check-status", amcRefundHandler.CheckStatus)
+			
 		}
 
 		zones := admin.Group("/zones")
