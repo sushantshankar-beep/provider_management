@@ -23,18 +23,35 @@ func (s *ServiceService) CreateService(ctx context.Context, service *domain.Serv
 	if service.ServiceName == "" {
 		return fmt.Errorf("service name is required")
 	}
-	if service.Category == "" {
-		return fmt.Errorf("category is required")
+
+	if !domain.IsValidCategory(service.Category) {
+		return fmt.Errorf("invalid category")
 	}
+
 	if len(service.VehicleType) == 0 {
 		return fmt.Errorf("vehicle type is required")
 	}
+
+	if !domain.IsValidVehicleType(service.VehicleType) {
+	    return fmt.Errorf("invalid vehicle type: %s", service.VehicleType)
+	}
+
+
+
 	if service.Location == "" {
 		return fmt.Errorf("location is required")
 	}
 
+	if service.MinCost < 0 {
+		return fmt.Errorf("min cost cannot be negative")
+	}
+
 	if service.Status == "" {
-		service.Status = "active"
+		service.Status = domain.StatusActive
+	}
+
+	if !domain.IsValidStatus(service.Status) {
+		return fmt.Errorf("invalid status")
 	}
 
 	return s.ServiceMasterRepo.Create(ctx, service)
@@ -151,54 +168,101 @@ func (s *ServiceService) GetServiceByID(ctx context.Context, id string) (map[str
 	}, nil
 }
 
-func (s *ServiceService) UpdateService(ctx context.Context, id string, updateData map[string]any) error {
+func (s *ServiceService) UpdateService(
+	ctx context.Context,
+	id string,
+	updateData map[string]any,
+) error {
+
 	if len(updateData) == 0 {
 		return fmt.Errorf("no update data provided")
 	}
 
 	update := bson.M{}
+
 	if val, ok := updateData["service_name"]; ok {
-		update["serviceName"] = val
+		name, ok := val.(string)
+		if !ok || name == "" {
+			return fmt.Errorf("invalid service name")
+		}
+		update["serviceName"] = name
 	}
+
 	if val, ok := updateData["category"]; ok {
-		update["category"] = val
+		cat, ok := val.(string)
+		if !ok || !domain.IsValidCategory(domain.ServiceCategory(cat)) {
+			return fmt.Errorf("invalid category")
+		}
+		update["category"] = cat
 	}
+
 	if val, ok := updateData["vehicle_type"]; ok {
-		update["vehicleType"] = val
+           vt, ok := val.(string)
+			if !ok || !domain.IsValidVehicleType(domain.VehicleType(vt)) {
+				return fmt.Errorf("invalid vehicle type: %v")
+			}
+		update["vehicleType"] = vt
 	}
+
 	if val, ok := updateData["brand_scope"]; ok {
 		update["brandScope"] = val
 	}
+
 	if val, ok := updateData["sub_brand_scope"]; ok {
 		update["subBrandScope"] = val
 	}
+
 	if val, ok := updateData["fuel_type_scope"]; ok {
 		update["fuelTypeScope"] = val
 	}
+
 	if val, ok := updateData["location"]; ok {
-		update["location"] = val
+		loc, ok := val.(string)
+		if !ok || loc == "" {
+			return fmt.Errorf("invalid location")
+		}
+		update["location"] = loc
 	}
+
 	if val, ok := updateData["requires_otp"]; ok {
-		update["requiresOtp"] = val
+		b, ok := val.(bool)
+		if !ok {
+			return fmt.Errorf("invalid requires_otp")
+		}
+		update["requiresOtp"] = b
 	}
+
 	if val, ok := updateData["status"]; ok {
-		update["status"] = val
+		status, ok := val.(string)
+		if !ok || !domain.IsValidStatus(domain.ServiceStatus(status)) {
+			return fmt.Errorf("invalid status")
+		}
+		update["status"] = status
 	}
+
 	if val, ok := updateData["display_order"]; ok {
 		update["displayOrder"] = val
 	}
+
 	if val, ok := updateData["tag"]; ok {
 		update["tag"] = val
 	}
+
 	if val, ok := updateData["min_cost"]; ok {
-		update["minCost"] = val
+		cost, ok := val.(float64)
+		if !ok || cost < 0 {
+			return fmt.Errorf("min cost cannot be negative")
+		}
+		update["minCost"] = cost
 	}
+
 	if val, ok := updateData["short_description"]; ok {
 		update["shortDesc"] = val
 	}
 
 	return s.ServiceMasterRepo.Update(ctx, id, update)
 }
+
 
 func (s *ServiceService) UpdateServiceStatus(ctx context.Context, id string, status string) error {
 	if status != "active" && status != "inactive" {

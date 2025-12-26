@@ -27,7 +27,10 @@ func SetupRoutes(
 	amcTransactionHandler *handler.AMCTransactionHandler,
 	amcOrderHandler *handler.OrderHandler,
 	refundHandler *handler.RefundHandler,
-    amcRefundHandler *handler.AMCRefundHandler,
+	amcRefundHandler *handler.AMCRefundHandler,
+	zoneHandler *handler.ZoneHandler,
+	vehicleBrandHandler *handler.VehicleBrandHandler,
+	s3Uploader *middleware.S3Uploader,
 ) {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
@@ -53,20 +56,30 @@ func SetupRoutes(
 	adminPanel := r.Group("/admin/panel")
 	{
 		adminPanel.POST("/login", adminHandler.Login)
-		
+
 		authenticated := adminPanel.Group("")
 		authenticated.Use(authMiddleware.AdminAuth())
 		authenticated.Use(activityLogMiddleware.LogActivity())
 		{
-			authenticated.POST("/logout",adminHandler.Logout)
+			authenticated.POST("/logout", adminHandler.Logout)
 			authenticated.POST("/logout-all", adminHandler.LogoutAll)
 			authenticated.GET("/profile", adminHandler.GetProfile)
 			authenticated.POST("/change-password", adminHandler.ChangeOwnPassword)
-			authenticated.POST("/create", adminHandler.CreateAdmin)
+			authenticated.POST("/create",
+			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
+				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
+			}),
+			adminHandler.CreateAdmin,
+		)
 			authenticated.GET("/all", adminHandler.GetAllAdmins)
 			authenticated.GET("/stats", adminHandler.GetDashboardStats)
 			authenticated.GET("/:id", adminHandler.GetAdminByID)
-			authenticated.PUT("/:id", adminHandler.UpdateAdmin)
+			authenticated.PUT("/:id",
+				s3Uploader.UploadMiddleware([]middleware.FieldConfig{
+					{FormFieldName: "profileImage", ContextKey: "profileUrl"},
+				}),
+				adminHandler.UpdateAdmin,
+			)
 			authenticated.PATCH("/:id/toggle-status", adminHandler.ToggleAdminStatus)
 			authenticated.DELETE("/:id", adminHandler.DeleteAdmin)
 			authenticated.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
@@ -141,7 +154,7 @@ func SetupRoutes(
 			providerSettlement.POST("/create", settlementHandler.CreateSettlement)
 			providerSettlement.POST("/:id/settle", settlementHandler.ChangeProviderSettlementStatus)
 			providerSettlement.GET("/:id", settlementHandler.GetSettlementByID)
-			providerSettlement.POST("/export", settlementHandler.ExportSettlements)
+			providerSettlement.GET("/export", settlementHandler.ExportSettlements)
 		}
 
 		services := admin.Group("/services")
@@ -193,12 +206,27 @@ func SetupRoutes(
 
 		amcRefund := admin.Group("/amc-refund")
 		{
-           amcRefund.GET("", amcRefundHandler.GetAll)
-           amcRefund.GET("/:id", amcRefundHandler.GetDetails)
-		   amcRefund.PUT("/:id/approve",amcRefundHandler.Approve)
-		   amcRefund.PUT("/:id/reject",amcRefundHandler.Reject)
-		   amcRefund.GET("/:id/check-status",amcRefundHandler.CheckStatus)
+			amcRefund.GET("", amcRefundHandler.GetAll)
+			amcRefund.GET("/:id", amcRefundHandler.GetDetails)
+			amcRefund.PUT("/:id/approve", amcRefundHandler.Approve)
+			amcRefund.PUT("/:id/reject", amcRefundHandler.Reject)
+			amcRefund.GET("/:id/check-status", amcRefundHandler.CheckStatus)
+		}
 
+		zones := admin.Group("/zones")
+		{
+			zones.POST("", zoneHandler.Create)
+			zones.GET("", zoneHandler.GetAll)
+			zones.GET("/active", zoneHandler.GetActive)
+			zones.PUT("/:id", zoneHandler.Update)
+			zones.PATCH("/:id/toggle-status", zoneHandler.ToggleStatus)
+			zones.DELETE("/:id", zoneHandler.Delete)
+		}
+
+		vehicleBrands := admin.Group("/vehicle-brands")
+		{
+			vehicleBrands.GET("", vehicleBrandHandler.GetBrands)
+			vehicleBrands.GET("/models", vehicleBrandHandler.GetModels)
 		}
 	}
 }
