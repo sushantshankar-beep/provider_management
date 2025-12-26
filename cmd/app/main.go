@@ -44,11 +44,13 @@ func main() {
 	paymentPayoutRepo := repository.NewPaymentPayoutRepo(mongoDB)
 	settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
 	serviceMasterRepo := repository.NewServiceMasterRepo(mongoDB)
+	roleRepo := repository.NewRoleRepository(mongoDB)
 	adminRepo := repository.NewAdminRepository(mongoDB)
 	refundRepo := repository.NewRefundRepository(mongoDB)
 	activityLogRepo := repository.NewActivityLogRepository(mongoDB)
 	authMiddleware := middleware.NewAuthMiddleware(adminRepo)
 	activityLogMiddleware := middleware.NewActivityLogMiddleware(activityLogRepo)
+	rbacMiddleware := middleware.NewRBACMiddleware(roleRepo)
 	amcPlanRepo := repository.NewAMCPlanRepo(mongoDB)
 	amcTransactionRepo := repository.NewAMCTransactionRepo(mongoDB)
 	amcOrderRepo := repository.NewOrderRepo(mongoDB)
@@ -72,11 +74,11 @@ func main() {
 	amcPlanService := service.NewAMCPlanService(amcPlanRepo)
 	amcTransactionService := service.NewAMCTransactionService(amcTransactionRepo, userRepo, amcRepo)
 	amcOrderService := service.NewOrderService(amcOrderRepo, userRepo, amcPlanRepo, savedVehicleRepo, zoneRepo)
-payUService := service.NewPayUService(
+	payUService := service.NewPayUService(
 	cfg.PayU.Key,
 	cfg.PayU.Salt,
 	cfg.PayU.BaseURL,
-)
+	)
 	amcRefundService := service.NewAMCRefundService(
 		amcRefundRepo,
 		amcPurchaseRepo,
@@ -100,11 +102,10 @@ payUService := service.NewPayUService(
 	amcOrderHandler := handler.NewOrderHandler(amcOrderService)
     refundHandler := handler.NewRefundHandler(refundService)
 	amcRefundHandler := handler.NewAMCRefundHandler(amcRefundService)
-
+	roleHandler := handler.NewRoleHandler(roleRepo)
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
-
 	routes.SetupRoutes(
 		r,
 		cfg.AllowedOrigins,
@@ -117,15 +118,18 @@ payUService := service.NewPayUService(
 		settlementHandler,
 		serviceMasterHandler,
 		adminHandler,
-		authMiddleware,
-		activityLogMiddleware,
 		activityLogHandler,
 		amcPlanHandler,
 		amcTransactionHandler,
 		amcOrderHandler,
 		refundHandler,
 		amcRefundHandler,
+		authMiddleware,
+		activityLogMiddleware,
+		rbacMiddleware,
+		roleHandler,
 	)
+
 
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
