@@ -429,3 +429,22 @@ func (r *AcceptedServiceRepo) FindByInternalID(
 
 	return &svc, nil
 }
+
+
+func (r *AcceptedServiceRepo) FindByIDs(ctx context.Context, ids []primitive.ObjectID) ([]domain.AcceptedService, error) {
+	var services []domain.AcceptedService
+	
+	filter := bson.M{"_id": bson.M{"$in": ids}}
+	
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	
+	if err := cursor.All(ctx, &services); err != nil {
+		return nil, err
+	}
+	
+	return services, nil
+}
