@@ -263,7 +263,21 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 		"paymentStatus": "paid",
 		"$or": []bson.M{
 			{"payoutCreated": bson.M{"$exists": false}},
-			{"payoutCreated": false},                   
+			{"payoutCreated": false},
+		},
+		"$and": []bson.M{
+			{
+				"$or": []bson.M{
+					{"complaintUser": bson.M{"$exists": false}},
+					{"complaintUser": ""},
+				},
+			},
+			{
+				"$or": []bson.M{
+					{"complaintProvider": bson.M{"$exists": false}},
+					{"complaintProvider": ""},
+				},
+			},
 		},
 		"completedAt": bson.M{
 			"$gte": from,
@@ -277,7 +291,6 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 	}
 
 	var services []domain.AcceptedService
-	log.Println("servicesss",services)
 	if err := cursor.All(ctx, &services); err != nil {
 		return nil, err
 	}

@@ -99,39 +99,9 @@ func (s *ComplaintService) GetComplaintWithDetails(ctx context.Context, id strin
 		Complaint: *complaint,
 	}
 
-	if complaint.UserID != "" {
-		user, err := s.userRepo.FindByID(ctx, complaint.UserID)
-		if err != nil {
-			log.Printf("Warning: Could not fetch user details for ID %s: %v", complaint.UserID, err)
-		} else {
-			complaintWithDetails.UserDetails = &domain.UserDetails{
-				ID:    user.ID,
-				InternalID: fmt.Sprintf("VW%d", user.InternalID),
-				Name:  user.Name,
-				Email: user.Email,
-				Phone: user.Phone,
-			}
-		}
-	}
-
-	if complaint.ProviderID != "" {
-		provider, err := s.providerRepo.FindByID(ctx, complaint.ProviderID)
-		if err != nil {
-			log.Printf("Warning: Could not fetch provider details for ID %s: %v", complaint.ProviderID, err)
-		} else {
-			complaintWithDetails.ProviderDetails = &domain.ProviderDetails{
-				ID:          provider.ID.Hex(),
-				InternalID:  fmt.Sprintf("PRO%d", provider.InternalID),
-				Name:        provider.Name,
-				Email:       provider.Email,
-				Phone:       provider.Phone,
-				CompanyName: provider.CompanyName,
-			}
-		}
-	}
-
+	var booking *domain.AcceptedService
 	if complaint.AcceptedServiceID != "" {
-		booking, err := s.acceptedServiceRepo.FindByID(ctx, complaint.AcceptedServiceID)
+		booking, err = s.acceptedServiceRepo.FindByID(ctx, complaint.AcceptedServiceID)
 		if err != nil {
 			log.Printf("Warning: Could not fetch booking details for ID %s: %v", complaint.AcceptedServiceID, err)
 		} else {
@@ -144,10 +114,49 @@ func (s *ComplaintService) GetComplaintWithDetails(ctx context.Context, id strin
 		}
 	}
 
+	userID := complaint.UserID
+	if userID == "" && booking != nil {
+		userID = booking.UserID
+	}
+
+	if userID != "" {
+		user, err := s.userRepo.FindByID(ctx, userID)
+		if err != nil {
+			log.Printf("Warning: Could not fetch user details for ID %s: %v", userID, err)
+		} else {
+			complaintWithDetails.UserDetails = &domain.UserDetails{
+				ID:         user.ID,
+				InternalID: fmt.Sprintf("VW%d", user.InternalID),
+				Name:       user.Name,
+				Email:      user.Email,
+				Phone:      user.Phone,
+			}
+		}
+	}
+
+	providerID := complaint.ProviderID
+	if providerID == "" && booking != nil {
+		providerID = booking.ProviderID.Hex()
+	}
+
+	if providerID != "" {
+		provider, err := s.providerRepo.FindByID(ctx, providerID)
+		if err != nil {
+			log.Printf("Warning: Could not fetch provider details for ID %s: %v", providerID, err)
+		} else {
+			complaintWithDetails.ProviderDetails = &domain.ProviderDetails{
+				ID:          provider.ID.Hex(),
+				InternalID:  fmt.Sprintf("PRO%d", provider.InternalID),
+				Name:        provider.Name,
+				Email:       provider.Email,
+				Phone:       provider.Phone,
+				CompanyName: provider.CompanyName,
+			}
+		}
+	}
 
 	return complaintWithDetails, nil
 }
-
 func (s *ComplaintService) ListComplaints(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error) {
 	return s.complaintRepo.List(ctx, filter)
 }
@@ -158,8 +167,8 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		return fmt.Errorf("failed to get complaint: %w", err)
 	}
 
-	if complaint.Status != "initiated" {
-		return fmt.Errorf("complaint must be in initiated status to assess, current status: %s", complaint.Status)
+	if complaint.Status != "in_review" {
+		return fmt.Errorf("complaint must be in in_review status to save assessment, current status: %s", complaint.Status)
 	}
 
 	acceptedService, err := s.acceptedServiceRepo.FindByID(ctx, complaint.AcceptedServiceID)
@@ -218,8 +227,13 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		return fmt.Errorf("failed to save assessment: %w", err)
 	}
 
-	if err := s.complaintRepo.UpdateStatus(ctx, complaint.ID, "in_review"); err != nil {
+	if err := s.complaintRepo.UpdateStatus(ctx, complaint.ID, "resolved"); err != nil {
 		return fmt.Errorf("failed to update status: %w", err)
+	}
+
+	paymentTracking := &domain.PaymentActionTracking{
+		RefundStatus: domain.PaymentActionNA,
+		PayoutStatus: domain.PaymentActionNA,
 	}
 
 	actions := []string{}
@@ -231,6 +245,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
         }
     }
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount > 0 {
+		paymentTracking.RefundStatus = domain.PaymentActionPending
 		refundReason := req.Remarks
 		
 		if req.RefundToUser == domain.RefundTypeFull {
@@ -262,6 +277,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	}
 
 	if req.PayoutToProvider != domain.PayoutTypeNone && req.PayoutAmount > 0 {
+		paymentTracking.PayoutStatus = domain.PaymentActionPending
 		acceptedService, err := s.acceptedServiceRepo.FindByID(ctx, complaint.AcceptedServiceID)
 		if err != nil {
 			log.Printf("Warning: Cannot fetch accepted service for payout: %v", err)
@@ -306,6 +322,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	log.Printf("AssessComplaint - Updating triggered actions: %v", actions)
 	if err := s.complaintRepo.Update(ctx, complaint.ID, bson.M{
 		"actionsTriggered": actions,
+		"paymentTracking":  paymentTracking,
 	}); err != nil {
 		log.Printf("Warning: Failed to update actions: %v", err)
 	}
@@ -313,6 +330,25 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	log.Printf("AssessComplaint - Assessment completed successfully")
 	return nil
 }
+
+func (s *ComplaintService) StartAssessment(ctx context.Context, complaintID string) error {
+	complaint, err := s.GetComplaint(ctx, complaintID)
+	if err != nil {
+		return fmt.Errorf("failed to get complaint: %w", err)
+	}
+
+	if complaint.Status != "initiated" {
+		return fmt.Errorf("complaint must be in initiated status to start assessment, current status: %s", complaint.Status)
+	}
+
+	if err := s.complaintRepo.UpdateStatus(ctx, complaint.ID, "in_review"); err != nil {
+		return fmt.Errorf("failed to update status to in_review: %w", err)
+	}
+
+	log.Printf("StartAssessment - Status changed to in_review for complaint %s", complaintID)
+	return nil
+}
+
 func (s *ComplaintService) UpdateComplaintStatus(ctx context.Context, complaintID string, status string, adminID string) error {
 
 	complaint, err := s.GetComplaint(ctx, complaintID)
@@ -403,4 +439,31 @@ type PayoutRequest struct {
 	ComplaintID string
 	BookingID     string
 	PartialAmount float64
+}
+
+func (s *ComplaintService) UpdatePaymentStatus(ctx context.Context, complaintID string, isRefund bool, status domain.PaymentActionStatus, paymentID string) error {
+	complaint, err := s.GetComplaint(ctx, complaintID)
+	if err != nil {
+		return fmt.Errorf("failed to get complaint: %w", err)
+	}
+
+	tracking := complaint.PaymentTracking
+	if tracking == nil {
+		tracking = &domain.PaymentActionTracking{
+			RefundStatus: domain.PaymentActionNA,
+			PayoutStatus: domain.PaymentActionNA,
+		}
+	}
+
+	if isRefund {
+		tracking.RefundStatus = status
+		tracking.RefundID = paymentID
+	} else {
+		tracking.PayoutStatus = status
+		tracking.PayoutID = paymentID
+	}
+
+	return s.complaintRepo.Update(ctx, complaint.ID, bson.M{
+		"paymentTracking": tracking,
+	})
 }

@@ -38,12 +38,27 @@ const (
 	PayoutTypeNone    PayoutType = "none"
 )
 
+type PaymentActionStatus string
+
+const (
+	PaymentActionPending   PaymentActionStatus = "pending"
+	PaymentActionCompleted PaymentActionStatus = "completed"
+	PaymentActionFailed    PaymentActionStatus = "failed"
+	PaymentActionNA        PaymentActionStatus = "n/a"
+)
+
 type ComplaintTimeline struct {
 	Initiated *time.Time `bson:"initiated,omitempty" json:"initiated,omitempty"`
 	InReview  *time.Time `bson:"inReview,omitempty" json:"in_review,omitempty"`
 	Resolved  *time.Time `bson:"resolved,omitempty" json:"resolved,omitempty"`
 }
 
+type PaymentActionTracking struct {
+	RefundStatus PaymentActionStatus `bson:"refundStatus" json:"refund_status"`
+	PayoutStatus PaymentActionStatus `bson:"payoutStatus" json:"payout_status"`
+	RefundID     string              `bson:"refundId,omitempty" json:"refund_id,omitempty"`
+	PayoutID     string              `bson:"payoutId,omitempty" json:"payout_id,omitempty"`
+}
 type ComplaintAssessment struct {
 	FaultParty       FaultParty `bson:"faultParty" json:"fault_party"`
 	RefundToUser     RefundType `bson:"refundToUser" json:"refund_to_user"`
@@ -82,7 +97,7 @@ type Complaint struct {
 	Assessment       *ComplaintAssessment `bson:"assessment,omitempty" json:"assessment,omitempty"`
 	Notes            []ComplaintNote      `bson:"notes,omitempty" json:"notes,omitempty"`
 	ActionsTriggered []string             `bson:"actionsTriggered,omitempty" json:"actions_triggered,omitempty"`
-
+    PaymentTracking  *PaymentActionTracking `bson:"paymentTracking,omitempty" json:"payment_tracking,omitempty"`
 	UserName      string `bson:"userName,omitempty" json:"user_name,omitempty"`
 	ProviderName  string `bson:"providerName,omitempty" json:"provider_name,omitempty"`
 	BookingNumber string `bson:"bookingNumber,omitempty" json:"booking_number,omitempty"`
