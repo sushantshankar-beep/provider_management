@@ -356,3 +356,18 @@ func (h *ComplaintHandler) GetStats(c *gin.Context) {
 		"data":    stats,
 	})
 }
+
+func (h *ComplaintHandler) StartAssessment(c *gin.Context) {
+	id := c.Param("id")
+	
+
+	if err := h.complaintService.StartAssessment(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Assessment saved successfully and complaint reviewed",
+		"status":  "in_review",
+	})
+}

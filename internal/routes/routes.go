@@ -129,6 +129,7 @@ func SetupRoutes(
 			complaints.GET("/stats", complaintHandler.GetStats)
 			complaints.GET("/:id", complaintHandler.GetByID)
 			complaints.GET("/:id/activity-logs", activityLogHandler.GetComplaintActivityLogs)
+			complaints.POST("/:id/start-assessment", complaintHandler.StartAssessment)
 			complaints.POST("/:id/assessment", complaintHandler.PostAssessment)
 			complaints.POST("/:id/notes", complaintHandler.AddNote)
 			complaints.PATCH("/:id/status", complaintHandler.UpdateStatus)
