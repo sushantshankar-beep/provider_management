@@ -37,6 +37,7 @@ type Admin struct {
 	Password      string               `bson:"password" json:"password,omitempty"`
 	ProfileURL    string               `bson:"profileUrl" json:"profileUrl"`
 	Role          string               `bson:"role" json:"role"`
+	RoleName      string               `bson:"roleName" json:"roleName"`
 	PowerLevel    int                  `bson:"powerLevel" json:"powerLevel"`
 	ServiceZones  []string             `bson:"serviceZones" json:"serviceZones"`
 	AccessModules []primitive.ObjectID `bson:"accessModules" json:"accessModules"`

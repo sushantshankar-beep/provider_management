@@ -74,7 +74,7 @@ func main() {
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
-	refundService := service.NewRefundService(refundRepo, transactionRepo)
+	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo)
 	complaintService := service.NewComplaintService(complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo)
@@ -87,13 +87,8 @@ func main() {
 	cfg.PayU.Salt,
 	cfg.PayU.BaseURL,
 	)
-	amcRefundService := service.NewAMCRefundService(
-		amcRefundRepo,
-		amcPurchaseRepo,
-		userRepo,
-		amcPlanRepo,
-		payUService,
-	)
+	amcRefundService := service.NewAMCRefundService(amcRefundRepo,amcPurchaseRepo,userRepo,amcPlanRepo,payUService)
+	adminRoleService := service.NewRoleService(roleRepo)
 	
 	complaintHandler := handler.NewComplaintHandler(complaintService,acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
@@ -112,12 +107,14 @@ func main() {
 	amcOrderHandler := handler.NewOrderHandler(amcOrderService)
 	refundHandler := handler.NewRefundHandler(refundService)
 	amcRefundHandler := handler.NewAMCRefundHandler(amcRefundService)
-	roleHandler := handler.NewRoleHandler(roleRepo)
+	roleHandler := handler.NewRoleHandler(roleRepo, adminRoleService)
 	zoneHandler := handler.NewZoneHandler(zoneService)
 	vehicleBrandHandler := handler.NewVehicleBrandHandler(vehicleBrandService)
+
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
+	
 	routes.SetupRoutes(
 		r,
 		cfg.AllowedOrigins,

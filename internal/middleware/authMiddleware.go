@@ -85,28 +85,28 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 			return
 		}
 
-		allowedForAllAdmins := []string{
-			"/admin/panel/logout",
-			"/admin/panel/logout-all",
-			"/admin/panel/profile",
-			"/admin/panel/change-password",
-		}
+		// allowedForAllAdmins := []string{
+		// 	"/admin/panel/logout",
+		// 	"/admin/panel/logout-all",
+		// 	"/admin/panel/profile",
+		// 	"/admin/panel/change-password",
+		// }
 
-		path := c.FullPath()
-		isAllowedForAll := false
-		for _, allowedPath := range allowedForAllAdmins {
-			if path == allowedPath {
-				isAllowedForAll = true
-				break
-			}
-		}
+		// path := c.FullPath()
+		// isAllowedForAll := false
+		// for _, allowedPath := range allowedForAllAdmins {
+		// 	if path == allowedPath {
+		// 		isAllowedForAll = true
+		// 		break
+		// 	}
+		// }
 
 	
-		if !isAllowedForAll && c.Request.Method != http.MethodGet && admin.Role != domain.RoleSuperAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"message": "Only superAdmin can perform this action"})
-			c.Abort()
-			return
-		}
+		// if !isAllowedForAll && c.Request.Method != http.MethodGet && admin.Role != domain.RoleSuperAdmin {
+		// 	c.JSON(http.StatusForbidden, gin.H{"message": "Only superAdmin can perform this action"})
+		// 	c.Abort()
+		// 	return
+		// }
 
 		c.Set("admin", admin)
 		c.Set("token", tokenString)

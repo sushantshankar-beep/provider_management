@@ -221,5 +221,32 @@ func (r *RoleRepository) FindByIDWithCreator(
 	return role, nil
 }
 
+func (r *RoleRepository) FindDistinctRoleTypes(ctx context.Context) ([]string, error) {
+	result, err := r.collection.Distinct(ctx, "roleType", bson.M{})
+	if err != nil {
+		return nil, err
+	}
 
+	var roleTypes []string
+	for _, v := range result {
+		if s, ok := v.(string); ok {
+			roleTypes = append(roleTypes, s)
+		}
+	}
+	return roleTypes, nil
+}
 
+func (r *RoleRepository) FindByRoleType(ctx context.Context, roleType string) ([]domain.Role, error) {
+	filter := bson.M{"roleType": roleType}
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var roles []domain.Role
+	if err := cursor.All(ctx, &roles); err != nil {
+		return nil, err
+	}
+	return roles, nil
+}

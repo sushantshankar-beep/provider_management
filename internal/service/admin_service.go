@@ -29,6 +29,7 @@ type CreateAdminRequest struct {
 	Phone         string
 	Password      string
 	Role          string
+	RoleName      string
 	ServiceZones  []string
 	AccessModules []primitive.ObjectID
 	ProfileURL    string
@@ -131,6 +132,7 @@ func (s *AdminService) CreateAdmin(ctx context.Context, req CreateAdminRequest, 
 		Phone:         req.Phone,
 		Password:      string(hashedPassword),
 		Role:          req.Role,
+		RoleName:     req.RoleName,
 		ServiceZones:  req.ServiceZones,
 		AccessModules: req.AccessModules,
 		ProfileURL:    req.ProfileURL,

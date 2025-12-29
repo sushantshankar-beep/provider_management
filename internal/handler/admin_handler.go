@@ -32,6 +32,7 @@ type CreateAdminRequestBody struct {
     Phone         string   `form:"phone" binding:"required"`
     Password      string   `form:"password" binding:"required,min=8"`
     Role          string   `form:"role" binding:"required"`
+    RoleName      string   `form:"roleName" binding:"required"`
     ServiceZones  []string `form:"serviceZones"`
     AccessModules []string `form:"accessModules"`
 }
@@ -156,6 +157,7 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 		Phone:         req.Phone,
 		Password:      req.Password,
 		Role:          req.Role,
+		RoleName:      req.RoleName,
 		ServiceZones:  req.ServiceZones,
 		AccessModules: accessModules,
 		ProfileURL:    profileURL,

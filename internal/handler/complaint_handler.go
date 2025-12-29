@@ -144,6 +144,7 @@ func (h *ComplaintHandler) GetByID(c *gin.Context) {
 		"updated_at":        complaint.UpdatedAt,
 		"updated_by_admin":  complaint.UpdatedByAdmin,
 		"admin_updated_at":  complaint.AdminUpdatedAt,
+		"payment_tracking":  complaint.PaymentTracking,
 	}
 
 	if complaint.UserDetails != nil {

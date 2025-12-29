@@ -269,3 +269,37 @@ func (r *UserRepo) SearchByName(
 
 	return users, nil
 }
+
+func (r *UserRepo) FindByIDs(ctx context.Context, userIDs []string) ([]*domain.User, error) {
+	if len(userIDs) == 0 {
+		return []*domain.User{}, nil
+	}
+
+	objectIDs := make([]primitive.ObjectID, 0, len(userIDs))
+	for _, id := range userIDs {
+		objID, err := primitive.ObjectIDFromHex(id)
+		if err != nil {
+			continue
+		}
+		objectIDs = append(objectIDs, objID)
+	}
+
+	if len(objectIDs) == 0 {
+		return []*domain.User{}, nil
+	}
+
+	filter := bson.M{"_id": bson.M{"$in": objectIDs}}
+
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find users by IDs: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var users []*domain.User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, fmt.Errorf("failed to decode users: %w", err)
+	}
+
+	return users, nil
+}

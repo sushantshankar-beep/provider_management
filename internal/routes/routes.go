@@ -37,9 +37,6 @@ func SetupRoutes(
 	s3Uploader *middleware.S3Uploader,
 ) {
 
-	// ===============================
-	// CORS
-	// ===============================
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
 		AllowMethods: []string{
@@ -61,9 +58,6 @@ func SetupRoutes(
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// ===============================
-	// ADMIN PANEL (LOGIN / PROFILE)
-	// ===============================
 	adminPanel := r.Group("/admin/panel")
 	{
 		adminPanel.POST("/login", adminHandler.Login)
@@ -75,33 +69,31 @@ func SetupRoutes(
 			authenticated.POST("/logout", adminHandler.Logout)
 			authenticated.POST("/logout-all", adminHandler.LogoutAll)
 			authenticated.GET("/profile", adminHandler.GetProfile)
-			authenticated.POST("/change-password", adminHandler.ChangeOwnPassword)
+			authenticated.POST("/change-password",rbac.Check("admins", "change_paasword"), adminHandler.ChangeOwnPassword)
 			authenticated.POST("/create",
-			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
-				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
-			}),
-			adminHandler.CreateAdmin,
-		)
-			authenticated.GET("/all", adminHandler.GetAllAdmins)
-			authenticated.GET("/stats", adminHandler.GetDashboardStats)
-			authenticated.GET("/:id", adminHandler.GetAdminByID)
+				s3Uploader.UploadMiddleware([]middleware.FieldConfig{
+					{FormFieldName: "profileImage", ContextKey: "profileUrl"},
+				}),
+				rbac.Check("admins", "create_admin/sub-admin"),
+				adminHandler.CreateAdmin,
+			)
+			authenticated.GET("/all", rbac.Check("admins", "view_admin/sub-admin"),adminHandler.GetAllAdmins)
+			authenticated.GET("/stats", rbac.Check("admins", "view_admin/sub-admin"),adminHandler.GetDashboardStats)
+			authenticated.GET("/:id", rbac.Check("admins", "view_admin/sub-admin_details"),adminHandler.GetAdminByID)
 			authenticated.PUT("/:id",
 				s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 					{FormFieldName: "profileImage", ContextKey: "profileUrl"},
 				}),
+				rbac.Check("admins", "edit_admin/sub-admin"),
 				adminHandler.UpdateAdmin,
 			)
-			authenticated.PATCH("/:id/toggle-status", adminHandler.ToggleAdminStatus)
+			authenticated.PATCH("/:id/toggle-status", rbac.Check("admins", "deactivate/activate_admin/sub-admin"),  adminHandler.ToggleAdminStatus)
 			authenticated.DELETE("/:id", adminHandler.DeleteAdmin)
 			authenticated.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
-			authenticated.GET("/:id/activity-logs", activityLogHandler.GetAdminActivityLogs)
+			authenticated.GET("/:id/activity-logs",rbac.Check("admins", "admin/sub-admin_activity_logs"), activityLogHandler.GetAdminActivityLogs)
 		}
 	}
 
-
-	// ===============================
-	// ADMIN APIs
-	// ===============================
 	admin := r.Group("/admin")
 	admin.Use(authMiddleware.AdminAuth())
 	admin.Use(activityLogMiddleware.LogActivity())
@@ -109,189 +101,182 @@ func SetupRoutes(
 	{
 		roles.POST(
 			"",
-			rbac.Check("rbac", "create"),
+			rbac.Check("roles", "create_new_role"),
 			roleHandler.CreateRole,
 		)
 
 		roles.GET(
 			"",
-			rbac.Check("rbac", "view"),
+			rbac.Check("roles", "view_role"),
 			roleHandler.ListRoles,
 		)
 
 		roles.PATCH(
 			"/:id/status",
-			rbac.Check("rbac", "update"),
+			rbac.Check("roles", "activate/deactivate_roles"),
 			roleHandler.ToggleRoleStatus,
 		)
 		roles.POST(
 			"/:id/clone",
-			rbac.Check("rbac", "create"),
+			rbac.Check("roles", "create_new_role"),
 			roleHandler.CloneRole,
 		)
 		roles.DELETE(
 			"/:id",
-			rbac.Check("rbac", "delete"),
+			rbac.Check("roles", "delete_roles"),
 			roleHandler.DeleteRole,
 		)
 		roles.PUT(
 			"/:id",
-			rbac.Check("rbac", "update"),
+			rbac.Check("roles", "update_roles"),
 			roleHandler.UpdateRole,
 		)
 		roles.GET(
 			"/:id",
-			rbac.Check("rbac", "view"),
+			rbac.Check("roles", "view_role_details"),
 			roleHandler.GetRoleByID,
 		)
+		roles.GET("/role-type", roleHandler.GetRoleTypes)
+		roles.GET("/role-names", roleHandler.GetRoleNamesByType)
 	}
 
-	// ---------- USERS ----------
 	users := admin.Group("/users")
 	{
-		users.GET("", rbac.Check("users", "view"), userAdminHandler.GetAllUsers)
-		users.GET("/:id", rbac.Check("users", "view"), userAdminHandler.GetByID)
-		users.GET("/:id/activity-logs", rbac.Check("activity_logs", "view"), activityLogHandler.GetUserActivityLogs)
-		users.PATCH("/:id/status", rbac.Check("users", "status"), userAdminHandler.UpdateStatus)
+		users.GET("", rbac.Check("users", "view_users"), userAdminHandler.GetAllUsers)
+		users.GET("/:id", rbac.Check("users", "view_user_profile"), userAdminHandler.GetByID)
+		users.GET("/:id/activity-logs", rbac.Check("activity_logs", "view_user_activity_logs"), activityLogHandler.GetUserActivityLogs)
+		users.PATCH("/:id/status", rbac.Check("users", "change_user_status"), userAdminHandler.UpdateStatus)
 	}
 
-	// ---------- PROVIDERS ----------
 	providers := admin.Group("/providers")
 	{
-		providers.GET("", rbac.Check("providers", "view"), providerAdminHandler.GetAll)
-		providers.GET("/:id", rbac.Check("providers", "view"), providerAdminHandler.GetByID)
-		providers.GET("/:id/activity-logs", rbac.Check("activity_logs", "view"), activityLogHandler.GetProviderActivityLogs)
-
-		providers.PATCH("/status/:id", rbac.Check("providers", "status"), providerAdminHandler.UpdateStatus)
+		providers.GET("", rbac.Check("providers", "view_providers"), providerAdminHandler.GetAll)
+		providers.GET("/:id", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.GetByID)
+		providers.GET("/:id/activity-logs", rbac.Check("activity_logs", "view_provider_activity_logs"), activityLogHandler.GetProviderActivityLogs)
+		providers.PATCH("/status/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateStatus)
 		providers.PATCH("/kyc/:id", rbac.Check("providers", "kyc"), providerAdminHandler.UpdateKYC)
-		providers.PATCH("/verify-document/:id", rbac.Check("providers", "verify-document"), providerAdminHandler.VerifyDocument)
-		providers.PATCH("/account-action/:id", rbac.Check("providers", "account-action"), providerAdminHandler.UpdateAccountAction)
-		providers.PATCH("/commission/:id", rbac.Check("providers", "commission"), providerAdminHandler.UpdateCommission)
+		providers.PATCH("/verify-document/:id", rbac.Check("providers", "verify_provider_document"), providerAdminHandler.VerifyDocument)
+		providers.PATCH("/account-action/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateAccountAction)
+		providers.PATCH("/commission/:id", rbac.Check("providers", "change_provider_commission"), providerAdminHandler.UpdateCommission)
 	}
 
-	// ---------- BOOKINGS ----------
 	bookings := admin.Group("/bookings")
 	{
-		bookings.GET("", rbac.Check("bookings", "view"), bookingAdminHandler.GetAllBookings)
-		bookings.GET("/stats", rbac.Check("bookings", "stats"), bookingAdminHandler.GetBookingStats)
-		bookings.GET("/:bookingId", rbac.Check("bookings", "view"), bookingAdminHandler.GetBookingByID)
-		bookings.GET("/:bookingId/activity-logs", rbac.Check("activity_logs", "view"), activityLogHandler.GetBookingActivityLogs)
-		bookings.GET("/get-invoice/:serviceId", rbac.Check("bookings", "invoice"), bookingAdminHandler.GetInvoiceData)
-		bookings.PUT("/:bookingId/cancel", rbac.Check("bookings", "cancel"), bookingAdminHandler.CancelBooking)
-		bookings.PUT("/:bookingId/complete", rbac.Check("bookings", "complete"), bookingAdminHandler.MarkBookingCompleted)
-		bookings.POST("/:bookingId/notes", rbac.Check("bookings", "notes"), bookingAdminHandler.AddNote)
+		bookings.GET("", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetAllBookings)
+		bookings.GET("/stats", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetBookingStats)
+		bookings.GET("/:bookingId", rbac.Check("bookings", "view_booking_profile"), bookingAdminHandler.GetBookingByID)
+		bookings.GET("/:bookingId/activity-logs", rbac.Check("activity_logs", "view_booking_activity_logs"), activityLogHandler.GetBookingActivityLogs)
+		bookings.GET("/get-invoice/:serviceId", rbac.Check("bookings", "view_booking_profile"), bookingAdminHandler.GetInvoiceData)
+		bookings.PUT("/:bookingId/cancel", rbac.Check("bookings", "booking_action"), bookingAdminHandler.CancelBooking)
+		bookings.PUT("/:bookingId/complete", rbac.Check("bookings", "booking_action"), bookingAdminHandler.MarkBookingCompleted)
+		bookings.POST("/:bookingId/notes", rbac.Check("bookings", "add_booking_notes"), bookingAdminHandler.AddNote)
 	}
 
-	// ---------- COMPLAINTS ----------
 	complaints := admin.Group("/complaints")
 	{
-		complaints.GET("", rbac.Check("complaints", "view"), complaintHandler.GetAll)
-		complaints.GET("/stats", rbac.Check("complaints", "stats"), complaintHandler.GetStats)
-		complaints.GET("/:id", rbac.Check("complaints", "view"), complaintHandler.GetByID)
-		complaints.GET("/:id/activity-logs", rbac.Check("activity_logs", "view"), activityLogHandler.GetComplaintActivityLogs)
-
-		complaints.POST("/:id/assessment", rbac.Check("complaints", "assessment"), complaintHandler.PostAssessment)
-		complaints.POST("/:id/notes", rbac.Check("complaints", "notes"), complaintHandler.AddNote)
+		complaints.GET("", rbac.Check("complaints", "view_complaint"), complaintHandler.GetAll)
+		complaints.GET("/stats", rbac.Check("complaints", "view_complaint"), complaintHandler.GetStats)
+		complaints.GET("/:id", rbac.Check("complaints", "view_complaint_details"), complaintHandler.GetByID)
+		complaints.GET("/:id/activity-logs", rbac.Check("activity_logs", "view_complaint_activity_logs"), activityLogHandler.GetComplaintActivityLogs)
+		complaints.POST("/:id/start-assessment", rbac.Check("complaints", "perform_assessment"),complaintHandler.StartAssessment)
+		complaints.POST("/:id/assessment", rbac.Check("complaints", "perform_assessment"), complaintHandler.PostAssessment)
+		complaints.POST("/:id/notes", rbac.Check("complaints", "add_complaint_notes"), complaintHandler.AddNote)
 		complaints.PATCH("/:id/status", rbac.Check("complaints", "status"), complaintHandler.UpdateStatus)
 	}
 
-	// ---------- TRANSACTIONS ----------
 	userTransactions := admin.Group("/user-transaction")
 	{
-		userTransactions.GET("", rbac.Check("transactions", "view"), transactionHandler.GetAll)
-		userTransactions.GET("/:id", rbac.Check("transactions", "view"), transactionHandler.GetByID)
+		userTransactions.GET("", rbac.Check("paymentandtransactions", "view_users_transaction"), transactionHandler.GetAll)
+		userTransactions.GET("/:id", rbac.Check("paymentandtransactions", "view_user_transaction_details"), transactionHandler.GetByID)
 	}
 
-	// ---------- PAYOUTS ----------
 	providerPayout := admin.Group("/provider-payout")
 	{
-		providerPayout.GET("", rbac.Check("payouts", "view"), payoutHandler.GetPayouts)
-		providerPayout.GET("/:id/details", rbac.Check("payouts", "view"), payoutHandler.GetProviderPayoutDetails)
-		providerPayout.GET("/:id/bookings", rbac.Check("payouts", "view"), payoutHandler.GetPayoutServices)
-		providerPayout.POST("/6hour", rbac.Check("payouts", "create"), payoutHandler.Create6HourPayout)
+		providerPayout.GET("", rbac.Check("paymentandtransactions", "view_provider_payout"), payoutHandler.GetPayouts)
+		providerPayout.GET("/:id/details", rbac.Check("paymentandtransactions", "view_provider_payout_details"), payoutHandler.GetProviderPayoutDetails)
+		providerPayout.GET("/:id/bookings", rbac.Check("paymentandtransactions", "view_provider_payout_details"), payoutHandler.GetPayoutServices)
+		providerPayout.POST("/6hour", rbac.Check("paymentandtransactions", "create"), payoutHandler.Create6HourPayout)
 	}
 
-	// ---------- SETTLEMENT ----------
 	providerSettlement := admin.Group("/provider-settlement")
 	{
-		providerSettlement.GET("", rbac.Check("settlement", "view"), settlementHandler.GetSettlements)
-		providerSettlement.POST("/create", rbac.Check("settlement", "create"), settlementHandler.CreateSettlement)
-		providerSettlement.POST("/:id/settle", rbac.Check("settlement", "update"), settlementHandler.ChangeProviderSettlementStatus)
-		providerSettlement.GET("/:id", rbac.Check("settlement", "view"), settlementHandler.GetSettlementByID)
-		providerSettlement.POST("/export", rbac.Check("settlement", "export"), settlementHandler.ExportSettlements)
-	}
-	// ---------- SERVICES ----------
-	services := admin.Group("/services")
-	{
-		services.POST("/create", rbac.Check("services", "create"), serviceHandler.CreateService)
-		services.GET("", rbac.Check("services", "view"), serviceHandler.GetServices)
-		services.GET("/stats", rbac.Check("services", "stats"), serviceHandler.GetServiceStats)
-		services.GET("/:id", rbac.Check("services", "view"), serviceHandler.GetServiceByID)
-		services.GET("/:id/activity-logs", rbac.Check("activity_logs", "view"), activityLogHandler.GetServiceActivityLogs)
-		services.PUT("/:id", rbac.Check("services", "update"), serviceHandler.UpdateService)
-		services.PATCH("/:id/status", rbac.Check("services", "status"), serviceHandler.UpdateServiceStatus)
-		services.DELETE("/:id", rbac.Check("services", "delete"), serviceHandler.DeleteService)
+		providerSettlement.GET("", rbac.Check("paymentandtransactions", "view_provider_settlement"), settlementHandler.GetSettlements)
+		providerSettlement.POST("/create", rbac.Check("paymentandtransactions", "create_provider_settlement"), settlementHandler.CreateSettlement)
+		providerSettlement.POST("/:id/settle", rbac.Check("paymentandtransactions", "process_final_settlement"), settlementHandler.ChangeProviderSettlementStatus)
+		providerSettlement.GET("/:id", rbac.Check("paymentandtransactions", "check_final_settlement"), settlementHandler.GetSettlementByID)
+		providerSettlement.POST("/export", rbac.Check("paymentandtransactions", "export"), settlementHandler.ExportSettlements)
 	}
 
-	// ---------- ACTIVITY LOGS ----------
+	services := admin.Group("/services")
+	{
+		services.POST("/create", rbac.Check("services", "create_service"), serviceHandler.CreateService)
+		services.GET("", rbac.Check("services", "view_service"), serviceHandler.GetServices)
+		services.GET("/stats", rbac.Check("services", "view_service"), serviceHandler.GetServiceStats)
+		services.GET("/:id", rbac.Check("services", "view_service_details"), serviceHandler.GetServiceByID)
+		services.GET("/:id/activity-logs", rbac.Check("activity_logs", "service_master_activity_logs"), activityLogHandler.GetServiceActivityLogs)
+		services.PUT("/:id", rbac.Check("services", "edit_service"), serviceHandler.UpdateService)
+		services.PATCH("/:id/status", rbac.Check("services", "activate/deactivate_service"), serviceHandler.UpdateServiceStatus)
+		services.DELETE("/:id", rbac.Check("services", "delete_service"), serviceHandler.DeleteService)
+	}
+
 	activityLogs := admin.Group("/activity-logs")
 	{
 		activityLogs.GET("", rbac.Check("activity_logs", "view"), activityLogHandler.GetAllActivityLogs)
 	}
 
-	// ---------- AMC ----------
 	amcPlans := admin.Group("/amc-plans")
 	{
-		amcPlans.POST("/create", rbac.Check("amc", "create"), amcPlanHandler.CreateAMC)
-		amcPlans.GET("", rbac.Check("amc", "view"), amcPlanHandler.GetAllAMC)
-		amcPlans.GET("/:id", rbac.Check("amc", "view"), amcPlanHandler.GetAMCByID)
-		amcPlans.PUT("/:id", rbac.Check("amc", "update"), amcPlanHandler.UpdateAMC)
-		amcPlans.DELETE("/:id", rbac.Check("amc", "delete"), amcPlanHandler.DeleteAMC)
-		amcPlans.PATCH("/:id/toggle-status", rbac.Check("amc", "status"), amcPlanHandler.ToggleAMCStatus)
+		amcPlans.POST("/create", rbac.Check("amc", "create_amc_plan"), amcPlanHandler.CreateAMC)
+		amcPlans.GET("", rbac.Check("amc", "view_amc_plan"), amcPlanHandler.GetAllAMC)
+		amcPlans.GET("/:id", rbac.Check("amc", "view_amc_detail"), amcPlanHandler.GetAMCByID)
+		amcPlans.PUT("/:id", rbac.Check("amc", "edit_amc_plan"), amcPlanHandler.UpdateAMC)
+		amcPlans.DELETE("/:id", rbac.Check("amc", "delete_amc_plan"), amcPlanHandler.DeleteAMC)
+		amcPlans.PATCH("/:id/toggle-status", rbac.Check("amc", "activate/deactivate_plan"), amcPlanHandler.ToggleAMCStatus)
 	}
 
 	amcTransaction := admin.Group("/amc-transaction")
 	{
-		amcTransaction.GET("", rbac.Check("amc", "view"), amcTransactionHandler.GetAll)
-		amcTransaction.GET("/:id", rbac.Check("amc", "view"), amcTransactionHandler.GetByID)
+		amcTransaction.GET("", rbac.Check("amc", "view_amc_transactions"), amcTransactionHandler.GetAll)
+		amcTransaction.GET("/:id", rbac.Check("amc", "view_amc_transactions_details"), amcTransactionHandler.GetByID)
 	}
 
 	amcOrder := admin.Group("/amc-order")
 	{
-		amcOrder.GET("", rbac.Check("amc", "view"), amcOrderHandler.GetAll)
+		amcOrder.GET("", rbac.Check("amc", "view_amc_orders"), amcOrderHandler.GetAll)
 		amcOrder.GET("/export", rbac.Check("amc", "export"), amcOrderHandler.ExportToCSV)
-		amcOrder.GET("/:id", rbac.Check("amc", "view"), amcOrderHandler.GetByID)
+		amcOrder.GET("/:id", rbac.Check("amc", "view_amc_order_details"), amcOrderHandler.GetByID)
 		amcOrder.PATCH("/:id/status", rbac.Check("amc", "status"), amcOrderHandler.UpdateStatus)
 	}
 
 	userRefund := admin.Group("/user-refund")
 	{
-		userRefund.GET("", rbac.Check("refunds", "view"), refundHandler.GetAllRefunds)
-		userRefund.GET("/:id", rbac.Check("refunds", "view"), refundHandler.GetRefundByID)
+		userRefund.GET("", rbac.Check("paymentandtransactions", "view_user_refund"), refundHandler.GetAllRefunds)
+		userRefund.GET("/:id", rbac.Check("paymentandtransactions", "view_user_refund_details"), refundHandler.GetRefundByID)
 	}
 
 	amcRefund := admin.Group("/amc-refund")
 	{
-		amcRefund.GET("", rbac.Check("refunds", "view"), amcRefundHandler.GetAll)
-		amcRefund.GET("/:id", rbac.Check("refunds", "view"), amcRefundHandler.GetDetails)
-		amcRefund.PUT("/:id/approve", rbac.Check("refunds", "approve"), amcRefundHandler.Approve)
-		amcRefund.PUT("/:id/reject", rbac.Check("refunds", "reject"), amcRefundHandler.Reject)
-		amcRefund.GET("/:id/check-status", rbac.Check("refunds", "view"), amcRefundHandler.CheckStatus)
-		}
+		amcRefund.GET("", rbac.Check("amc", "view_amc_refund"), amcRefundHandler.GetAll)
+		amcRefund.GET("/:id", rbac.Check("amc", "view_amc_refund_details"), amcRefundHandler.GetDetails)
+		amcRefund.PUT("/:id/approve", rbac.Check("amc", "approve_/_reject_refund"), amcRefundHandler.Approve)
+		amcRefund.PUT("/:id/reject", rbac.Check("amc", "approve_/_reject_refund"), amcRefundHandler.Reject)
+		amcRefund.GET("/:id/check-status", rbac.Check("amc", "approve_/_reject_refund"), amcRefundHandler.CheckStatus)
+		amcRefund.GET("/stats", rbac.Check("amc", "view_amc_refund"), amcRefundHandler.GetStats)
+	}
 
-		zones := admin.Group("/zones")
-		{
-			zones.POST("", zoneHandler.Create)
-			zones.GET("", zoneHandler.GetAll)
-			zones.GET("/active", zoneHandler.GetActive)
-			zones.PUT("/:id", zoneHandler.Update)
-			zones.PATCH("/:id/toggle-status", zoneHandler.ToggleStatus)
-			zones.DELETE("/:id", zoneHandler.Delete)
-		}
+	zones := admin.Group("/zones")
+	{
+		zones.POST("", zoneHandler.Create)
+		zones.GET("",  rbac.Check("zones", "view_zones"),zoneHandler.GetAll)
+		zones.GET("/active", zoneHandler.GetActive)
+		zones.PUT("/:id", zoneHandler.Update)
+		zones.PATCH("/:id/toggle-status", rbac.Check("zones", "activate/deactivate_zone"), zoneHandler.ToggleStatus)
+		zones.DELETE("/:id", zoneHandler.Delete)
+	}
 
-		vehicleBrands := admin.Group("/vehicle-brands")
-		{
-			vehicleBrands.GET("", vehicleBrandHandler.GetBrands)
-			vehicleBrands.GET("/models", vehicleBrandHandler.GetModels)
-		}
+	vehicleBrands := admin.Group("/vehicle-brands")
+	{
+		vehicleBrands.GET("", vehicleBrandHandler.GetBrands)
+		vehicleBrands.GET("/models", vehicleBrandHandler.GetModels)
+	}
 }
