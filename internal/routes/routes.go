@@ -177,15 +177,6 @@ func SetupRoutes(
 		bookings.GET("/:bookingId", rbac.Check("bookings", "view"), bookingAdminHandler.GetBookingByID)
 		bookings.GET("/:bookingId/activity-logs", rbac.Check("activity_logs", "view"), activityLogHandler.GetBookingActivityLogs)
 		bookings.GET("/get-invoice/:serviceId", rbac.Check("bookings", "invoice"), bookingAdminHandler.GetInvoiceData)
-		providerSettlement := admin.Group("/provider-settlement")
-		{
-			providerSettlement.GET("", settlementHandler.GetSettlements)
-			providerSettlement.POST("/create", settlementHandler.CreateSettlement)
-			providerSettlement.POST("/:id/settle", settlementHandler.ChangeProviderSettlementStatus)
-			providerSettlement.GET("/:id", settlementHandler.GetSettlementByID)
-			providerSettlement.GET("/export", settlementHandler.ExportSettlements)
-		}
-
 		bookings.PUT("/:bookingId/cancel", rbac.Check("bookings", "cancel"), bookingAdminHandler.CancelBooking)
 		bookings.PUT("/:bookingId/complete", rbac.Check("bookings", "complete"), bookingAdminHandler.MarkBookingCompleted)
 		bookings.POST("/:bookingId/notes", rbac.Check("bookings", "notes"), bookingAdminHandler.AddNote)
@@ -303,5 +294,4 @@ func SetupRoutes(
 			vehicleBrands.GET("", vehicleBrandHandler.GetBrands)
 			vehicleBrands.GET("/models", vehicleBrandHandler.GetModels)
 		}
-	}
 }
