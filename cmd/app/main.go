@@ -52,11 +52,13 @@ func main() {
 	paymentPayoutRepo := repository.NewPaymentPayoutRepo(mongoDB)
 	settlementRepo := repository.NewProviderSettlementRepo(mongoDB)
 	serviceMasterRepo := repository.NewServiceMasterRepo(mongoDB)
+	roleRepo := repository.NewRoleRepository(mongoDB)
 	adminRepo := repository.NewAdminRepository(mongoDB)
 	refundRepo := repository.NewRefundRepository(mongoDB)
 	activityLogRepo := repository.NewActivityLogRepository(mongoDB)
 	authMiddleware := middleware.NewAuthMiddleware(adminRepo)
 	activityLogMiddleware := middleware.NewActivityLogMiddleware(activityLogRepo)
+	rbacMiddleware := middleware.NewRBACMiddleware(roleRepo)
 	amcPlanRepo := repository.NewAMCPlanRepo(mongoDB)
 	amcTransactionRepo := repository.NewAMCTransactionRepo(mongoDB)
 	amcOrderRepo := repository.NewOrderRepo(mongoDB)
@@ -80,12 +82,24 @@ func main() {
 	amcPlanService := service.NewAMCPlanService(amcPlanRepo)
 	amcTransactionService := service.NewAMCTransactionService(amcTransactionRepo, userRepo, amcRepo)
 	amcOrderService := service.NewOrderService(amcOrderRepo, userRepo, amcPlanRepo, savedVehicleRepo, zoneRepo)
+	payUService := service.NewPayUService(
+	cfg.PayU.Key,
+	cfg.PayU.Salt,
+	cfg.PayU.BaseURL,
+	)
+	amcRefundService := service.NewAMCRefundService(
+		amcRefundRepo,
+		amcPurchaseRepo,
+		userRepo,
+		amcPlanRepo,
+		payUService,
+	)
+	
+	complaintHandler := handler.NewComplaintHandler(complaintService,acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
 	vehicleBrandService := service.NewVehicleBrandService(vehicleBrandRepo)
 	payUService := service.NewPayUService(cfg.PayU.Key, cfg.PayU.Salt, cfg.PayU.BaseURL)
 	amcRefundService := service.NewAMCRefundService(amcRefundRepo, amcPurchaseRepo, userRepo, amcPlanRepo, payUService )
-
-	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
@@ -100,13 +114,10 @@ func main() {
 	amcOrderHandler := handler.NewOrderHandler(amcOrderService)
 	refundHandler := handler.NewRefundHandler(refundService)
 	amcRefundHandler := handler.NewAMCRefundHandler(amcRefundService)
-	zoneHandler := handler.NewZoneHandler(zoneService)
-	vehicleBrandHandler := handler.NewVehicleBrandHandler(vehicleBrandService)
-
-	r := gin.Default()
+	roleHandler := handler.NewRoleHandler(roleRepo)
+	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
-
 	routes.SetupRoutes(
 		r,
 		cfg.AllowedOrigins,
@@ -119,18 +130,21 @@ func main() {
 		settlementHandler,
 		serviceMasterHandler,
 		adminHandler,
-		authMiddleware,
-		activityLogMiddleware,
 		activityLogHandler,
 		amcPlanHandler,
 		amcTransactionHandler,
 		amcOrderHandler,
 		refundHandler,
 		amcRefundHandler,
+		authMiddleware,
+		activityLogMiddleware,
+		rbacMiddleware,
+		roleHandler,
 		zoneHandler,
 		vehicleBrandHandler,
 		s3Uploader,
 	)
+
 
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,
