@@ -68,3 +68,158 @@ func (r *RoleRepository) UpdateStatus(
 	)
 	return err
 }
+func (r *RoleRepository) DeleteByID(
+	ctx context.Context,
+	id primitive.ObjectID,
+) error {
+	_, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
+	return err
+}
+func (r *RoleRepository) FindByID(ctx context.Context,id primitive.ObjectID) (*domain.Role, error) {
+
+	var role domain.Role
+
+	filter := bson.M{
+		"$or": []bson.M{
+			{"_id": id},
+			{"_id": id.Hex()},
+		},
+	}
+
+	err := r.collection.FindOne(ctx, filter).Decode(&role)
+	if err != nil {
+		return nil, err
+	}
+
+	return &role, nil
+}
+
+
+func (r *RoleRepository) ListWithCreator(ctx context.Context, filter bson.M) ([]bson.M, error) {
+	pipeline := []bson.M{
+		{"$match": filter},
+
+		{
+			"$lookup": bson.M{
+				"from": "admins",
+				"localField": "createdBy",
+				"foreignField": "_id",
+				"as": "creator",
+			},
+		},
+		{
+			"$unwind": bson.M{
+				"path": "$creator",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+		{
+			"$project": bson.M{
+				"name":        1,
+				"roleType":    1,
+				"status":      1,
+				"zoneScope":   1,
+				"description": 1,
+				"permissions": 1,
+				"createdAt":   1,
+				"updatedAt":   1,
+				"createdBy": bson.M{
+					"id":   "$creator._id",
+					"name": "$creator.name",
+				},
+			},
+		},
+	}
+
+	cursor, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var roles []bson.M
+	if err := cursor.All(ctx, &roles); err != nil {
+		return nil, err
+	}
+
+	return roles, nil
+}
+func (r *RoleRepository) UpdateByID(
+	ctx context.Context,
+	id primitive.ObjectID,
+	update bson.M,
+) error {
+	_, err := r.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": id},
+		bson.M{"$set": update},
+	)
+	return err
+}
+
+func (r *RoleRepository) FindByIDWithCreator(
+	ctx context.Context,
+	id primitive.ObjectID,
+) (bson.M, error) {
+
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"$or": []bson.M{
+					{"_id": id},
+					{"_id": id.Hex()}, // safety for string _id
+				},
+			},
+		},
+		{
+			"$lookup": bson.M{
+				"from": "admins",
+				"localField": "createdBy",
+				"foreignField": "_id",
+				"as": "creator",
+			},
+		},
+		{
+			"$unwind": bson.M{
+				"path": "$creator",
+				"preserveNullAndEmptyArrays": true,
+			},
+		},
+		{
+			"$project": bson.M{
+				"name":        1,
+				"roleType":    1,
+				"status":      1,
+				"zoneScope":   1,
+				"description": 1,
+				"permissions": 1,
+				"createdAt":   1,
+				"updatedAt":   1,
+				"createdBy": bson.M{
+					"id":   "$creator._id",
+					"name": "$creator.name",
+				},
+			},
+		},
+	}
+
+	cursor, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	if !cursor.Next(ctx) {
+		return nil, mongo.ErrNoDocuments
+	}
+
+	var role bson.M
+	if err := cursor.Decode(&role); err != nil {
+		return nil, err
+	}
+
+	return role, nil
+}
+
+
+

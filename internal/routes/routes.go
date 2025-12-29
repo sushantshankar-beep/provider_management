@@ -102,6 +102,26 @@ func SetupRoutes(
 			rbac.Check("rbac", "update"),
 			roleHandler.ToggleRoleStatus,
 		)
+		roles.POST(
+			"/:id/clone",
+			rbac.Check("rbac", "create"),
+			roleHandler.CloneRole,
+		)
+		roles.DELETE(
+			"/:id",
+			rbac.Check("rbac", "delete"),
+			roleHandler.DeleteRole,
+		)
+		roles.PUT(
+			"/:id",
+			rbac.Check("rbac", "update"),
+			roleHandler.UpdateRole,
+		)
+		roles.GET(
+			"/:id",
+			rbac.Check("rbac", "view"),
+			roleHandler.GetRoleByID,
+		)
 	}
 
 	// ---------- USERS ----------
