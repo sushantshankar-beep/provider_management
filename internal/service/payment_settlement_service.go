@@ -6,6 +6,7 @@ import (
 	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
+	"provider_management/internal/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -323,7 +324,7 @@ for _, settlement := range settlements {
 		ProviderName: settlement.ProviderName,
 		AccountNo:    settlement.AccountNo,
 		IfscCode:     settlement.IfscCode,
-		TotalAmount:  settlement.TotalAmount,
+		TotalAmount:  utils.RoundTo2(settlement.TotalAmount),
 		PaymentMode:  settlement.PaymentMode,
 		PaymentMethod: settlement.PaymentMethod,
 		Justification: settlement.Justification,
@@ -371,7 +372,7 @@ func (s *SettlementService) ChangeProviderSettlementStatus(
 	now := time.Now()
 	settlement.SettledPostData = &domain.SettledPostData{
 		TransactionID: req.TransactionID,
-		Amount:        req.Amount,
+		Amount:        utils.RoundTo2(req.Amount),
 		Status:        string(domain.SettleStatusSettled),
 		Note:          req.Note,
 	}

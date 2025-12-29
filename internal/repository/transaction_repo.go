@@ -73,25 +73,41 @@ func (r *TransactionRepo) FindWithFilter(
 	}
 
 	if search != "" {
+		searchUpper := strings.ToUpper(search)
 		or := bson.A{
 			bson.M{"txnid": bson.M{"$regex": search, "$options": "i"}},
 			bson.M{"status": bson.M{"$regex": search, "$options": "i"}},
 			bson.M{"paymentSource": bson.M{"$regex": search, "$options": "i"}},
 		}
 
-		if strings.HasPrefix(strings.ToUpper(search), "VW") {
-			if id, err := strconv.ParseInt(strings.TrimPrefix(search, "VW"), 10, 64); err == nil {
-				or = append(or, bson.M{"userInternalId": id})
+		if strings.HasPrefix(searchUpper, "VW") {
+			if id, err := strconv.ParseInt(strings.TrimPrefix(searchUpper, "VW"), 10, 64); err == nil {
+				userFilter := bson.M{"internalId": id}
+				var user domain.User
+				if err := r.col.FindOne(ctx, userFilter).Decode(&user); err == nil {
+					or = append(or, bson.M{"userId": user.ID})
+				}
 			}
 		}
 
-		if strings.HasPrefix(strings.ToUpper(search), "BK") {
-			if id, err := strconv.ParseInt(strings.TrimPrefix(search, "BK"), 10, 64); err == nil {
-				or = append(or, bson.M{"acceptedServiceInternalId": id})
+		if strings.HasPrefix(searchUpper, "BK") {
+			if id, err := strconv.ParseInt(strings.TrimPrefix(searchUpper, "BK"), 10, 64); err == nil {
+				serviceFilter := bson.M{"internalId": id}
+				var service domain.AcceptedService
+				if err := r.col.FindOne(ctx, serviceFilter).Decode(&service); err == nil {
+					or = append(or, bson.M{"serviceId": service.ID})
+				}
 			}
 		}
 
-		filter["$or"] = or
+		filter["$and"] = bson.A{
+			bson.M{"$or": bson.A{
+				bson.M{"AMCPurchaseId": bson.M{"$exists": false}},
+				bson.M{"AMCPurchaseId": primitive.NilObjectID},
+			}},
+			bson.M{"$or": or},
+		}
+		delete(filter, "$or")
 	}
 
 	opts := options.Find().

@@ -7,6 +7,8 @@ import (
 	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
+     "provider_management/internal/utils"
+
 	"strconv"
 	"time"
 )
@@ -14,12 +16,14 @@ import (
 type RefundService struct {
 	refundRepo      *repository.RefundRepository
 	transactionRepo *repository.TransactionRepo
+	userRepo   *repository.UserRepo
 }
 
-func NewRefundService(refundRepo *repository.RefundRepository, transactionRepo *repository.TransactionRepo) *RefundService {
+func NewRefundService(refundRepo *repository.RefundRepository, transactionRepo *repository.TransactionRepo,userRepo   *repository.UserRepo) *RefundService {
 	return &RefundService{
 		refundRepo:      refundRepo,
 		transactionRepo: transactionRepo,
+		userRepo: userRepo,
 	}
 }
 
@@ -111,8 +115,8 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req RefundRequest) er
 		ComplaintNo:   complaintNo,
 		TransactionID: transaction.TxnID,
 		Reason:        req.Reason,
-		Amount:        req.Amount,
-		GST:           gstAmount,
+		Amount:        utils.RoundTo2(req.Amount),
+		GST:           utils.RoundTo2(gstAmount),
 		Mode:          transaction.Method,
 		Status:        domain.RefundStatusPending,
 	}
@@ -150,18 +154,38 @@ func (s *RefundService) GetAllRefunds(
 		return nil, fmt.Errorf("failed to fetch refunds: %w", err)
 	}
 
+	userIDs := make([]string, 0, len(refunds))
+	for _, r := range refunds {
+		userIDs = append(userIDs, r.UserID)
+	}
+
+	users, err := s.userRepo.FindByIDs(ctx, userIDs)
+	if err != nil {
+		log.Printf("GetAllRefunds - Failed to fetch users: %v", err)
+	}
+
+	userMap := make(map[string]*domain.User)
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+
 	items := make([]RefundListItem, 0, len(refunds))
 	for _, r := range refunds {
+		formattedUserID := r.UserID
+		if user, ok := userMap[r.UserID]; ok && user.InternalID > 0 {
+			formattedUserID = fmt.Sprintf("VW%d", user.InternalID)
+		}
+
 		items = append(items, RefundListItem{
 			ID:            r.ID,
 			RefundID:      r.RefundID,
-			UserID:        r.UserID,
+			UserID:        formattedUserID,
 			BookingNo:     formatWithPrefix("BK", r.BookingNo),
 			ComplaintNo:   formatWithPrefix("CMP", r.ComplaintNo),
 			TransactionID: r.TransactionID,
-			GST:           r.GST,
+			GST:           utils.RoundTo2(r.GST),
 			Mode:          r.Mode,
-			Amount:        r.Amount,
+			Amount:        utils.RoundTo2(r.Amount),
 			Status:        r.Status,
 			Reason:        r.Reason,
 			CreatedAt:     r.CreatedAt,
@@ -173,11 +197,9 @@ func (s *RefundService) GetAllRefunds(
 		Total:   total,
 		Page:    filter.Page,
 		Limit:   filter.Limit,
-		TotalPages: (total + int64(filter.Limit) - 1) /
-			int64(filter.Limit),
+		TotalPages: (total + int64(filter.Limit) - 1) / int64(filter.Limit),
 	}, nil
 }
-
 func (s *RefundService) GetRefundByID(
 	ctx context.Context,
 	refundID string,
@@ -188,16 +210,23 @@ func (s *RefundService) GetRefundByID(
 		return nil, fmt.Errorf("refund not found: %w", err)
 	}
 
+	user, err := s.userRepo.FindByID(ctx, r.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("user not found for refund: %w", err)
+	}
+
+	vwUserID := fmt.Sprintf("VW%d", user.InternalID)
+
 	return &RefundDetail{
 		ID:            r.ID,
 		RefundID:      r.RefundID,
-		UserID:        r.UserID,
-		Amount:        r.Amount,
+		UserID:        vwUserID,
+		Amount:        utils.RoundTo2(r.Amount),
 		BookingNo:     formatWithPrefix("BK", r.BookingNo),
 		ComplaintNo:   formatWithPrefix("CMP", r.ComplaintNo),
 		ComplaintID:   r.ComplaintID,
 		TransactionID: r.TransactionID,
-		GST:           r.GST,
+		GST:           utils.RoundTo2(r.GST),
 		Mode:          r.Mode,
 		Reason:        r.Reason,
 		Status:        r.Status,

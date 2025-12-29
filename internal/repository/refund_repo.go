@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"provider_management/internal/domain"
 	"time"
-
+    "strconv"
+	"strings"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,12 +16,14 @@ import (
 type RefundRepository struct {
 	collection *mongo.Collection
 	counterCol *mongo.Collection
+	userCollection *mongo.Collection
 }
 
 func NewRefundRepository(db *mongo.Database) *RefundRepository {
 	return &RefundRepository{
 		collection: db.Collection("Refunds"),
 		counterCol: db.Collection("counters"),
+		userCollection: db.Collection("users"),
 	}
 }
 
@@ -105,13 +108,61 @@ func (r *RefundRepository) FindAll(
 		query["status"] = filter.Status
 	}
 
-	// userId stored as ObjectId ✅
 	if filter.UserID != "" {
 		userObjID, err := primitive.ObjectIDFromHex(filter.UserID)
 		if err != nil {
 			return nil, 0, err
 		}
 		query["userId"] = userObjID
+	}
+
+	if filter.Search != "" {
+		orFilters := []bson.M{}
+
+		searchUpper := strings.ToUpper(filter.Search)
+
+		if strings.HasPrefix(searchUpper, "RF") {
+			orFilters = append(orFilters, bson.M{"refundId": filter.Search})
+			orFilters = append(orFilters, bson.M{"refundId": bson.M{"$regex": filter.Search, "$options": "i"}})
+		}
+
+		if strings.HasPrefix(searchUpper, "VW") {
+			if internalID, err := strconv.ParseInt(filter.Search[2:], 10, 64); err == nil {
+				var user domain.User
+				err := r.userCollection.FindOne(ctx, bson.M{"id": internalID}).Decode(&user)
+				if err == nil && user.ID != "" {
+					orFilters = append(orFilters, bson.M{"userId": user.ID})
+				}
+			}
+		}
+
+		if strings.HasPrefix(searchUpper, "BK") {
+			if bookingNo, err := strconv.ParseInt(filter.Search[2:], 10, 64); err == nil {
+				orFilters = append(orFilters, bson.M{"bookingNo": bookingNo})
+			}
+		}
+
+		if strings.HasPrefix(searchUpper, "CMP") {
+			if complaintNo, err := strconv.ParseInt(filter.Search[3:], 10, 64); err == nil {
+				orFilters = append(orFilters, bson.M{"complaintNo": complaintNo})
+			}
+		}
+
+		if numericSearch, err := strconv.ParseInt(filter.Search, 10, 64); err == nil {
+			orFilters = append(orFilters,
+				bson.M{"bookingNo": numericSearch},
+				bson.M{"complaintNo": numericSearch},
+			)
+		}
+
+		orFilters = append(orFilters, 
+			bson.M{"transactionId": bson.M{"$regex": filter.Search, "$options": "i"}},
+			bson.M{"refundId": bson.M{"$regex": filter.Search, "$options": "i"}},
+		)
+
+		if len(orFilters) > 0 {
+			query["$or"] = orFilters
+		}
 	}
 
 	total, err := r.collection.CountDocuments(ctx, query)
@@ -143,6 +194,7 @@ func (r *RefundRepository) FindAll(
 
 	return refunds, total, nil
 }
+
 func (r *RefundRepository) FindByRefundID(ctx context.Context, refundID string) (*domain.Refund, error) {
 	var refund domain.Refund
 	err := r.collection.FindOne(ctx, bson.M{"refundId": refundID}).Decode(&refund)

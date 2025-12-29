@@ -26,6 +26,7 @@ func (h *RefundHandler) GetAllRefunds(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	status := c.Query("status")
 	userID := c.Query("user_id")
+	search := c.Query("search")
 
 	if page < 1 {
 		page = 1
@@ -39,6 +40,7 @@ func (h *RefundHandler) GetAllRefunds(c *gin.Context) {
 		Limit:  limit,
 		Status: status,
 		UserID: userID,
+		Search: search,
 	})
 
 	if err != nil {
@@ -56,7 +58,6 @@ func (h *RefundHandler) GetAllRefunds(c *gin.Context) {
 		"data":    result,
 	})
 }
-
 func (h *RefundHandler) GetRefundByID(c *gin.Context) {
 	id := c.Param("id")
 	id = strings.TrimPrefix(id, "REF")

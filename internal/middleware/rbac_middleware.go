@@ -25,21 +25,21 @@ func (r *RBACMiddleware) Check(module string, action string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 			return
 		}
-
-		// 🔥 Super Admin bypass
+   
 		if admin.Role == domain.RoleSuperAdmin {
 			c.Next()
 			return
 		}
 
-		role, err := r.roleRepo.FindByName(c, admin.Role)
+		role, err := r.roleRepo.FindByName(c, admin.RoleName)
+
 		if err != nil || role.Status != domain.RoleActive {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"message": "Role inactive or not found",
 			})
 			return
 		}
-
+        
 		actions := role.Permissions[module]
 		for _, a := range actions {
 			if a == action {

@@ -104,6 +104,7 @@ type DetailedBookingResponse struct {
 	ProviderEarnings   *ProviderEarningsInfo   `json:"providerEarnings"`
 	Notes              []domain.BookingNote      `bson:"notes,omitempty" json:"notes,omitempty"`
 	AllBookings        []BookingSummary        `json:"allBookings"`
+	IsSettled           bool                `json:"is_settled"`
 }
 
 type BookingNote struct {
@@ -695,6 +696,7 @@ func (s *AdminBookingService) GetBookingByID(
 		Problems:      sr.Problems,
 		Description:   sr.Description,
 		Location:      sr.Address,
+		IsSettled:     svc.IsSettled,
 		Notes: svc.Notes,
 	}
 

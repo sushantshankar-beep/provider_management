@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+     "provider_management/internal/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -88,12 +88,12 @@ func (s *PayoutService) CreatePayoutLast6Hours(ctx context.Context) error {
 			PayoutID:          payoutID,
 			ProviderID:        providerObjID,
 			ServiceIDs:        data.ServiceIDs,
-			BaseAmount:        base,
+			BaseAmount:        utils.RoundTo2(base),
 			CommissionPercent: commissionPercent,
-			CommissionAmount:  commission,
+			CommissionAmount:  utils.RoundTo2(commission),
 			GSTPercent:        gstPercent,
-			GSTAmount:         gst,
-			NetPayable:        net,
+			GSTAmount:          utils.RoundTo2(gst),
+			NetPayable:        utils.RoundTo2(net),
 			Status:            "pending",
 			PeriodFrom:        from,
 			PeriodTo:          to,
@@ -139,12 +139,26 @@ func (s *PayoutService) GetPayouts(
 	}
 
 	if search != "" {
+		orFilters := []bson.M{}
+
 		if objID, err := primitive.ObjectIDFromHex(search); err == nil {
-			filter["providerId"] = objID
-		} else {
-			filter["$or"] = []bson.M{
-				{"status": bson.M{"$regex": search, "$options": "i"}},
+			orFilters = append(orFilters, bson.M{"providerId": objID})
+		}
+        
+		if len(search) > 3 && strings.ToUpper(search[:3]) == "PAY" {
+			if payoutID, err := strconv.ParseInt(search[3:], 10, 64); err == nil {
+				orFilters = append(orFilters, bson.M{"payoutId": payoutID})
 			}
+		}
+
+		if payoutID, err := strconv.ParseInt(search, 10, 64); err == nil {
+			orFilters = append(orFilters, bson.M{"payoutId": payoutID})
+		}
+
+		orFilters = append(orFilters, bson.M{"status": bson.M{"$regex": search, "$options": "i"}})
+
+		if len(orFilters) > 0 {
+			filter["$or"] = orFilters
 		}
 	}
 
@@ -188,12 +202,12 @@ func (s *PayoutService) GetPayouts(
 			"payout_id":          "PAY" + strconv.FormatInt(p.PayoutID, 10),
 			"provider_id":        p.ProviderID.Hex(),
 			"service_ids":        p.ServiceIDs,
-			"base_amount":        p.BaseAmount,
+			"base_amount":        utils.RoundTo2(p.BaseAmount),
 			"commission_percent": p.CommissionPercent,
-			"commission_amount":  p.CommissionAmount,
+			"commission_amount":  utils.RoundTo2(p.CommissionAmount),
 			"gst_percent":        p.GSTPercent,
-			"gst_amount":         p.GSTAmount,
-			"net_payable":        p.NetPayable,
+			"gst_amount":         utils.RoundTo2(p.GSTAmount),
+			"net_payable":        utils.RoundTo2(p.NetPayable),
 			"status":             p.Status,
 			"period_from":        p.PeriodFrom,
 			"period_to":          p.PeriodTo,
@@ -255,13 +269,13 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			"booking_id":         fmt.Sprintf("BK%d", service.InternalID),
 			"amc_id":             "amc",
 			"provider_id":        payout.ProviderID.Hex(),
-			"service_amount":     service.FinalPrice,
+			"service_amount":     utils.RoundTo2(service.FinalPrice),
 			"commission_percent": payout.CommissionPercent,
-			"commission_amount":  serviceCommission,
+			"commission_amount":  utils.RoundTo2(serviceCommission),
 			"gst_percent":        payout.GSTPercent,
-			"gst_amount":         serviceGST,
-			"net_amount":         serviceNet,
-			"partial_amount":     payout.PartialAmount,
+			"gst_amount":         utils.RoundTo2(serviceGST),
+			"net_amount":         utils.RoundTo2(serviceNet),
+			"partial_amount":     utils.RoundTo2(payout.PartialAmount),
 			"payout_id":          fmt.Sprintf("SET%d", payout.PayoutID),
 			"is_settled":         service.IsSettled,
 			"settlement_id":      service.SettlementID,
@@ -310,9 +324,9 @@ func (s *PayoutService) GetPayoutProviderData(ctx context.Context, payoutID stri
 			"booking_id":         fmt.Sprintf("BK%d", service.InternalID),
 			"amc_id":             "amc",
 			"provider_id":        payout.ProviderID.Hex(),
-			"service_amount":     service.FinalPrice,
+			"service_amount":     utils.RoundTo2(service.FinalPrice),
 			"commission_percent": payout.CommissionPercent,
-			"gst_percent":        payout.GSTPercent,
+			"gst_percent":        utils.RoundTo2(payout.GSTPercent),
 			"partial_amount":     "₹",
 			"payout_id":          fmt.Sprintf("SET%d", payout.PayoutID),
 		}
@@ -411,11 +425,11 @@ func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID s
 	}
 
 	earningSummary := map[string]any{
-		"total_earnings":     totalEarnings,
-		"total_settled":      totalSettled,
-		"pending_settlement": pendingSettlement,
-		"gst":                totalGST,
-		"adjustments":        adjustments,
+		"total_earnings":     utils.RoundTo2(totalEarnings),
+		"total_settled":       utils.RoundTo2(totalSettled),
+		"pending_settlement":  utils.RoundTo2(pendingSettlement),
+		"gst":                utils.RoundTo2(totalGST),
+		"adjustments":         utils.RoundTo2(adjustments),
 	}
 
 	settlementHistory := []map[string]any{}
@@ -431,7 +445,7 @@ func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID s
 				settlementHistory = append(settlementHistory, map[string]any{
 					"date":          settlement.SettledAt,
 					"settlement_id": fmt.Sprintf("UP%06d", settlement.SettlementID),
-					"amount":        settlement.TotalAmount,
+					"amount":        utils.RoundTo2(settlement.TotalAmount),
 					"payment_mode":  settlement.PaymentMode,
 					"method":        settlement.PaymentMethod,
 				})
@@ -449,7 +463,7 @@ func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID s
 					settlementHistory = append(settlementHistory, map[string]any{
 						"date":          p.UpdatedAt,
 						"settlement_id": fmt.Sprintf("UTR-IMPS-%s", p.SettlementID.Hex()[:6]),
-						"amount":        p.NetPayable,
+						"amount":        utils.RoundTo2(p.NetPayable),
 					})
 				}
 			}

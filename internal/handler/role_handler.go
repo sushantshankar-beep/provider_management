@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"provider_management/internal/domain"
 	"provider_management/internal/middleware"
 	"provider_management/internal/repository"
+	"provider_management/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,11 +17,12 @@ import (
 )
 
 type RoleHandler struct {
+	svc  *service.RoleService
 	repo *repository.RoleRepository
 }
 
-func NewRoleHandler(repo *repository.RoleRepository) *RoleHandler {
-	return &RoleHandler{repo: repo}
+func NewRoleHandler(repo *repository.RoleRepository,svc *service.RoleService) *RoleHandler {
+	return &RoleHandler{repo: repo, svc: svc}
 }
 
 // --------------------
@@ -363,3 +366,27 @@ func (h *RoleHandler) GetRoleByID(c *gin.Context) {
 }
 
 
+func (h *RoleHandler) GetRoleTypes(c *gin.Context) {
+	roleTypes, err := h.svc.GetRoleTypes(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": roleTypes})
+}
+
+func (h *RoleHandler) GetRoleNamesByType(c *gin.Context) {
+	roleType := c.Query("roleType")
+	log.Println("roleType",roleType)
+	if roleType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "roleType required"})
+		return
+	}
+
+	roleNames, err := h.svc.GetRoleNamesByType(c, roleType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": roleNames})
+}
