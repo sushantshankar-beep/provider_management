@@ -241,3 +241,59 @@ type CheckRefundStatusResult struct {
 	ErrorMsg     string
 	RawResponse  map[string]interface{}
 }
+
+
+type RefundStats struct {
+	Total          int64 `json:"total"`
+	Approved       int64 `json:"approved"`
+	RejectedAdmin  int64 `json:"rejectedAdmin"`
+	Rejected       int64 `json:"rejected"`
+	UnderProcess   int64 `json:"underProcess"`
+}
+
+func (r *AMCRefundRepo) GetStats(ctx context.Context) (*RefundStats, error) {
+	collection := r.col
+
+	pipeline := []bson.M{
+		{
+			"$group": bson.M{
+				"_id": "$status",
+				"count": bson.M{"$sum": 1},
+			},
+		},
+	}
+
+	cursor, err := collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	stats := &RefundStats{}
+
+	for cursor.Next(ctx) {
+		var res struct {
+			Status string `bson:"_id"`
+			Count  int64  `bson:"count"`
+		}
+
+		if err := cursor.Decode(&res); err != nil {
+			return nil, err
+		}
+
+		stats.Total += res.Count
+
+		switch res.Status {
+		case "approved":
+			stats.Approved = res.Count
+		case "rejected_admin":
+			stats.RejectedAdmin = res.Count
+		case "rejected_payu":
+			stats.Rejected = res.Count
+		case "under_process":
+			stats.UnderProcess = res.Count
+		}
+	}
+
+	return stats, nil
+}

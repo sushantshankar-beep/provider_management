@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"os"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
@@ -31,12 +32,14 @@ type CreateAdminRequest struct {
 	ServiceZones  []string
 	AccessModules []primitive.ObjectID
 	ProfileURL    string
+	Token         string
 }
 
 type UpdateAdminRequest struct {
 	Name          string
 	Email         string
 	Phone         string
+	Password      string
 	Role          string
 	ServiceZones  []string
 	AccessModules []primitive.ObjectID
@@ -69,26 +72,41 @@ func (s *AdminService) Login(ctx context.Context, email, password string) (strin
 		return "", nil, err
 	}
 
-	admin.Tokens = append(admin.Tokens, domain.Token{Token: token})
-	if err := s.repo.Update(ctx, admin.ID, bson.M{"tokens": admin.Tokens}); err != nil {
+	err = s.repo.Update(ctx, admin.ID, bson.M{
+		"$set": bson.M{
+			"token":     token,
+			"updatedAt": time.Now(),
+		},
+	})
+	if err != nil {
 		return "", nil, err
 	}
+
+	admin.Token = token
 
 	return token, admin, nil
 }
 
 func (s *AdminService) Logout(ctx context.Context, admin *domain.Admin, token string) error {
-	var newTokens []domain.Token
-	for _, t := range admin.Tokens {
-		if t.Token != token {
-			newTokens = append(newTokens, t)
-		}
-	}
-	return s.repo.Update(ctx, admin.ID, bson.M{"tokens": newTokens})
+	return s.repo.Update(ctx, admin.ID, bson.M{
+		"$unset": bson.M{
+			"token": "",
+		},
+		"$set": bson.M{
+			"updatedAt": time.Now(),
+		},
+	})
 }
 
 func (s *AdminService) LogoutAll(ctx context.Context, admin *domain.Admin) error {
-	return s.repo.Update(ctx, admin.ID, bson.M{"tokens": []domain.Token{}})
+	return s.repo.Update(ctx, admin.ID, bson.M{
+		"$unset": bson.M{
+			"token": "",
+		},
+		"$set": bson.M{
+			"updatedAt": time.Now(),
+		},
+	})
 }
 
 func (s *AdminService) CreateAdmin(ctx context.Context, req CreateAdminRequest, creatorID primitive.ObjectID) (*domain.Admin, error) {
@@ -118,7 +136,7 @@ func (s *AdminService) CreateAdmin(ctx context.Context, req CreateAdminRequest, 
 		ProfileURL:    req.ProfileURL,
 		CreatedBy:     creatorID,
 		Status:        domain.StatusActive,
-		Tokens:        []domain.Token{},
+		Token:        req.Token,
 	}
 
 	if err := s.repo.Create(ctx, admin); err != nil {
@@ -198,8 +216,10 @@ func (s *AdminService) UpdateAdmin(ctx context.Context, id primitive.ObjectID, r
 	if req.ProfileURL != "" {
 		update["profileUrl"] = req.ProfileURL
 	}
-
-	if err := s.repo.Update(ctx, id, update); err != nil {
+	err = s.repo.Update(ctx, id, bson.M{
+		"$set": update,
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -212,14 +232,22 @@ func (s *AdminService) ToggleAdminStatus(ctx context.Context, id primitive.Objec
 		return nil, errors.New("Admin not found")
 	}
 
-	newStatus := domain.StatusActive
-	if admin.Status == domain.StatusActive {
-		newStatus = domain.StatusDeactive
+	newStatus := domain.AdminStatusActive
+	log.Println("djhwcbdhjb",newStatus)
+
+	if admin.Status == domain.AdminStatusActive {
+		newStatus = domain.StatusDeactive 
 	}
 
-	if err := s.repo.Update(ctx, id, bson.M{"status": newStatus}); err != nil {
+	if err := s.repo.Update(ctx, id, bson.M{
+		"$set": bson.M{
+			"status":    newStatus,
+			"updatedAt": time.Now(),
+		},
+	}); err != nil {
 		return nil, err
 	}
+	
 
 	return s.repo.FindByID(ctx, id)
 }
@@ -244,8 +272,13 @@ func (s *AdminService) ResetPasswordBySuperAdmin(ctx context.Context, id primiti
 	}
 
 	return s.repo.Update(ctx, admin.ID, bson.M{
-		"password": string(hashedPassword),
-		"tokens":   []domain.Token{},
+		"$set": bson.M{
+			"password":  string(hashedPassword),
+			"updatedAt": time.Now(),
+		},
+		"$unset": bson.M{
+			"token": "",
+		},
 	})
 }
 
@@ -259,16 +292,14 @@ func (s *AdminService) ChangeOwnPassword(ctx context.Context, admin *domain.Admi
 		return err
 	}
 
-	var newTokens []domain.Token
-	for _, t := range admin.Tokens {
-		if t.Token == currentToken {
-			newTokens = append(newTokens, t)
-		}
-	}
-
 	return s.repo.Update(ctx, admin.ID, bson.M{
-		"password": string(hashedPassword),
-		"tokens":   newTokens,
+		"$set": bson.M{
+			"password":  string(hashedPassword),
+			"updatedAt": time.Now(),
+		},
+		"$unset": bson.M{
+			"token": "",
+		},
 	})
 }
 
@@ -284,16 +315,11 @@ func (s *AdminService) GetDashboardStats(ctx context.Context) (map[string]int64,
 			},
 		},
 	})
+	log.Println("wdbjh")
 	if err != nil {
 		return nil, err
 	}
 
-	totalSubAdmin, err := s.repo.CountDocuments(ctx, bson.M{
-		"role": domain.RoleSubAdmin,
-	})
-	if err != nil {
-		return nil, err
-	}
 
 	totalActive, err := s.repo.CountDocuments(ctx, bson.M{
 		"status": domain.StatusActive,
@@ -311,7 +337,6 @@ func (s *AdminService) GetDashboardStats(ctx context.Context) (map[string]int64,
 
 	return map[string]int64{
 		"totalAdmin":    totalAdmin,
-		"totalSubAdmin": totalSubAdmin,
 		"totalActive":   totalActive,
 		"totalDeactive": totalDeactive,
 	}, nil

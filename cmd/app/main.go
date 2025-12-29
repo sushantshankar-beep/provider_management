@@ -17,9 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joho/godotenv"
-
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -28,6 +27,15 @@ func main() {
 	}
 	cfg := config.Load()
 	logg := logger.NewLogger()
+
+	awsSession, err := config.InitAWSSession()
+	if err != nil {
+		log.Fatal("Failed to initialize AWS session:", err)
+	}
+	log.Println("AWS session initialized successfully")
+	
+
+	s3Uploader := middleware.NewS3Uploader(awsSession, os.Getenv("AWS_BUCKET_NAME"))
 
 	client := db.ConnectMongo(cfg.MongoURI)
 	mongoDB := client.Database(cfg.MongoDBName)
@@ -57,8 +65,8 @@ func main() {
 	savedVehicleRepo := repository.NewSavedVehiclesRepo(mongoDB)
 	zoneRepo := repository.NewZoneRepo(mongoDB)
 	amcPurchaseRepo := repository.NewAMCPurchaseRepo(mongoDB)
-    amcRefundRepo := repository.NewAMCRefundRepo(mongoDB)
-
+	amcRefundRepo := repository.NewAMCRefundRepo(mongoDB)
+	vehicleBrandRepo := repository.NewVehicleBrandRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
@@ -66,7 +74,7 @@ func main() {
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
-	refundService := service.NewRefundService(refundRepo,transactionRepo)
+	refundService := service.NewRefundService(refundRepo, transactionRepo)
 	complaintService := service.NewComplaintService(complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo)
@@ -88,6 +96,10 @@ func main() {
 	)
 	
 	complaintHandler := handler.NewComplaintHandler(complaintService,acceptedServiceRepo)
+	zoneService := service.NewZoneService(zoneRepo)
+	vehicleBrandService := service.NewVehicleBrandService(vehicleBrandRepo)
+	payUService := service.NewPayUService(cfg.PayU.Key, cfg.PayU.Salt, cfg.PayU.BaseURL)
+	amcRefundService := service.NewAMCRefundService(amcRefundRepo, amcPurchaseRepo, userRepo, amcPlanRepo, payUService )
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
@@ -100,7 +112,7 @@ func main() {
 	amcPlanHandler := handler.NewAMCPlanHandler(amcPlanService)
 	amcTransactionHandler := handler.NewAMCTransactionHandler(amcTransactionService)
 	amcOrderHandler := handler.NewOrderHandler(amcOrderService)
-    refundHandler := handler.NewRefundHandler(refundService)
+	refundHandler := handler.NewRefundHandler(refundService)
 	amcRefundHandler := handler.NewAMCRefundHandler(amcRefundService)
 	roleHandler := handler.NewRoleHandler(roleRepo)
 	r := gin.Default() 
@@ -128,6 +140,9 @@ func main() {
 		activityLogMiddleware,
 		rbacMiddleware,
 		roleHandler,
+		zoneHandler,
+		vehicleBrandHandler,
+		s3Uploader,
 	)
 
 
@@ -151,3 +166,4 @@ func main() {
 	defer cancel()
 	srv.Shutdown(ctx)
 }
+

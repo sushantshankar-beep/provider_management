@@ -100,6 +100,13 @@ type AMCInfo struct {
 	PaymentStatus      string    `json:"paymentStatus"`
 }
 
+type UserAdminStatusResponse struct {
+	UserID  string `json:"user_id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+
 func (s *UserAdminService) GetAllUsers(
 	ctx context.Context,
 	search, status, zone string,
@@ -117,13 +124,10 @@ func (s *UserAdminService) GetAllUsers(
 	}
 
 	if status != "" {
-		switch status {
-		case "active":
+		if status == "active" {
 			query["isActive"] = domain.AccountStatusActive
-		case "inactive":
-			query["isActive"] = bson.M{"$ne": domain.AccountStatusActive}
-		default:
-			query["isActive"] = status
+		} else if status == "inactive" {
+			query["isActive"] = bson.M{"$nin": []interface{}{domain.AccountStatusActive, "true"}}
 		}
 	}
 
@@ -313,7 +317,7 @@ func (s *UserAdminService) GetUserByID(
 func (s *UserAdminService) UpdateUserStatus(
 	ctx context.Context,
 	userID, status string,
-) (*UserAdminResponse, error) {
+) (*UserAdminStatusResponse, error) {
 	query := bson.M{}
 
 	if strings.HasPrefix(userID, "VW") {
@@ -334,10 +338,10 @@ func (s *UserAdminService) UpdateUserStatus(
 		updatedStatus = "active"
 	}
 
-	return &UserAdminResponse{
-		ID:     u.InternalID,
-		UserID: fmt.Sprintf("VW%06d", u.InternalID),
-		Status: updatedStatus,
+	return &UserAdminStatusResponse{
+		UserID:  fmt.Sprintf("VW%06d", u.InternalID),
+		Status:  updatedStatus,
+		Message: "Status updated successfully",
 	}, nil
 }
 

@@ -238,13 +238,14 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 
 	if err := h.complaintService.AssessComplaint(c.Request.Context(), id, req); err != nil {
 		log.Println("Assessment error:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
+	
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
-			"message": "Failed to assess complaint: " + err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
-
+	
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Complaint assessed successfully",
@@ -353,5 +354,20 @@ func (h *ComplaintHandler) GetStats(c *gin.Context) {
 		"error":   false,
 		"message": "Stats fetched successfully",
 		"data":    stats,
+	})
+}
+
+func (h *ComplaintHandler) StartAssessment(c *gin.Context) {
+	id := c.Param("id")
+	
+
+	if err := h.complaintService.StartAssessment(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Assessment saved successfully and complaint reviewed",
+		"status":  "in_review",
 	})
 }

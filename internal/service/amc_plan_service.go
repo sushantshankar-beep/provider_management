@@ -88,29 +88,29 @@ func (s *AMCPlanService) GetAllAMC(
 		}
 	}
 
-	plans, total, err := s.AMCPlanRepo.GetPlans(ctx, filter, skip, limit, "createdAt", -1)
+	plans, _, err := s.AMCPlanRepo.GetPlans(ctx, filter, skip, limit, "createdAt", -1)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Get counts
+	filteredTotal, _ := s.AMCPlanRepo.CountDocuments(ctx, filter)
+
 	totalPlans, _ := s.AMCPlanRepo.CountDocuments(ctx, bson.M{})
 	activePlans, _ := s.AMCPlanRepo.CountDocuments(ctx, bson.M{"isActive": true})
 	inactivePlans, _ := s.AMCPlanRepo.CountDocuments(ctx, bson.M{"isActive": false})
 
-	// Transform response
 	responseData := make([]map[string]any, len(plans))
 	for i, plan := range plans {
 		responseData[i] = map[string]any{
-			"_id":                     plan.ID.Hex(),
-			"plan_name":               plan.PlanName,
-			"plan_category":           plan.PlanCategory,
-			"plan_vehicle_type":       plan.PlanVehicleType,
-			"plan_total_amount":       plan.PlanTotalAmount,
-			"plan_duration_in_month":  plan.PlanDurationInMonth,
-			"plan_base_price":         plan.PlanBasePrice,
-			"created_at":              plan.CreatedAt,
-			"is_active":               plan.IsActive,
+			"_id":                    plan.ID.Hex(),
+			"plan_name":              plan.PlanName,
+			"plan_category":          plan.PlanCategory,
+			"plan_vehicle_type":      plan.PlanVehicleType,
+			"plan_total_amount":      plan.PlanTotalAmount,
+			"plan_duration_in_month": plan.PlanDurationInMonth,
+			"plan_base_price":        plan.PlanBasePrice,
+			"created_at":             plan.CreatedAt,
+			"is_active":              plan.IsActive,
 		}
 	}
 
@@ -120,8 +120,8 @@ func (s *AMCPlanService) GetAllAMC(
 		"inactive_plans": inactivePlans,
 	}
 
-	totalPages := total / limit
-	if total%limit > 0 {
+	totalPages := filteredTotal / limit
+	if filteredTotal%limit > 0 {
 		totalPages++
 	}
 
@@ -129,6 +129,7 @@ func (s *AMCPlanService) GetAllAMC(
 		"page":        page,
 		"limit":       limit,
 		"total_pages": totalPages,
+		"total_items": filteredTotal,
 	}
 
 	return responseData, counts, pagination, nil
@@ -175,7 +176,6 @@ func (s *AMCPlanService) UpdateAMC(ctx context.Context, id string, updateData ma
 		return fmt.Errorf("no update data provided")
 	}
 
-	// Check if slug is being updated and if it already exists
 	if slug, ok := updateData["plan_slug"]; ok {
 		existingPlan, err := s.AMCPlanRepo.FindBySlug(ctx, slug.(string))
 		if err != nil && err != mongo.ErrNoDocuments {
@@ -188,7 +188,6 @@ func (s *AMCPlanService) UpdateAMC(ctx context.Context, id string, updateData ma
 
 	update := bson.M{}
 
-	// Map snake_case to camelCase
 	fieldMap := map[string]string{
 		"plan_name":                   "planName",
 		"plan_slug":                   "planSlug",
@@ -220,7 +219,6 @@ func (s *AMCPlanService) UpdateAMC(ctx context.Context, id string, updateData ma
 		}
 	}
 
-	// Set last modified by
 	objID, err := primitive.ObjectIDFromHex(adminID)
 	if err != nil {
 		return fmt.Errorf("invalid admin ID")

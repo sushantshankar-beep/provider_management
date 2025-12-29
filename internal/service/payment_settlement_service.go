@@ -160,15 +160,21 @@ func (s *SettlementService) CreateSettlement(
 		return nil, fmt.Errorf("some services are already settled")
 	}
 
-	now := time.Now()
-
-	settlementAmount := payout.NetPayable
-
-	if payout.PartialAmount > 0 {
-
-		settlementAmount = payout.PartialAmount
-
+	services, err := s.serviceRepo.FindByIDs(ctx, serviceObjIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch services")
 	}
+
+	var totalServiceAmount float64
+	for _, svc := range services {
+		totalServiceAmount += svc.FinalPrice
+	}
+
+	commissionAmount := totalServiceAmount * (payout.CommissionPercent / 100)
+	gstAmount := commissionAmount * (payout.GSTPercent / 100)
+	settlementAmount := totalServiceAmount - commissionAmount - gstAmount
+
+	now := time.Now()
 
 	settlement := &domain.ProviderSettlement{
 		SettlementID:  time.Now().UnixMilli(),
@@ -198,7 +204,6 @@ func (s *SettlementService) CreateSettlement(
 	if err != nil {
 		return nil, err
 	}
-	log.Println("unsettledCount", unsettledCount)
 
 	if unsettledCount == 0 {
 		err = s.payoutRepo.UpdateStatus(
@@ -383,15 +388,15 @@ func (s *SettlementService) ChangeProviderSettlementStatus(
 		return nil, fmt.Errorf("failed to update settlement: %w", err)
 	}
 	
-	err = s.payoutRepo.UpdateStatus(
-		ctx,
-		settlement.PayoutID,
-		domain.PayoutStatusSettled,
-		&settlement.ID,
-	)
-	if err != nil {
-		return nil, err
-	}
+	// err = s.payoutRepo.UpdateStatus(
+	// 	ctx,
+	// 	settlement.PayoutID,
+	// 	domain.PayoutStatusSettled,
+	// 	&settlement.ID,
+	// )
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	return settlement, nil
 }

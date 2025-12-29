@@ -32,6 +32,9 @@ func SetupRoutes(
 	activityLogMiddleware *middleware.ActivityLogMiddleware,
 	rbac *middleware.RBACMiddleware,
 	roleHandler *handler.RoleHandler,
+	zoneHandler *handler.ZoneHandler,
+	vehicleBrandHandler *handler.VehicleBrandHandler,
+	s3Uploader *middleware.S3Uploader,
 ) {
 
 	// ===============================
@@ -73,6 +76,25 @@ func SetupRoutes(
 			authenticated.POST("/logout-all", adminHandler.LogoutAll)
 			authenticated.GET("/profile", adminHandler.GetProfile)
 			authenticated.POST("/change-password", adminHandler.ChangeOwnPassword)
+			authenticated.POST("/create",
+			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
+				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
+			}),
+			adminHandler.CreateAdmin,
+		)
+			authenticated.GET("/all", adminHandler.GetAllAdmins)
+			authenticated.GET("/stats", adminHandler.GetDashboardStats)
+			authenticated.GET("/:id", adminHandler.GetAdminByID)
+			authenticated.PUT("/:id",
+				s3Uploader.UploadMiddleware([]middleware.FieldConfig{
+					{FormFieldName: "profileImage", ContextKey: "profileUrl"},
+				}),
+				adminHandler.UpdateAdmin,
+			)
+			authenticated.PATCH("/:id/toggle-status", adminHandler.ToggleAdminStatus)
+			authenticated.DELETE("/:id", adminHandler.DeleteAdmin)
+			authenticated.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
+			authenticated.GET("/:id/activity-logs", activityLogHandler.GetAdminActivityLogs)
 		}
 	}
 
@@ -155,6 +177,14 @@ func SetupRoutes(
 		bookings.GET("/:bookingId", rbac.Check("bookings", "view"), bookingAdminHandler.GetBookingByID)
 		bookings.GET("/:bookingId/activity-logs", rbac.Check("activity_logs", "view"), activityLogHandler.GetBookingActivityLogs)
 		bookings.GET("/get-invoice/:serviceId", rbac.Check("bookings", "invoice"), bookingAdminHandler.GetInvoiceData)
+		providerSettlement := admin.Group("/provider-settlement")
+		{
+			providerSettlement.GET("", settlementHandler.GetSettlements)
+			providerSettlement.POST("/create", settlementHandler.CreateSettlement)
+			providerSettlement.POST("/:id/settle", settlementHandler.ChangeProviderSettlementStatus)
+			providerSettlement.GET("/:id", settlementHandler.GetSettlementByID)
+			providerSettlement.GET("/export", settlementHandler.ExportSettlements)
+		}
 
 		bookings.PUT("/:bookingId/cancel", rbac.Check("bookings", "cancel"), bookingAdminHandler.CancelBooking)
 		bookings.PUT("/:bookingId/complete", rbac.Check("bookings", "complete"), bookingAdminHandler.MarkBookingCompleted)
@@ -199,7 +229,6 @@ func SetupRoutes(
 		providerSettlement.GET("/:id", rbac.Check("settlement", "view"), settlementHandler.GetSettlementByID)
 		providerSettlement.POST("/export", rbac.Check("settlement", "export"), settlementHandler.ExportSettlements)
 	}
-
 	// ---------- SERVICES ----------
 	services := admin.Group("/services")
 	{
@@ -257,5 +286,22 @@ func SetupRoutes(
 		amcRefund.PUT("/:id/approve", rbac.Check("refunds", "approve"), amcRefundHandler.Approve)
 		amcRefund.PUT("/:id/reject", rbac.Check("refunds", "reject"), amcRefundHandler.Reject)
 		amcRefund.GET("/:id/check-status", rbac.Check("refunds", "view"), amcRefundHandler.CheckStatus)
+		}
+
+		zones := admin.Group("/zones")
+		{
+			zones.POST("", zoneHandler.Create)
+			zones.GET("", zoneHandler.GetAll)
+			zones.GET("/active", zoneHandler.GetActive)
+			zones.PUT("/:id", zoneHandler.Update)
+			zones.PATCH("/:id/toggle-status", zoneHandler.ToggleStatus)
+			zones.DELETE("/:id", zoneHandler.Delete)
+		}
+
+		vehicleBrands := admin.Group("/vehicle-brands")
+		{
+			vehicleBrands.GET("", vehicleBrandHandler.GetBrands)
+			vehicleBrands.GET("/models", vehicleBrandHandler.GetModels)
+		}
 	}
 }
