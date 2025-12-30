@@ -135,3 +135,7 @@ func (r *AMCPurchaseRepo) UpdateRefundStatusAndPlanStatus(ctx context.Context, i
 	_, err = r.col.UpdateOne(ctx, bson.M{"_id": objID}, update)
 	return err
 }
+
+func (r *AMCPurchaseRepo) CountActive(ctx context.Context) (int64, error) {
+	return r.col.CountDocuments(ctx, bson.M{"planStatus": "pending"})
+}

@@ -2,15 +2,19 @@ package repository
 
 import (
 	"context"
-    "strings"
-	"strconv"
 	"fmt"
+	"log"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"provider_management/internal/utils"
+	"strconv"
+	"strings"
 	"time"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"provider_management/internal/domain"
 )
 
 type TransactionRepo struct {
@@ -164,4 +168,154 @@ func (r *TransactionRepo) UpdateRefundID(ctx context.Context, transactionID prim
 	}
 	_, err := r.col.UpdateOne(ctx, bson.M{"_id": transactionID}, update)
 	return err
+}
+
+func (r *TransactionRepo) GetAMCRevenueStats(ctx context.Context, period string) (dto.RevenueStats, error) {
+	startDate := utils.GetStartDateForPeriod(period)
+
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"createdAt": bson.M{"$gte": startDate},
+				"status":    "paid",
+				"AMCPurchaseId": bson.M{
+					"$exists": true,
+					"$ne":     primitive.NilObjectID,
+				},
+			},
+		},
+		{
+			"$lookup": bson.M{
+				"from":         "amcpurchaseschemas",
+				"localField":   "AMCPurchaseId",
+				"foreignField": "_id",
+				"as":           "amcPurchase",
+			},
+		},
+		{
+			"$unwind": bson.M{
+				"path":                       "$amcPurchase",
+				"preserveNullAndEmptyArrays": false,
+			},
+		},
+		{
+			"$match": bson.M{
+				"$or": []bson.M{
+					{"amcPurchase.refundStatus": ""},
+					{"amcPurchase.refundStatus": bson.M{"$exists": false}},
+					{"amcPurchase.refundStatus": bson.M{
+						"$nin": []string{"approved", "completed", "refunded"},
+					}},
+				},
+			},
+		},
+		{
+			"$group": bson.M{
+				"_id": bson.M{
+					"$dateToString": bson.M{
+						"format": "%Y-%m-%d",
+						"date":   "$createdAt",
+					},
+				},
+				"totalAmount": bson.M{"$sum": "$amount"},
+				"count":       bson.M{"$sum": 1},
+			},
+		},
+		{
+			"$sort": bson.M{"_id": 1},
+		},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		log.Printf("Aggregate error: %v", err)
+		return dto.RevenueStats{}, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []struct {
+		Day    string  `bson:"_id"`
+		Amount float64 `bson:"totalAmount"`
+		Count  int64   `bson:"count"`
+	}
+
+	if err := cursor.All(ctx, &results); err != nil {
+		log.Printf("Cursor.All error: %v", err)
+		return dto.RevenueStats{}, err
+	}
+
+	log.Printf("Found %d daily revenue records", len(results))
+	
+	dataPoints := make([]dto.RevenueDataPoint, len(results))
+	totalAmount := 0.0
+	for i, r := range results {
+		dataPoints[i] = dto.RevenueDataPoint{
+			Day:    r.Day,
+			Amount: r.Amount,
+		}
+		totalAmount += r.Amount
+		log.Printf("  Date: %s, Amount: %.2f INR, Transactions: %d", r.Day, r.Amount, r.Count)
+	}
+	
+	log.Printf("Total AMC Revenue: %.2f INR", totalAmount)
+
+	return dto.RevenueStats{
+		Period:      period,
+		Data:        dataPoints,
+		TotalAmount: totalAmount,
+	}, nil
+}
+
+func (r *TransactionRepo) GetTransactionStats(
+	ctx context.Context,
+	days string,
+) (dto.TransactionStats, error) {
+
+	startDay := utils.GetStartDateFromDays(days)
+
+	now := time.Now().UTC()
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"createdAt": bson.M{"$gte": startDay, "$lte": now,},
+				"serviceId": bson.M{"$exists": true, "$ne": nil},
+				"status":    "paid",
+			},
+		},
+		{
+			"$group": bson.M{
+				"_id":         nil,
+				"totalAmount": bson.M{"$sum": "$amount"},
+				"count":       bson.M{"$sum": 1},
+				"totalWithGST": bson.M{
+					"$sum": bson.M{
+						"$multiply": bson.A{"$amount", 1.18},
+					},
+				},
+			},
+		},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return dto.TransactionStats{}, err
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		TotalAmount  float64 `bson:"totalAmount"`
+		TotalWithGST float64 `bson:"totalWithGST"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return dto.TransactionStats{}, err
+	}
+
+	var stats dto.TransactionStats
+	if len(result) > 0 {
+		stats.TotalAmount = utils.RoundTo2(result[0].TotalAmount)
+		stats.GSTAmount = utils.RoundTo2(result[0].TotalWithGST - result[0].TotalAmount)
+	}
+
+	return stats, nil
 }

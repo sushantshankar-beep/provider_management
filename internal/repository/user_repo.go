@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-
+    "provider_management/internal/dto"
 	"provider_management/internal/domain"
 )
 
@@ -302,4 +302,55 @@ func (r *UserRepo) FindByIDs(ctx context.Context, userIDs []string) ([]*domain.U
 	}
 
 	return users, nil
+}
+
+func (r *UserRepo) GetStats(ctx context.Context) (dto.UsersStats, error) {
+	pipeline := []bson.M{
+		{
+			"$facet": bson.M{
+				"total": []bson.M{
+					{"$count": "count"},
+				},
+				"active": []bson.M{
+					{"$match": bson.M{"isActive": "active"}},
+					{"$count": "count"},
+				},
+				"inactive": []bson.M{
+					{"$match": bson.M{"isActive": bson.M{"$ne": "active"}}},
+					{"$count": "count"},
+				},
+			},
+		},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return dto.UsersStats{}, err
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		Total    []struct{ Count int64 } `bson:"total"`
+		Active   []struct{ Count int64 } `bson:"active"`
+		Inactive []struct{ Count int64 } `bson:"inactive"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return dto.UsersStats{}, err
+	}
+
+	stats := dto.UsersStats{}
+	if len(result) > 0 {
+		if len(result[0].Total) > 0 {
+			stats.Total = result[0].Total[0].Count
+		}
+		if len(result[0].Active) > 0 {
+			stats.Active = result[0].Active[0].Count
+		}
+		if len(result[0].Inactive) > 0 {
+			stats.Inactive = result[0].Inactive[0].Count
+		}
+	}
+
+	return stats, nil
 }

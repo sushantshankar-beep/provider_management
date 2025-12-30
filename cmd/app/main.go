@@ -67,6 +67,7 @@ func main() {
 	amcPurchaseRepo := repository.NewAMCPurchaseRepo(mongoDB)
 	amcRefundRepo := repository.NewAMCRefundRepo(mongoDB)
 	vehicleBrandRepo := repository.NewVehicleBrandRepo(mongoDB)
+	bidRepo := repository.NewBidRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
@@ -89,7 +90,8 @@ func main() {
 	)
 	amcRefundService := service.NewAMCRefundService(amcRefundRepo,amcPurchaseRepo,userRepo,amcPlanRepo,payUService)
 	adminRoleService := service.NewRoleService(roleRepo)
-	
+	dashboardService := service.NewDashboardService(providerRepo,userRepo,acceptedServiceRepo,settlementRepo,complaintRepo,transactionRepo,amcPurchaseRepo,bidRepo)  
+
 	complaintHandler := handler.NewComplaintHandler(complaintService,acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
 	vehicleBrandService := service.NewVehicleBrandService(vehicleBrandRepo)
@@ -110,11 +112,11 @@ func main() {
 	roleHandler := handler.NewRoleHandler(roleRepo, adminRoleService)
 	zoneHandler := handler.NewZoneHandler(zoneService)
 	vehicleBrandHandler := handler.NewVehicleBrandHandler(vehicleBrandService)
-
+    dashboardHandler := handler.NewDashboardHandler(dashboardService)
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
-	
+
 	routes.SetupRoutes(
 		r,
 		cfg.AllowedOrigins,
@@ -139,6 +141,7 @@ func main() {
 		roleHandler,
 		zoneHandler,
 		vehicleBrandHandler,
+		dashboardHandler,
 		s3Uploader,
 	)
 

@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"provider_management/internal/domain"
+	"provider_management/internal/dto"
 	"strconv"
 	"strings"
 	"time"
@@ -347,4 +348,57 @@ func (r *ComplaintRepository) GenerateInternalID(ctx context.Context) (int64, er
 	}
 
 	return result.SequenceValue, nil
+}
+
+func (r *ComplaintRepository) GetDashboardStats(ctx context.Context) (dto.ComplaintsStats, error) {
+	pipeline := []bson.M{
+		{
+			"$facet": bson.M{
+				"total": []bson.M{
+					{"$count": "count"},
+				},
+				"resolved": []bson.M{
+					{"$match": bson.M{"status": "resolved"}},
+					{"$count": "count"},
+				},
+				"underReview": []bson.M{
+					{"$match": bson.M{"status": "in_review"}},
+					{"$count": "count"},
+				},
+			},
+		},
+	}
+
+	cursor, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return dto.ComplaintsStats{}, err
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		Total          []struct{ Count int64 } `bson:"total"`
+		Resolved       []struct{ Count int64 } `bson:"resolved"`
+		UnderReview    []struct{ Count int64 } `bson:"underReview"`
+		UserRaised     []struct{ Count int64 } `bson:"userRaised"`
+		ProviderRaised []struct{ Count int64 } `bson:"providerRaised"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return dto.ComplaintsStats{}, err
+	}
+
+	stats := dto.ComplaintsStats{}
+	if len(result) > 0 {
+		if len(result[0].Total) > 0 {
+			stats.Total = result[0].Total[0].Count
+		}
+		if len(result[0].Resolved) > 0 {
+			stats.Resolved = result[0].Resolved[0].Count
+		}
+		if len(result[0].UnderReview) > 0 {
+			stats.UnderReview = result[0].UnderReview[0].Count
+		}
+	}
+
+	return stats, nil
 }

@@ -2,11 +2,13 @@ package middleware
 
 import (
 	"context"
+	
 	"net/http"
 	"os"
-	"strings"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -80,10 +82,14 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 		}
 
 		if admin.Status == domain.StatusDeactive {
-			c.JSON(http.StatusForbidden, gin.H{"message": "Account is deactivated"})
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"message": "Account is deactivated.",
+				"code": "ACCOUNT_DEACTIVATED",
+			})
 			c.Abort()
 			return
 		}
+		
 
 		// allowedForAllAdmins := []string{
 		// 	"/admin/panel/logout",

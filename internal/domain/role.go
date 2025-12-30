@@ -27,10 +27,10 @@ const (
 // --------------------
 // Zone Scope
 // --------------------
-const (
-	ZoneScopeAll      = "all"
-	ZoneScopeAssigned = "assigned"
-)
+// const (
+// 	ZoneScopeAll      = "all"
+// 	ZoneScopeAssigned = "assigned"
+// )
 
 // --------------------
 // Role Model
@@ -40,7 +40,7 @@ type Role struct {
 	Name        string              `bson:"name" json:"name"`
 	RoleType    string              `bson:"roleType" json:"roleType"` // admin | subAdmin
 	Status      RoleStatus          `bson:"status" json:"status"`
-	ZoneScope   string              `bson:"zoneScope" json:"zoneScope"` // all | assigned
+	ZoneScope    []string                  `bson:"zoneScope" json:"zoneScope"` // all | assigned
 	Description string              `bson:"description,omitempty" json:"description,omitempty"`
 	Permissions map[string][]string `bson:"permissions" json:"permissions"`
 	CreatedBy   primitive.ObjectID  `bson:"createdBy" json:"createdBy"`

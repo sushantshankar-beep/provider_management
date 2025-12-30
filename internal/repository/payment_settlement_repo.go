@@ -2,12 +2,14 @@ package repository
 
 import (
 	"context"
-	
 
 	"fmt"
+	"log"
 	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"provider_management/internal/utils"
 	"time"
-   "log"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -154,4 +156,44 @@ func (r *ProviderSettlementRepo) FindBySettlementIDs(
 	
 	log.Printf("Found %d settlements", len(settlements))
 	return settlements, nil
+}
+
+func (r *ProviderSettlementRepo) GetStats(ctx context.Context, days string) (dto.SettlementStats, error) {
+	startDay := utils.GetStartDateFromDays(days)
+    pipeline := []bson.M{
+        {
+            "$match": bson.M{
+                "createdAt": bson.M{"$gte": startDay},
+            },
+        },
+        {
+            "$group": bson.M{
+                "_id": nil,
+                "settledAmount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+                    bson.M{"$eq": []interface{}{"$status", "settled"}}, "$totalAmount", 0,
+                }}},
+            },
+        },
+    }
+    
+    cursor, err := r.coll.Aggregate(ctx, pipeline)
+    if err != nil {
+        return dto.SettlementStats{}, err
+    }
+    defer cursor.Close(ctx)
+    
+    var result []struct {
+        SettledAmount float64 `bson:"settledAmount"`
+    }
+    
+    if err := cursor.All(ctx, &result); err != nil {
+        return dto.SettlementStats{}, err
+    }
+    
+    stats := dto.SettlementStats{}
+    if len(result) > 0 {
+        stats.SettledAmount = utils.RoundTo2(result[0].SettledAmount)
+    }
+    
+    return stats, nil
 }

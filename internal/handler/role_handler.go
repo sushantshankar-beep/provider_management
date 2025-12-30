@@ -61,10 +61,9 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 	if req.Status == "" {
 		req.Status = domain.RoleInactive
 	}
-	if req.ZoneScope == "" {
-		req.ZoneScope = domain.ZoneScopeAll
+	if req.ZoneScope == nil {
+		req.ZoneScope = []string{} 
 	}
-
 	if err := h.repo.Create(c, &req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create role"})
 		return
@@ -168,7 +167,7 @@ func (h *RoleHandler) CloneRole(c *gin.Context) {
 	newRole := domain.Role{
 		Name:        newName,
 		RoleType:    sourceRole.RoleType,
-		ZoneScope:   sourceRole.ZoneScope,
+		ZoneScope:       append([]string{}, sourceRole.ZoneScope...),
 		Description: sourceRole.Description,
 		Permissions: clonePermissions(sourceRole.Permissions),
 		Status:    domain.RoleInactive,
@@ -252,7 +251,7 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 		Name        string              `json:"name"`
 		Description string              `json:"description"`
 		RoleType    string              `json:"roleType"`
-		ZoneScope   string              `json:"zoneScope"`
+		ZoneScope   []string              `json:"zoneScope"`
 		Permissions map[string][]string `json:"permissions"`
 	}
 
@@ -311,8 +310,8 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 	}
 
 	// Zone Scope
-	if body.ZoneScope != "" {
-		update["zoneScope"] = body.ZoneScope
+	if body.ZoneScope != nil {
+		update["zones"] = body.ZoneScope
 	}
 
 	// Permissions
