@@ -6,9 +6,9 @@ import (
 	"log"
 	"strings"
 	"time"
-
+    "math"
 	"provider_management/internal/domain"
-
+    "provider_management/internal/dto"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -460,4 +460,134 @@ func (r *AcceptedServiceRepo) FindByIDs(ctx context.Context, ids []primitive.Obj
 	}
 	
 	return services, nil
+}
+
+func (r *AcceptedServiceRepo) GetBookingStats(ctx context.Context) (dto.BookingsStats, error) {
+	pipeline := []bson.M{
+		{
+			"$facet": bson.M{
+				"total": []bson.M{
+					{"$count": "count"},
+				},
+				"completed": []bson.M{
+					{"$match": bson.M{"status": "completed"}},
+					{"$count": "count"},
+				},
+				"ongoing": []bson.M{
+					{"$match": bson.M{"status": bson.M{"$in": []string{"started","reached_location", "otp_verified", "in_progress"}}}},
+					{"$count": "count"},
+				},
+			},
+		},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return dto.BookingsStats{}, err
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		Total     []struct{ Count int64 } `bson:"total"`
+		Completed []struct{ Count int64 } `bson:"completed"`
+		Ongoing   []struct{ Count int64 } `bson:"ongoing"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return dto.BookingsStats{}, err
+	}
+
+	stats := dto.BookingsStats{}
+	if len(result) > 0 {
+		if len(result[0].Total) > 0 {
+			stats.Total = result[0].Total[0].Count
+		}
+		if len(result[0].Completed) > 0 {
+			stats.Completed = result[0].Completed[0].Count
+		}
+		if len(result[0].Ongoing) > 0 {
+			stats.Ongoing = result[0].Ongoing[0].Count
+		}
+	}
+
+	return stats, nil
+}
+
+func (r *AcceptedServiceRepo) GetTopServices(ctx context.Context) ([]dto.TopService, error) {
+    pipeline := []bson.M{
+        {
+            "$match": bson.M{
+                "status": "completed",
+            },
+        },
+        {
+            "$lookup": bson.M{
+                "from":         "servicerequests",
+                "localField":   "serviceRequest",
+                "foreignField": "_id",
+                "as":           "serviceRequestData",
+            },
+        },
+        {
+            "$unwind": bson.M{
+                "path":                       "$serviceRequestData",
+                "preserveNullAndEmptyArrays": false,
+            },
+        },
+        {
+            "$unwind": bson.M{
+                "path":                       "$serviceRequestData.problems",
+                "preserveNullAndEmptyArrays": false,
+            },
+        },
+        {
+            "$group": bson.M{
+                "_id":   "$serviceRequestData.problems",
+                "count": bson.M{"$sum": 1},
+            },
+        },
+        {
+            "$sort": bson.M{"count": -1},
+        },
+        {
+            "$limit": 5,
+        },
+    }
+
+    cursor, err := r.col.Aggregate(ctx, pipeline)
+    if err != nil {
+        return nil, err
+    }
+    defer cursor.Close(ctx)
+
+    var results []struct {
+        Problem string `bson:"_id"`
+        Count   int64  `bson:"count"`
+    }
+
+    if err := cursor.All(ctx, &results); err != nil {
+        return nil, err
+    }
+
+    var totalCount int64
+    for _, r := range results {
+        totalCount += r.Count
+    }
+
+    services := make([]dto.TopService, len(results))
+    for i, r := range results {
+        percentage := 0.0
+        if totalCount > 0 {
+            percentage = (float64(r.Count) / float64(totalCount)) * 100
+            // Round to nearest whole number as shown in your screenshot
+            percentage = math.Round(percentage)
+        }
+        services[i] = dto.TopService{
+            Name:       r.Problem,
+            Percentage: percentage,
+            Count:      r.Count,
+        }
+    }
+
+    return services, nil
 }

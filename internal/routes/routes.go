@@ -34,6 +34,7 @@ func SetupRoutes(
 	roleHandler *handler.RoleHandler,
 	zoneHandler *handler.ZoneHandler,
 	vehicleBrandHandler *handler.VehicleBrandHandler,
+	dashboardHandler *handler.DashboardHandler,
 	s3Uploader *middleware.S3Uploader,
 ) {
 
@@ -69,7 +70,7 @@ func SetupRoutes(
 			authenticated.POST("/logout", adminHandler.Logout)
 			authenticated.POST("/logout-all", adminHandler.LogoutAll)
 			authenticated.GET("/profile", adminHandler.GetProfile)
-			authenticated.POST("/change-password",rbac.Check("admins", "change_paasword"), adminHandler.ChangeOwnPassword)
+			authenticated.POST("/change-password",rbac.Check("admins", "change_pasword"), adminHandler.ChangeOwnPassword)
 			authenticated.POST("/create",
 				s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 					{FormFieldName: "profileImage", ContextKey: "profileUrl"},
@@ -87,8 +88,8 @@ func SetupRoutes(
 				rbac.Check("admins", "edit_admin/sub-admin"),
 				adminHandler.UpdateAdmin,
 			)
-			authenticated.PATCH("/:id/toggle-status", rbac.Check("admins", "deactivate/activate_admin/sub-admin"),  adminHandler.ToggleAdminStatus)
-			authenticated.DELETE("/:id", adminHandler.DeleteAdmin)
+			authenticated.PATCH("/:id/toggle-status", rbac.Check("admins", "edit_admin/sub-admin"),  adminHandler.ToggleAdminStatus)
+			authenticated.DELETE("/:id",rbac.Check("admins", "delete_admin/subadmin"), adminHandler.DeleteAdmin)
 			authenticated.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
 			authenticated.GET("/:id/activity-logs",rbac.Check("admins", "admin/sub-admin_activity_logs"), activityLogHandler.GetAdminActivityLogs)
 		}
@@ -113,7 +114,7 @@ func SetupRoutes(
 
 		roles.PATCH(
 			"/:id/status",
-			rbac.Check("roles", "activate/deactivate_roles"),
+			rbac.Check("roles", "update_roles"),
 			roleHandler.ToggleRoleStatus,
 		)
 		roles.POST(
@@ -140,11 +141,16 @@ func SetupRoutes(
 		roles.GET("/role-names", roleHandler.GetRoleNamesByType)
 	}
 
+	dashboard := admin.Group("/dashboard")
+	{
+		dashboard.GET("/stats", rbac.Check("dashboard", "view_stats"), dashboardHandler.GetDashboardStats)
+	}
+
 	users := admin.Group("/users")
 	{
 		users.GET("", rbac.Check("users", "view_users"), userAdminHandler.GetAllUsers)
 		users.GET("/:id", rbac.Check("users", "view_user_profile"), userAdminHandler.GetByID)
-		users.GET("/:id/activity-logs", rbac.Check("activity_logs", "view_user_activity_logs"), activityLogHandler.GetUserActivityLogs)
+		users.GET("/:id/activity-logs", rbac.Check("users", "view_user_activity_logs"), activityLogHandler.GetUserActivityLogs)
 		users.PATCH("/:id/status", rbac.Check("users", "change_user_status"), userAdminHandler.UpdateStatus)
 	}
 
@@ -152,7 +158,7 @@ func SetupRoutes(
 	{
 		providers.GET("", rbac.Check("providers", "view_providers"), providerAdminHandler.GetAll)
 		providers.GET("/:id", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.GetByID)
-		providers.GET("/:id/activity-logs", rbac.Check("activity_logs", "view_provider_activity_logs"), activityLogHandler.GetProviderActivityLogs)
+		providers.GET("/:id/activity-logs", rbac.Check("providers", "view_provider_activity_logs"), activityLogHandler.GetProviderActivityLogs)
 		providers.PATCH("/status/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateStatus)
 		providers.PATCH("/kyc/:id", rbac.Check("providers", "kyc"), providerAdminHandler.UpdateKYC)
 		providers.PATCH("/verify-document/:id", rbac.Check("providers", "verify_provider_document"), providerAdminHandler.VerifyDocument)
@@ -165,7 +171,7 @@ func SetupRoutes(
 		bookings.GET("", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetAllBookings)
 		bookings.GET("/stats", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetBookingStats)
 		bookings.GET("/:bookingId", rbac.Check("bookings", "view_booking_profile"), bookingAdminHandler.GetBookingByID)
-		bookings.GET("/:bookingId/activity-logs", rbac.Check("activity_logs", "view_booking_activity_logs"), activityLogHandler.GetBookingActivityLogs)
+		bookings.GET("/:bookingId/activity-logs", rbac.Check("bookings", "view_booking_activity_logs"), activityLogHandler.GetBookingActivityLogs)
 		bookings.GET("/get-invoice/:serviceId", rbac.Check("bookings", "view_booking_profile"), bookingAdminHandler.GetInvoiceData)
 		bookings.PUT("/:bookingId/cancel", rbac.Check("bookings", "booking_action"), bookingAdminHandler.CancelBooking)
 		bookings.PUT("/:bookingId/complete", rbac.Check("bookings", "booking_action"), bookingAdminHandler.MarkBookingCompleted)
@@ -177,7 +183,7 @@ func SetupRoutes(
 		complaints.GET("", rbac.Check("complaints", "view_complaint"), complaintHandler.GetAll)
 		complaints.GET("/stats", rbac.Check("complaints", "view_complaint"), complaintHandler.GetStats)
 		complaints.GET("/:id", rbac.Check("complaints", "view_complaint_details"), complaintHandler.GetByID)
-		complaints.GET("/:id/activity-logs", rbac.Check("activity_logs", "view_complaint_activity_logs"), activityLogHandler.GetComplaintActivityLogs)
+		complaints.GET("/:id/activity-logs", rbac.Check("complaints", "view_complaint_activity_logs"), activityLogHandler.GetComplaintActivityLogs)
 		complaints.POST("/:id/start-assessment", rbac.Check("complaints", "perform_assessment"),complaintHandler.StartAssessment)
 		complaints.POST("/:id/assessment", rbac.Check("complaints", "perform_assessment"), complaintHandler.PostAssessment)
 		complaints.POST("/:id/notes", rbac.Check("complaints", "add_complaint_notes"), complaintHandler.AddNote)
@@ -213,9 +219,9 @@ func SetupRoutes(
 		services.GET("", rbac.Check("services", "view_service"), serviceHandler.GetServices)
 		services.GET("/stats", rbac.Check("services", "view_service"), serviceHandler.GetServiceStats)
 		services.GET("/:id", rbac.Check("services", "view_service_details"), serviceHandler.GetServiceByID)
-		services.GET("/:id/activity-logs", rbac.Check("activity_logs", "service_master_activity_logs"), activityLogHandler.GetServiceActivityLogs)
+		services.GET("/:id/activity-logs", rbac.Check("services", "service_master_activity_logs"), activityLogHandler.GetServiceActivityLogs)
 		services.PUT("/:id", rbac.Check("services", "edit_service"), serviceHandler.UpdateService)
-		services.PATCH("/:id/status", rbac.Check("services", "activate/deactivate_service"), serviceHandler.UpdateServiceStatus)
+		services.PATCH("/:id/status", rbac.Check("services", "edit_service"), serviceHandler.UpdateServiceStatus)
 		services.DELETE("/:id", rbac.Check("services", "delete_service"), serviceHandler.DeleteService)
 	}
 
@@ -231,7 +237,7 @@ func SetupRoutes(
 		amcPlans.GET("/:id", rbac.Check("amc", "view_amc_detail"), amcPlanHandler.GetAMCByID)
 		amcPlans.PUT("/:id", rbac.Check("amc", "edit_amc_plan"), amcPlanHandler.UpdateAMC)
 		amcPlans.DELETE("/:id", rbac.Check("amc", "delete_amc_plan"), amcPlanHandler.DeleteAMC)
-		amcPlans.PATCH("/:id/toggle-status", rbac.Check("amc", "activate/deactivate_plan"), amcPlanHandler.ToggleAMCStatus)
+		amcPlans.PATCH("/:id/toggle-status", rbac.Check("amc", "edit_amc_plan"), amcPlanHandler.ToggleAMCStatus)
 	}
 
 	amcTransaction := admin.Group("/amc-transaction")

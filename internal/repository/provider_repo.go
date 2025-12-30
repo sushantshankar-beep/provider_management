@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"provider_management/internal/domain"
-
+    "provider_management/internal/dto"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -278,4 +278,55 @@ func (r *ProviderRepo) CountByMultipleStatuses(ctx context.Context, filter bson.
         return 0, err
     }
     return count, nil
+}
+
+func (r *ProviderRepo) GetStats(ctx context.Context) (dto.ProvidersStats, error) {
+	pipeline := []bson.M{
+		{
+			"$facet": bson.M{
+				"total": []bson.M{
+					{"$count": "count"},
+				},
+				"active": []bson.M{
+					{"$match": bson.M{"isActive": "active"}},
+					{"$count": "count"},
+				},
+				"inactive": []bson.M{
+					{"$match": bson.M{"isActive": bson.M{"$ne": "active"}}},
+					{"$count": "count"},
+				},
+			},
+		},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return dto.ProvidersStats{}, err
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		Total    []struct{ Count int64 } `bson:"total"`
+		Active   []struct{ Count int64 } `bson:"active"`
+		Inactive []struct{ Count int64 } `bson:"inactive"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return dto.ProvidersStats{}, err
+	}
+
+	stats := dto.ProvidersStats{}
+	if len(result) > 0 {
+		if len(result[0].Total) > 0 {
+			stats.Total = result[0].Total[0].Count
+		}
+		if len(result[0].Active) > 0 {
+			stats.Active = result[0].Active[0].Count
+		}
+		if len(result[0].Inactive) > 0 {
+			stats.Inactive = result[0].Inactive[0].Count
+		}
+	}
+
+	return stats, nil
 }
