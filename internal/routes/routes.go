@@ -143,7 +143,7 @@ func SetupRoutes(
 
 	dashboard := admin.Group("/dashboard")
 	{
-		dashboard.GET("/stats", rbac.Check("dashboard", "view_stats"), dashboardHandler.GetDashboardStats)
+		dashboard.GET("/stats", dashboardHandler.GetDashboardStats)
 	}
 
 	users := admin.Group("/users")
