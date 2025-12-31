@@ -23,8 +23,9 @@ func (h *AMCTransactionHandler) GetAll(c *gin.Context) {
 	search := c.Query("search")
 	status := c.Query("status")
 	method := c.Query("method")
+	createdAt := c.Query("created_at")     
 
-	res, total, err := h.svc.ListAMCTransactions(c, page, limit, search, status, method)
+	res, total, err := h.svc.ListAMCTransactions(c, page, limit, search, status, method,createdAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching transactions", "error": err.Error()})
 		return

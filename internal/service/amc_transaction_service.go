@@ -57,7 +57,7 @@ type AMCTransactionDetailResponse struct {
 
 func (s *AMCTransactionService) ListAMCTransactions(
 	ctx context.Context,
-	pageStr, limitStr, search, status, method string,
+	pageStr, limitStr, search, status, method, createdAt string,
 ) ([]AMCTransactionListResponse, int64, error) {
 
 	page, _ := strconv.ParseInt(pageStr, 10, 64)
@@ -72,7 +72,7 @@ func (s *AMCTransactionService) ListAMCTransactions(
 
 	skip := (page - 1) * limit
 
-	txns, total, err := s.transactions.FindAMCTransactions(ctx, skip, limit, status, method)
+	txns, total, err := s.transactions.FindAMCTransactions(ctx, skip, limit, status, method, createdAt)
 	if err != nil {
 		return nil, 0, err
 	}

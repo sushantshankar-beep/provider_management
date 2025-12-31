@@ -109,7 +109,7 @@ type UserAdminStatusResponse struct {
 
 func (s *UserAdminService) GetAllUsers(
 	ctx context.Context,
-	search, status, zone string,
+	search, status, zone,amcStatus,platformUsed,vehicleType,startDate string,
 	page, limit int64,
 ) (*UserAdminListResponse, error) {
 	query := bson.M{}
@@ -133,6 +133,16 @@ func (s *UserAdminService) GetAllUsers(
 
 	if zone != "" {
 		query["selectedCityName"] = zone
+	}
+
+	if startDate != "" {
+		if t, err := time.Parse("2006-01-02", startDate); err == nil {
+			endOfDay := t.Add(24*time.Hour - time.Second)
+			query["createdAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(t),
+				"$lte": primitive.NewDateTimeFromTime(endOfDay),
+			}
+		}
 	}
 
 	skip := (page - 1) * limit
@@ -182,24 +192,39 @@ func (s *UserAdminService) GetAllUsers(
 		return nil, err
 	}
 
-	result := make([]UserAdminResponse, len(users))
-	for i, u := range users {
+	result := make([]UserAdminResponse, 0, len(users))
+	for _, u := range users {
 		vehicleInfo := vehicleMap[u.ID]
-		amcStatus := "No"
+		userAMCStatus := "No"
 		if amc, exists := amcMap[u.ID]; exists {
 			if amc.PlanEndDate.After(time.Now()) {
-				amcStatus = "Active"
+				userAMCStatus = "Active"
 			} else {
-				amcStatus = "Expired"
+				userAMCStatus = "Expired"
 			}
 		}
 
-		status := u.IsActive
+		userStatus := u.IsActive
 		if u.IsActive == "true" {
-			status = "active"
+			userStatus = "active"
 		}
 
-		result[i] = UserAdminResponse{
+		userVehicleType := defaultStr(vehicleInfo.Type, "N/A")
+		userPlatformUsed := "Android"
+
+		if amcStatus != "" && strings.ToLower(amcStatus) != strings.ToLower(userAMCStatus) {
+			continue
+		}
+
+		if platformUsed != "" && strings.ToLower(platformUsed) != strings.ToLower(userPlatformUsed) {
+			continue
+		}
+
+		if vehicleType != "" && strings.ToLower(vehicleType) != strings.ToLower(userVehicleType) {
+			continue
+		}
+
+		result = append(result, UserAdminResponse{
 			ID:            u.InternalID,
 			MongoID:       u.ID,
 			Name:          defaultStr(u.Name, "N/A"),
@@ -207,16 +232,16 @@ func (s *UserAdminService) GetAllUsers(
 			Email:         defaultStr(u.Email, "—"),
 			UserID:        fmt.Sprintf("VW%06d", u.InternalID),
 			Zone:          defaultStr(u.SelectedCityName, "N/A"),
-			Status:        status,
+			Status:        userStatus,
 			CreatedDate:   u.CreatedAt.Format("2006-01-02"),
-			PlatformUsed:  "Android",
-			VehicleType:   defaultStr(vehicleInfo.Type, "N/A"),
+			PlatformUsed:  userPlatformUsed,
+			VehicleType:   userVehicleType,
 			VehicleCount:  vehicleInfo.Count,
 			TotalBookings: bookingMap[u.ID],
-			AMCStatus:     amcStatus,
+			AMCStatus:     userAMCStatus,
 			ProfileURL:    u.ProfileURL,
 			Address:       u.Address,
-		}
+		})
 	}
 
 	totalPages := int(math.Ceil(float64(total) / float64(limit)))
