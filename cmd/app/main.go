@@ -83,16 +83,12 @@ func main() {
 	amcPlanService := service.NewAMCPlanService(amcPlanRepo)
 	amcTransactionService := service.NewAMCTransactionService(amcTransactionRepo, userRepo, amcRepo)
 	amcOrderService := service.NewOrderService(amcOrderRepo, userRepo, amcPlanRepo, savedVehicleRepo, zoneRepo)
-	payUService := service.NewPayUService(
-	cfg.PayU.Key,
-	cfg.PayU.Salt,
-	cfg.PayU.BaseURL,
-	)
-	amcRefundService := service.NewAMCRefundService(amcRefundRepo,amcPurchaseRepo,userRepo,amcPlanRepo,payUService)
+	payUService := service.NewPayUService(cfg.PayU.Key, cfg.PayU.Salt, cfg.PayU.BaseURL)
+	amcRefundService := service.NewAMCRefundService(amcRefundRepo, amcPurchaseRepo, userRepo, amcPlanRepo, payUService)
 	adminRoleService := service.NewRoleService(roleRepo)
-	dashboardService := service.NewDashboardService(providerRepo,userRepo,acceptedServiceRepo,settlementRepo,complaintRepo,transactionRepo,amcPurchaseRepo,bidRepo)  
+	dashboardService := service.NewDashboardService(providerRepo, userRepo, acceptedServiceRepo, settlementRepo, complaintRepo,transactionRepo, amcPurchaseRepo, bidRepo)   
 
-	complaintHandler := handler.NewComplaintHandler(complaintService,acceptedServiceRepo)
+	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
 	vehicleBrandService := service.NewVehicleBrandService(vehicleBrandRepo)
 	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
@@ -113,6 +109,7 @@ func main() {
 	zoneHandler := handler.NewZoneHandler(zoneService)
 	vehicleBrandHandler := handler.NewVehicleBrandHandler(vehicleBrandService)
     dashboardHandler := handler.NewDashboardHandler(dashboardService)
+
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
@@ -144,7 +141,6 @@ func main() {
 		dashboardHandler,
 		s3Uploader,
 	)
-
 
 	srv := &http.Server{
 		Addr:    cfg.HTTPAddr,

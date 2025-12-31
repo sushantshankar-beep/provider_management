@@ -76,7 +76,7 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 
 		admin, err := m.adminRepo.FindByID(context.Background(), adminID)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Account is Deleted","code": "ACCOUNT_DELETED",})
 			c.Abort()
 			return
 		}
@@ -89,38 +89,12 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
-
-		// allowedForAllAdmins := []string{
-		// 	"/admin/panel/logout",
-		// 	"/admin/panel/logout-all",
-		// 	"/admin/panel/profile",
-		// 	"/admin/panel/change-password",
-		// }
-
-		// path := c.FullPath()
-		// isAllowedForAll := false
-		// for _, allowedPath := range allowedForAllAdmins {
-		// 	if path == allowedPath {
-		// 		isAllowedForAll = true
-		// 		break
-		// 	}
-		// }
-
-	
-		// if !isAllowedForAll && c.Request.Method != http.MethodGet && admin.Role != domain.RoleSuperAdmin {
-		// 	c.JSON(http.StatusForbidden, gin.H{"message": "Only superAdmin can perform this action"})
-		// 	c.Abort()
-		// 	return
-		// }
 
 		c.Set("admin", admin)
 		c.Set("token", tokenString)
 		c.Next()
 	}
 }
-
-
 
 func GetAdminFromContext(c *gin.Context) *domain.Admin {
 	admin, exists := c.Get("admin")
