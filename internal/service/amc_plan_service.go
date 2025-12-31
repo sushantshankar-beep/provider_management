@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
-
+	"strconv"
+	"time"
+    "log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -58,7 +60,7 @@ func (s *AMCPlanService) CreateAMC(ctx context.Context, plan *domain.AMCPlan, ad
 func (s *AMCPlanService) GetAllAMC(
 	ctx context.Context,
 	page, limit int64,
-	isActive, planStatus, planVehicleType, planCategory, search string,
+	isActive, planStatus, planVehicleType, planCategory, createdDate,validityPeriod, search string,
 ) ([]map[string]any, map[string]int64, map[string]any, error) {
 	skip := (page - 1) * limit
 	filter := bson.M{}
@@ -77,6 +79,59 @@ func (s *AMCPlanService) GetAllAMC(
 
 	if planVehicleType != "" {
 		filter["planVehicleType"] = planVehicleType
+	}
+
+	if validityPeriod != "" {
+        switch validityPeriod {
+        case "6":
+            filter["planDurationInMonth"] = 6
+        case "12":
+            filter["planDurationInMonth"] = 12
+        case "24":
+            filter["planDurationInMonth"] = 24
+        case "36":
+            filter["planDurationInMonth"] = 36
+        default:
+            if duration, err := strconv.Atoi(validityPeriod); err == nil {
+                filter["planDurationInMonth"] = duration
+            }
+        }
+    }
+
+	if createdDate != "" {
+		var parsedDate time.Time
+		var err error
+		
+		parsedDate, err = time.Parse("2006/01/02", createdDate)
+		if err != nil {
+			parsedDate, err = time.Parse("02/01/2006", createdDate)
+		}
+		
+		if err == nil {
+			startOfDay := time.Date(
+				parsedDate.Year(),
+				parsedDate.Month(),
+				parsedDate.Day(),
+				0, 0, 0, 0,
+				time.UTC,
+			)
+			
+			endOfDay := time.Date(
+				parsedDate.Year(),
+				parsedDate.Month(),
+				parsedDate.Day(),
+				23, 59, 59, 999999999,
+				time.UTC,
+			)
+			
+			filter["createdAt"] = bson.M{
+				"$gte": startOfDay,
+				"$lte": endOfDay,
+			}
+			log.Printf("Searching for date range: %s to %s\n", startOfDay.Format(time.RFC3339), endOfDay.Format(time.RFC3339))
+		} else {
+			log.Printf("Error parsing date %s: %v\n", createdDate, err)
+		}
 	}
 
 	if search != "" {

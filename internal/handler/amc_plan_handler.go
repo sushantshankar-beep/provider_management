@@ -76,8 +76,9 @@ func (h *AMCPlanHandler) GetAllAMC(c *gin.Context) {
 	planStatus := c.Query("plan_status")
 	planVehicleType := c.Query("plan_vehicle_type")
 	planCategory := c.Query("plan_category")
+	createdDate := c.Query("created_date")
+	validityPeriod := c.Query("validity_period") 
 	search := c.Query("search")
-
 	plans, counts, pagination, err := h.svc.GetAllAMC(
 		c.Request.Context(),
 		page,
@@ -86,6 +87,8 @@ func (h *AMCPlanHandler) GetAllAMC(c *gin.Context) {
 		planStatus,
 		planVehicleType,
 		planCategory,
+		createdDate,
+		validityPeriod,
 		search,
 	)
 

@@ -318,7 +318,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 	if serviceType := params["serviceType"]; serviceType != "" {
 		filter["serviceType"] = serviceType
 	}
-
+	
 	if userID := params["userId"]; userID != "" {
 		if primitive.IsValidObjectID(userID) {
 			objID, _ := primitive.ObjectIDFromHex(userID)

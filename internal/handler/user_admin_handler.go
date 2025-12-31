@@ -24,6 +24,10 @@ func (h *UserAdminHandler) GetAllUsers(c *gin.Context) {
 		c.Query("search"),
 		c.Query("status"),
 		c.Query("zone"),
+		c.Query("amcStatus"),
+		c.Query("platformUsed"),
+		c.Query("vehicleType"),
+		c.Query("startDate"),
 		page,
 		limit,
 	)

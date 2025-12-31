@@ -83,7 +83,7 @@ type OrderDetailResponse struct {
 
 func (s *OrderService) ListOrders(
 	ctx context.Context,
-	pageStr, limitStr, search, status, paymentStatus, startDate, endDate, sortBy, sortOrder string,
+	pageStr, limitStr, search, planStatus, paymentStatus, startDate, endDate, sortBy, sortOrder string,
 ) ([]OrderListResponse, int64, error) {
 
 	page, _ := strconv.ParseInt(pageStr, 10, 64)
@@ -99,7 +99,7 @@ func (s *OrderService) ListOrders(
 	skip := (page - 1) * limit
 
 	orders, total, err := s.orders.FindWithFilter(
-		ctx, skip, limit, search, status, paymentStatus,
+		ctx, skip, limit, search, planStatus, paymentStatus,
 		startDate, endDate, sortBy, sortOrder,
 	)
 	if err != nil {

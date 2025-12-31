@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"time"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -43,11 +42,12 @@ func (r *OrderRepo) FindByID(ctx context.Context, id string) (*domain.AMCPurchas
 func (r *OrderRepo) FindWithFilter(
 	ctx context.Context,
 	skip, limit int64,
-	search, status, paymentStatus, startDate, endDate, sortBy, sortOrder string,
+	search, planStatus, paymentStatus, startDate, endDate, sortBy, sortOrder string,
 ) ([]domain.AMCPurchase, int64, error) {
 
 	filter := bson.M{
 		"paymentStatus": bson.M{"$in": bson.A{"success", "failed"}},
+		"planStatus":    bson.M{"$in": bson.A{"pending", "cancelled"}},
 	}
 
 	if search != "" {
@@ -104,10 +104,9 @@ func (r *OrderRepo) FindWithFilter(
 		}
 	}
 
-	if status != "" {
-		filter["planStatus"] = status
+	if planStatus != "" {
+		filter["planStatus"] = planStatus
 	}
-
 
 	if paymentStatus != "" && (paymentStatus == "success" || paymentStatus == "failed") {
 		filter["paymentStatus"] = paymentStatus
@@ -116,17 +115,17 @@ func (r *OrderRepo) FindWithFilter(
 	if startDate != "" || endDate != "" {
 		dateFilter := bson.M{}
 		if startDate != "" {
-			if t, err := time.Parse(time.RFC3339, startDate); err == nil {
-				dateFilter["$gte"] = t
+			if t, err := time.Parse("2006-01-02", startDate); err == nil {
+				dateFilter["$gte"] = primitive.NewDateTimeFromTime(t)
 			}
 		}
 		if endDate != "" {
-			if t, err := time.Parse(time.RFC3339, endDate); err == nil {
-				dateFilter["$lte"] = t
+			if t, err := time.Parse("2006-01-02", endDate); err == nil {
+				dateFilter["$lte"] = primitive.NewDateTimeFromTime(t.Add(24*time.Hour - time.Second))
 			}
 		}
 		if len(dateFilter) > 0 {
-			filter["createdAt"] = dateFilter
+			filter["updatedAt"] = dateFilter
 		}
 	}
 
