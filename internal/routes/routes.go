@@ -37,6 +37,9 @@ func SetupRoutes(
 	dashboardHandler *handler.DashboardHandler,
 	s3Uploader *middleware.S3Uploader,
 ) {
+	r.GET("/health", func(c *gin.Context) {
+        c.JSON(200, gin.H{"status": "ok"})
+    })
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
