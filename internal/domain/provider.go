@@ -78,6 +78,7 @@ type Provider struct {
 	CommissionPercentage float64       `bson:"commissionPercentage,omitempty" json:"commission_percentage,omitempty"`
 	CreatedAt            time.Time     `bson:"createdAt" json:"created_at"`
 	UpdatedAt            time.Time     `bson:"updatedAt" json:"updated_at"`
+	ApprovedAt            time.Time     `bson:"approvedAt" json:"approved_at"`
 }
 
 type Service struct {

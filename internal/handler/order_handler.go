@@ -22,14 +22,14 @@ func (h *OrderHandler) GetAll(c *gin.Context) {
 	page := c.DefaultQuery("page", "1")
 	limit := c.DefaultQuery("limit", "10")
 	search := c.Query("search")
-	status := c.Query("status")
+	planStatus := c.Query("planStatus")
 	paymentStatus := c.Query("paymentStatus")
 	startDate := c.Query("startDate")
 	endDate := c.Query("endDate")
 	sortBy := c.DefaultQuery("sortBy", "updatedAt")
 	sortOrder := c.DefaultQuery("sortOrder", "desc")
 
-	res, total, err := h.svc.ListOrders(c, page, limit, search, status, paymentStatus, startDate, endDate, sortBy, sortOrder)
+	res, total, err := h.svc.ListOrders(c, page, limit, search, planStatus, paymentStatus, startDate, endDate, sortBy, sortOrder)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch orders"})
 		return

@@ -12,7 +12,7 @@ import (
 	"provider_management/internal/constants"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
-
+"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -101,12 +101,13 @@ type ProviderDetailResponse struct {
 	CompletedJobs        int64                `json:"completed_jobs"`
 	RecentServices       []domain.Service     `json:"recent_services"`
 	CommissionPercentage float64              `json:"commission_percentage,omitempty"`
+    ApprovedAt           string           `json:"approved_at"`
 }
 
 func (s *ProviderAdminService) GetAllProviders(
 	ctx context.Context,
 	pageStr, limitStr, sort, search, status, name, mobile,
-	providerID, kycStatus, accountStatus, vehicleType, zone, filter string,
+	providerID, kycStatus, accountStatus, vehicleType, zone,startDate,filter string,
 ) (*ProviderListResponse, error) {
     log.Println("status",status)
 	log.Println("kycstatus",kycStatus)
@@ -158,6 +159,19 @@ func (s *ProviderAdminService) GetAllProviders(
             conditions = append(conditions, bson.M{"status": domain.StatusRejected})
         }
     }
+
+
+	if startDate != "" {
+		if t, err := time.Parse("2006-01-02", startDate); err == nil {
+			endOfDay := t.Add(24*time.Hour - time.Second)
+			conditions = append(conditions, bson.M{
+				"createdAt": bson.M{
+					"$gte": primitive.NewDateTimeFromTime(t),
+					"$lte": primitive.NewDateTimeFromTime(endOfDay),
+				},
+			})
+		}
+	}
 	if search != "" {
 		searchConditions := []bson.M{
 			{"name": bson.M{"$regex": search, "$options": "i"}},
@@ -452,6 +466,7 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		CompletedJobs:        completedJobs,
 		RecentServices:       recentServices,
 		CommissionPercentage: provider.CommissionPercentage,
+		ApprovedAt:           formatDateDetailed(provider.ApprovedAt),
 	}, nil
 }
 
