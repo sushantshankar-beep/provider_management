@@ -73,7 +73,7 @@ func SetupRoutes(
 			authenticated.POST("/logout", adminHandler.Logout)
 			authenticated.POST("/logout-all", adminHandler.LogoutAll)
 			authenticated.GET("/profile", adminHandler.GetProfile)
-			authenticated.POST("/change-password",rbac.Check("admins", "change_pasword"), adminHandler.ChangeOwnPassword)
+			authenticated.POST("/change-password",rbac.Check("admins", "change_password"), adminHandler.ChangeOwnPassword)
 			authenticated.POST("/create",
 				s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 					{FormFieldName: "profileImage", ContextKey: "profileUrl"},
