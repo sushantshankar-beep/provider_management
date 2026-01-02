@@ -157,10 +157,10 @@ func (s *ComplaintService) GetComplaintWithDetails(ctx context.Context, id strin
 
 	return complaintWithDetails, nil
 }
-func (s *ComplaintService) ListComplaints(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, error) {
+
+func (s *ComplaintService) ListComplaints(ctx context.Context, filter domain.ComplaintFilter) ([]*domain.Complaint, int64, *domain.ComplaintStats, error) {
 	return s.complaintRepo.List(ctx, filter)
 }
-
 func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID string, req AssessComplaintRequest) error {
 	complaint, err := s.GetComplaint(ctx, complaintID)
 	if err != nil {

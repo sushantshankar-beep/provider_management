@@ -26,6 +26,8 @@ func (h *RefundHandler) GetAllRefunds(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	status := c.Query("status")
 	userID := c.Query("user_id")
+	mode :=   c.Query("mode")
+	reason := c.Query("reason")
 	search := c.Query("search")
 
 	if page < 1 {
@@ -40,6 +42,8 @@ func (h *RefundHandler) GetAllRefunds(c *gin.Context) {
 		Limit:  limit,
 		Status: status,
 		UserID: userID,
+		Mode: mode,
+		Reason: reason,
 		Search: search,
 	})
 

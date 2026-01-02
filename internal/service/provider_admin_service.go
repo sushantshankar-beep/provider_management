@@ -104,6 +104,15 @@ type ProviderDetailResponse struct {
     ApprovedAt           string           `json:"approved_at"`
 }
 
+type DocumentResponse struct {
+	DocumentID   string `json:"document_id,omitempty"`
+	DocumentType string `json:"document_type"`
+	Type         string `json:"type,omitempty"`
+	File         string `json:"file"`
+	Verified     string `json:"verified"`
+}
+
+
 func (s *ProviderAdminService) GetAllProviders(
 	ctx context.Context,
 	pageStr, limitStr, sort, search, status, name, mobile,
@@ -595,4 +604,88 @@ func formatDate(t time.Time) string {
 
 func formatDateDetailed(t time.Time) string {
 	return t.Format("Jan 2, 2006")
+}
+
+func (s *ProviderAdminService) GetDocumentURL(
+	ctx context.Context,
+	providerID, documentType, documentID string,
+) (*DocumentResponse, error) {
+	provider, err := s.providers.FindByID(ctx, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("provider not found")
+	}
+
+	switch documentType {
+	case "identity":
+		if len(provider.IdentityProof) == 0 {
+			return nil, fmt.Errorf("no identity proof documents found")
+		}
+		
+		if documentID != "" {
+			for _, proof := range provider.IdentityProof {
+				if proof.ID.Hex() == documentID {
+					return &DocumentResponse{
+						DocumentID:   proof.ID.Hex(),
+						DocumentType: "identity",
+						Type:         proof.Type,
+						File:         proof.File,
+						Verified:     proof.Verified,
+					}, nil
+				}
+			}
+			return nil, fmt.Errorf("identity document with ID %s not found", documentID)
+		}
+		
+		proof := provider.IdentityProof[0]
+		return &DocumentResponse{
+			DocumentID:   proof.ID.Hex(),
+			DocumentType: "identity",
+			Type:         proof.Type,
+			File:         proof.File,
+			Verified:     proof.Verified,
+		}, nil
+
+	case "address":
+		if len(provider.AddressProof) == 0 {
+			return nil, fmt.Errorf("no address proof documents found")
+		}
+		
+		if documentID != "" {
+			for _, proof := range provider.AddressProof {
+				if proof.ID.Hex() == documentID {
+					return &DocumentResponse{
+						DocumentID:   proof.ID.Hex(),
+						DocumentType: "address",
+						Type:         proof.Type,
+						File:         proof.File,
+						Verified:     proof.Verified,
+					}, nil
+				}
+			}
+			return nil, fmt.Errorf("address document with ID %s not found", documentID)
+		}
+		
+		proof := provider.AddressProof[0]
+		return &DocumentResponse{
+			DocumentID:   proof.ID.Hex(),
+			DocumentType: "address",
+			Type:         proof.Type,
+			File:         proof.File,
+			Verified:     proof.Verified,
+		}, nil
+
+	case "cancel_cheque":
+		if provider.CancelCheque == nil {
+			return nil, fmt.Errorf("no cancel cheque document found")
+		}
+		
+		return &DocumentResponse{
+			DocumentType: "cancel_cheque",
+			File:         provider.CancelCheque.File,
+			Verified:     provider.CancelCheque.Verified,
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("invalid document type. Use: identity, address, or cancel_cheque")
+	}
 }
