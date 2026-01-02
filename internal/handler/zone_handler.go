@@ -50,8 +50,11 @@ func (h *ZoneHandler) GetAll(c *gin.Context) {
 	limit := c.DefaultQuery("limit", "10")
 	search := c.Query("search")
 	isActive := c.Query("isActive")
+	state := c.Query("state")          
+	createdAt := c.Query("createdAt")
+	updatedAt := c.Query("updatedAt") 
 
-	zones, stats, total, err := h.svc.ListZones(c, page, limit, search, isActive)
+	zones, stats, total, err := h.svc.ListZones(c, page, limit, search, isActive, state, createdAt, updatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Internal server error"})
 		return

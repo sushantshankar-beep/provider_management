@@ -108,6 +108,14 @@ func (r *RefundRepository) FindAll(
 		query["status"] = filter.Status
 	}
 
+	if filter.Mode != "" {
+		query["mode"] = filter.Mode
+	}
+
+	if filter.Reason != "" {
+		query["reason"] = filter.Reason
+	}
+	
 	if filter.UserID != "" {
 		userObjID, err := primitive.ObjectIDFromHex(filter.UserID)
 		if err != nil {

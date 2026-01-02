@@ -48,6 +48,8 @@ type RefundFilter struct {
 	Page   int
 	Limit  int
 	Status string
+	Mode   string 
+	Reason string
 	UserID string
 	Search string
 }

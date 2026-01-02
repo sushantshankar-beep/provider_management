@@ -2,7 +2,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-
+    "fmt"
 	"net/http"
 	"provider_management/internal/service"
 )
@@ -245,4 +245,45 @@ func (h *ProviderAdminHandler) UpdateCommission(c *gin.Context) {
 		"message": "Commission updated successfully",
 		"data":    gin.H{"commissionPercentage": res.CommissionPercentage},
 	})
+}
+
+func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
+	id := c.Param("id")
+	documentType := c.Query("documentType") 
+	documentID := c.Query("documentId")  
+
+	if documentType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "documentType query parameter is required (identity, address, cancel_cheque)",
+		})
+		return
+	}
+
+	result, err := h.svc.GetDocumentURL(c.Request.Context(), id, documentType, documentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   true,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	resp, err := http.Get(result.File)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to download file from storage",
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	filename := fmt.Sprintf("%s_%s.pdf", documentType, documentID)
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Type", "application/pdf")
+
+	c.DataFromReader(http.StatusOK, resp.ContentLength, "application/pdf", resp.Body, nil)
 }

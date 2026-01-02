@@ -91,3 +91,11 @@ type Service struct {
     Date          string  `bson:"-" json:"date"`
     ServiceType   string  `bson:"serviceType,omitempty" json:"service_type"`
 }
+
+type DocumentURLResponse struct {
+	DocumentType string `json:"documentType"`
+	DocumentName string `json:"documentName"`
+	URL          string `json:"url"`
+	FileType     string `json:"fileType"`
+}
+
