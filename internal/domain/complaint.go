@@ -136,12 +136,18 @@ type ComplaintFilter struct {
 	DateFrom    *time.Time
 	DateTo      *time.Time
 	SearchQuery *string
+	UserID      *string
+	ProviderID  *string
 	Page        int
 	Limit       int
 }
 
 type ComplaintStats struct {
-	TotalComplaints    int64 `json:"total_complaints"`
+	TotalComplaints   int64 `json:"total_complaints"`
+	StatusResolved    int64 `json:"status_resolved"`
+	StatusUnresolved  int64 `json:"status_unresolved"`
+	RaisedByYou       int64 `json:"raised_by_you"`
+	RaisedByProviders int64 `json:"raised_by_providers"`
 	UserComplaints     int64 `json:"user_complaints"`
 	ProviderComplaints int64 `json:"provider_complaints"`
 }

@@ -167,6 +167,8 @@ func SetupRoutes(
 		providers.PATCH("/verify-document/:id", rbac.Check("providers", "verify_provider_document"), providerAdminHandler.VerifyDocument)
 		providers.PATCH("/account-action/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateAccountAction)
 		providers.PATCH("/commission/:id", rbac.Check("providers", "change_provider_commission"), providerAdminHandler.UpdateCommission)
+		providers.GET("/:id/documents/download", providerAdminHandler.DownloadDocument)
+
 	}
 
 	bookings := admin.Group("/bookings")

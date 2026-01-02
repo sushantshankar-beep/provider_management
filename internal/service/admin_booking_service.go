@@ -39,6 +39,7 @@ type BookingResponse struct {
 	ServiceType    string      `json:"serviceType"`
 	Problems       []string    `json:"problems"`
 	BookingDate    time.Time   `json:"bookingDate"`
+    CompletedAt   *time.Time `json:"completedAt"`
 	Zone           string      `json:"zone"`
 	Status         string      `json:"status"`
 	Amount         float64     `json:"amount"`
@@ -318,6 +319,11 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 	if serviceType := params["serviceType"]; serviceType != "" {
 		filter["serviceType"] = serviceType
 	}
+    
+	if vehicleType := params["vehicleType"]; vehicleType != "" {
+		filter["vehicleType"] = vehicleType
+	}
+	
 	
 	if userID := params["userId"]; userID != "" {
 		if primitive.IsValidObjectID(userID) {
@@ -438,6 +444,8 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		}
 	}
 
+
+
 	skip := int64((page - 1) * limit)
 	sort := params["sort"]
 
@@ -520,6 +528,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 			PaymentStatus: s.mapPaymentStatus(svc.PaymentStatus),
 			ServiceType:   svc.ServiceType,
 			BookingDate:   svc.CreatedAt,
+			CompletedAt:   svc.CompletedAt,
 		}
 
 		if user, ok := userMap[svc.UserID]; ok {

@@ -2,11 +2,12 @@ package repository
 
 import (
 	"context"
+	"provider_management/internal/domain"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -66,7 +67,9 @@ func (r *ZoneRepo) FindByName(ctx context.Context, name string) (*domain.Zone, e
 	return &zone, nil
 }
 
-func (r *ZoneRepo) FindWithFilter(ctx context.Context, skip, limit int64, search string, isActive *bool) ([]domain.Zone, int64, error) {
+func (r *ZoneRepo) FindWithFilter(ctx context.Context, skip, limit int64, search string, isActive *bool, state string,
+	createdAt *time.Time,
+	updatedAt *time.Time) ([]domain.Zone, int64, error) {
 	filter := bson.M{}
 
 	if search != "" {
@@ -78,6 +81,42 @@ func (r *ZoneRepo) FindWithFilter(ctx context.Context, skip, limit int64, search
 
 	if isActive != nil {
 		filter["isActive"] = *isActive
+	}
+
+	if state != "" {
+		filter["stateName"] = state
+	}
+
+	if createdAt != nil {
+		start := time.Date(
+			createdAt.Year(),
+			createdAt.Month(),
+			createdAt.Day(),
+			0, 0, 0, 0,
+			time.UTC,
+		)
+		end := start.Add(24 * time.Hour)
+
+		filter["createdAt"] = bson.M{
+			"$gte": start,
+			"$lt":  end,
+		}
+	}
+
+	if updatedAt != nil {
+		start := time.Date(
+			updatedAt.Year(),
+			updatedAt.Month(),
+			updatedAt.Day(),
+			0, 0, 0, 0,
+			time.UTC,
+		)
+		end := start.Add(24 * time.Hour)
+
+		filter["updatedAt"] = bson.M{
+			"$gte": start,
+			"$lt":  end,
+		}
 	}
 
 	opts := options.Find().

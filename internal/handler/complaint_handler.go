@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 	"provider_management/internal/domain"
-	"provider_management/internal/service"
 	"provider_management/internal/repository"
+	"provider_management/internal/service"
 	"strconv"
 	"strings"
 	"time"
@@ -57,6 +57,27 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 		filter.SearchQuery = &search
 	}
 
+	if userId := c.Query("userId"); userId != "" {
+		filter.UserID = &userId
+	}
+
+	if providerId := c.Query("providerId"); providerId != "" {
+		filter.ProviderID = &providerId
+	}
+
+	if dateFrom := c.Query("date_from"); dateFrom != "" {
+		if parsedDate, err := time.Parse("2006-01-02", dateFrom); err == nil {
+			filter.DateFrom = &parsedDate
+		}
+	}
+
+	if dateTo := c.Query("date_to"); dateTo != "" {
+		if parsedDate, err := time.Parse("2006-01-02", dateTo); err == nil {
+			parsedDate = parsedDate.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+			filter.DateTo = &parsedDate
+		}
+	}
+
 	if page := c.Query("page"); page != "" {
 		if p, err := strconv.Atoi(page); err == nil && p > 0 {
 			filter.Page = p
@@ -69,7 +90,7 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 		}
 	}
 
-	complaints, total, err := h.complaintService.ListComplaints(c.Request.Context(), filter)
+	complaints, total, stats, err := h.complaintService.ListComplaints(c.Request.Context(), filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
@@ -98,6 +119,7 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 		"error":   false,
 		"message": "Complaints fetched successfully",
 		"data":    limitedData,
+		"stats":   stats,
 		"pagination": gin.H{
 			"page":         filter.Page,
 			"limit":        filter.Limit,
@@ -108,7 +130,6 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 		},
 	})
 }
-
 func (h *ComplaintHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 

@@ -52,7 +52,7 @@ func (s *ZoneService) CreateZone(ctx context.Context, zoneName, stateName string
 	return zone, nil
 }
 
-func (s *ZoneService) ListZones(ctx context.Context, pageStr, limitStr, search, isActiveStr string) ([]domain.Zone, ZoneStats, int64, error) {
+func (s *ZoneService) ListZones(ctx context.Context, pageStr, limitStr, search, isActiveStr,state, createdAtStr, updatedAtStr string) ([]domain.Zone, ZoneStats, int64, error) {
 	page, _ := strconv.ParseInt(pageStr, 10, 64)
 	limit, _ := strconv.ParseInt(limitStr, 10, 64)
 
@@ -71,7 +71,23 @@ func (s *ZoneService) ListZones(ctx context.Context, pageStr, limitStr, search, 
 		isActivePtr = &val
 	}
 
-	zones, total, err := s.zones.FindWithFilter(ctx, skip, limit, search, isActivePtr)
+	var createdAtPtr, updatedAtPtr *time.Time
+
+	if createdAtStr != "" {
+		if t, err := time.Parse("02/01/2006", createdAtStr); err == nil {
+			createdAtPtr = &t
+		}
+	}
+
+	if updatedAtStr != "" {
+		if t, err := time.Parse("02/01/2006", updatedAtStr); err == nil {
+			updatedAtPtr = &t
+		}
+	}
+
+
+	zones, total, err := s.zones.FindWithFilter(ctx, skip, limit, search, isActivePtr, state ,createdAtPtr,
+		updatedAtPtr,)
 	if err != nil {
 		return nil, ZoneStats{}, 0, err
 	}
