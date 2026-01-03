@@ -65,6 +65,7 @@ type UserAdminResponse struct {
 	VehicleCount  int    `json:"vehicleCount"`
 	TotalBookings int    `json:"totalBookings"`
 	AMCStatus     string `json:"amcStatus"`
+	Notes         []domain.UserNote  `json:"notes"`
 	ProfileURL    string `json:"profileUrl,omitempty"`
 	Address       string `json:"address,omitempty"`
 }
@@ -329,6 +330,7 @@ func (s *UserAdminService) GetUserByID(
 			CreatedDate:   u.CreatedAt.Format(time.RFC3339),
 			VehicleCount:  len(vehicles),
 			TotalBookings: int(totalBookings),
+			Notes:  u.Notes,
 			ProfileURL:    u.ProfileURL,
 			Address:       u.Address,
 		},
