@@ -19,10 +19,11 @@ import (
 type RoleHandler struct {
 	svc  *service.RoleService
 	repo *repository.RoleRepository
+	repos *repository.AdminRepository
 }
 
-func NewRoleHandler(repo *repository.RoleRepository,svc *service.RoleService) *RoleHandler {
-	return &RoleHandler{repo: repo, svc: svc}
+func NewRoleHandler(repo *repository.RoleRepository,svc *service.RoleService, repos *repository.AdminRepository) *RoleHandler {
+	return &RoleHandler{repo: repo, svc: svc, repos: repos}
 }
 
 // --------------------
@@ -388,4 +389,35 @@ func (h *RoleHandler) GetRoleNamesByType(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": roleNames})
+}
+
+func (h *RoleHandler) GetMyRole(c *gin.Context) {
+	adminInterface, exists := c.Get("admin")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		return
+	}
+
+	admin, ok := adminInterface.(*domain.Admin)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Invalid admin data"})
+		return
+	}
+
+	if admin.Role == "superAdmin" {
+		c.JSON(http.StatusOK, gin.H{
+			"role": "superAdmin",
+			"permissions": "all",
+		})
+		return
+	}
+
+	roleID := admin.RoleID
+	role, err := h.repo.FindByID(c, roleID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Role not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, role)
 }
