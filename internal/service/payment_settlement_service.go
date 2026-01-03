@@ -429,7 +429,7 @@ func (s *SettlementService) GetSettlementByID(
 		ProviderName:    settlement.ProviderName,
 		AccountNo:       settlement.AccountNo,
 		IfscCode:        settlement.IfscCode,
-		TotalAmount:     settlement.TotalAmount,
+		TotalAmount:     utils.RoundTo2(settlement.TotalAmount),
 		PaymentMode:     settlement.PaymentMode,
 		PaymentMethod:   settlement.PaymentMethod,
 		Justification:   settlement.Justification,

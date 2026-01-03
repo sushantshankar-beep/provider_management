@@ -312,7 +312,7 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 
 	// Zone Scope
 	if body.ZoneScope != nil {
-		update["zones"] = body.ZoneScope
+		update["zoneScope"] = body.ZoneScope
 	}
 
 	// Permissions
