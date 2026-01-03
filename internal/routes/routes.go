@@ -36,6 +36,8 @@ func SetupRoutes(
 	vehicleBrandHandler *handler.VehicleBrandHandler,
 	dashboardHandler *handler.DashboardHandler,
 	s3Uploader *middleware.S3Uploader,
+	zoneFilter *middleware.ZoneFilterMiddleware,
+	permissionHandler *handler.PermissionHandler,
 ) {
 
 	r.Use(cors.New(cors.Config{
@@ -70,7 +72,7 @@ func SetupRoutes(
 			authenticated.POST("/logout", adminHandler.Logout)
 			authenticated.POST("/logout-all", adminHandler.LogoutAll)
 			authenticated.GET("/profile", adminHandler.GetProfile)
-			authenticated.POST("/change-password",rbac.Check("admins", "change_password"), adminHandler.ChangeOwnPassword)
+			authenticated.POST("/change-password", rbac.Check("admins", "change_password"), adminHandler.ChangeOwnPassword)
 			authenticated.POST("/create",
 				s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 					{FormFieldName: "profileImage", ContextKey: "profileUrl"},
@@ -78,9 +80,9 @@ func SetupRoutes(
 				rbac.Check("admins", "create_admin/sub-admin"),
 				adminHandler.CreateAdmin,
 			)
-			authenticated.GET("/all", rbac.Check("admins", "view_admin/sub-admin"),adminHandler.GetAllAdmins)
-			authenticated.GET("/stats", rbac.Check("admins", "view_admin/sub-admin"),adminHandler.GetDashboardStats)
-			authenticated.GET("/:id", rbac.Check("admins", "view_admin/sub-admin_details"),adminHandler.GetAdminByID)
+			authenticated.GET("/all", rbac.Check("admins", "view_admin/sub-admin"), adminHandler.GetAllAdmins)
+			authenticated.GET("/stats", rbac.Check("admins", "view_admin/sub-admin"), adminHandler.GetDashboardStats)
+			authenticated.GET("/:id", rbac.Check("admins", "view_admin/sub-admin_details"), adminHandler.GetAdminByID)
 			authenticated.PUT("/:id",
 				s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 					{FormFieldName: "profileImage", ContextKey: "profileUrl"},
@@ -88,19 +90,20 @@ func SetupRoutes(
 				rbac.Check("admins", "edit_admin/sub-admin"),
 				adminHandler.UpdateAdmin,
 			)
-			authenticated.PATCH("/:id/toggle-status", rbac.Check("admins", "edit_admin/sub-admin"),  adminHandler.ToggleAdminStatus)
-			authenticated.DELETE("/:id",rbac.Check("admins", "delete_admin/subadmin"), adminHandler.DeleteAdmin)
+			authenticated.PATCH("/:id/toggle-status", rbac.Check("admins", "edit_admin/sub-admin"), adminHandler.ToggleAdminStatus)
+			authenticated.DELETE("/:id", rbac.Check("admins", "delete_admin/subadmin"), adminHandler.DeleteAdmin)
 			authenticated.POST("/:id/reset-password", adminHandler.ResetPasswordBySuperAdmin)
-			authenticated.GET("/:id/activity-logs",rbac.Check("admins", "admin/sub-admin_activity_logs"), activityLogHandler.GetAdminActivityLogs)
+			authenticated.GET("/:id/activity-logs", rbac.Check("admins", "admin/sub-admin_activity_logs"), activityLogHandler.GetAdminActivityLogs)
 		}
 	}
 
 	admin := r.Group("/admin")
 	admin.Use(authMiddleware.AdminAuth())
 	admin.Use(activityLogMiddleware.LogActivity())
+	admin.Use(zoneFilter.ApplyZoneFilter())
 	roles := admin.Group("/roles")
 	{
-		roles.GET("/my-role", roleHandler.GetMyRole) 
+		roles.GET("/my-role", roleHandler.GetMyRole)
 		roles.POST(
 			"",
 			rbac.Check("roles", "create_new_role"),
@@ -144,7 +147,7 @@ func SetupRoutes(
 
 	dashboard := admin.Group("/dashboard")
 	{
-		dashboard.GET("/stats", dashboardHandler.GetDashboardStats)
+		dashboard.GET("/stats",rbac.Check("dashboard", "view_dashboard"), dashboardHandler.GetDashboardStats)
 	}
 
 	users := admin.Group("/users")
@@ -189,7 +192,7 @@ func SetupRoutes(
 		complaints.GET("/stats", rbac.Check("complaints", "view_complaint"), complaintHandler.GetStats)
 		complaints.GET("/:id", rbac.Check("complaints", "view_complaint_details"), complaintHandler.GetByID)
 		complaints.GET("/:id/activity-logs", rbac.Check("complaints", "view_complaint_activity_logs"), activityLogHandler.GetComplaintActivityLogs)
-		complaints.POST("/:id/start-assessment", rbac.Check("complaints", "perform_assessment"),complaintHandler.StartAssessment)
+		complaints.POST("/:id/start-assessment", rbac.Check("complaints", "perform_assessment"), complaintHandler.StartAssessment)
 		complaints.POST("/:id/assessment", rbac.Check("complaints", "perform_assessment"), complaintHandler.PostAssessment)
 		complaints.POST("/:id/notes", rbac.Check("complaints", "add_complaint_notes"), complaintHandler.AddNote)
 		complaints.PATCH("/:id/status", rbac.Check("complaints", "status"), complaintHandler.UpdateStatus)
@@ -278,7 +281,7 @@ func SetupRoutes(
 	zones := admin.Group("/zones")
 	{
 		zones.POST("", zoneHandler.Create)
-		zones.GET("",  rbac.Check("zones", "view_zones"),zoneHandler.GetAll)
+		zones.GET("", rbac.Check("zones", "view_zones"), zoneHandler.GetAll)
 		zones.GET("/active", zoneHandler.GetActive)
 		zones.PUT("/:id", zoneHandler.Update)
 		zones.PATCH("/:id/toggle-status", rbac.Check("zones", "activate/deactivate_zone"), zoneHandler.ToggleStatus)
@@ -289,5 +292,14 @@ func SetupRoutes(
 	{
 		vehicleBrands.GET("", vehicleBrandHandler.GetBrands)
 		vehicleBrands.GET("/models", vehicleBrandHandler.GetModels)
+	}
+
+	panelPermission := admin.Group("/permission")
+	{
+		panelPermission.GET("", permissionHandler.GetAllPermissions)
+		panelPermission.GET("/:id", permissionHandler.GetPermissionByID)
+		panelPermission.POST("", permissionHandler.CreatePermission)
+		panelPermission.PUT("/:id", permissionHandler.UpdatePermission)
+		panelPermission.DELETE("/:id", permissionHandler.DeletePermission)
 	}
 }
