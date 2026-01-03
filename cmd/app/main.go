@@ -68,6 +68,8 @@ func main() {
 	amcRefundRepo := repository.NewAMCRefundRepo(mongoDB)
 	vehicleBrandRepo := repository.NewVehicleBrandRepo(mongoDB)
 	bidRepo := repository.NewBidRepo(mongoDB)
+	zoneFilterMiddleware := middleware.NewZoneFilterMiddleware()
+	permissionRepo := repository. NewPermissionRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
@@ -87,6 +89,7 @@ func main() {
 	amcRefundService := service.NewAMCRefundService(amcRefundRepo, amcPurchaseRepo, userRepo, amcPlanRepo, payUService)
 	adminRoleService := service.NewRoleService(roleRepo)
 	dashboardService := service.NewDashboardService(providerRepo, userRepo, acceptedServiceRepo, settlementRepo, complaintRepo,transactionRepo, amcPurchaseRepo, bidRepo)   
+	permissionService := service.NewPermissionService(permissionRepo)
 
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
@@ -109,6 +112,7 @@ func main() {
 	zoneHandler := handler.NewZoneHandler(zoneService)
 	vehicleBrandHandler := handler.NewVehicleBrandHandler(vehicleBrandService)
     dashboardHandler := handler.NewDashboardHandler(dashboardService)
+	permissionHandler := handler.NewPermissionHandler(permissionService)
 
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
@@ -140,6 +144,8 @@ func main() {
 		vehicleBrandHandler,
 		dashboardHandler,
 		s3Uploader,
+		zoneFilterMiddleware,
+		permissionHandler,
 	)
 
 	srv := &http.Server{
