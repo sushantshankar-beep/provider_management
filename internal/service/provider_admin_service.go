@@ -101,6 +101,7 @@ type ProviderDetailResponse struct {
 	CompletedJobs        int64                `json:"completed_jobs"`
 	RecentServices       []domain.Service     `json:"recent_services"`
 	CommissionPercentage float64              `json:"commission_percentage,omitempty"`
+	Notes                 []domain.ProviderNote  `json:"notes,omitempty"`
     ApprovedAt           string           `json:"approved_at"`
 }
 
@@ -475,6 +476,7 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		CompletedJobs:        completedJobs,
 		RecentServices:       recentServices,
 		CommissionPercentage: provider.CommissionPercentage,
+		Notes: provider.Notes,
 		ApprovedAt:           formatDateDetailed(provider.ApprovedAt),
 	}, nil
 }
