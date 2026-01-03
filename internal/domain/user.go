@@ -35,7 +35,15 @@ type User struct {
 	SelectedCity       string       `bson:"selectedCity,omitempty" json:"selected_city,omitempty"`
 	SelectedCityName   string       `bson:"selectedCityName,omitempty" json:"selected_city_name,omitempty"`
 	WalletBalance float64            `bson:"walletBalance" json:"wallet_balance"`
+	Notes               []UserNote      `bson:"notes,omitempty" json:"notes,omitempty"`
 	IsActive           string       `bson:"isActive" json:"is_active"`
 	CreatedAt          time.Time    `bson:"createdAt" json:"created_at"`
 	UpdatedAt          time.Time    `bson:"updatedAt" json:"updated_at"`
+}
+
+type UserNote struct {
+	ID         string    `bson:"_id,omitempty" json:"id"`
+	Content    string   `bson:"content" json:"content"`
+	AddedBy    string   `bson:"addedBy" json:"addedBy"`
+	CreatedAt  time.Time`bson:"createdAt" json:"createdAt"`
 }

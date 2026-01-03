@@ -78,7 +78,7 @@ func main() {
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo)
 	complaintService := service.NewComplaintService(complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
-	adminService := service.NewAdminService(adminRepo)
+	adminService := service.NewAdminService(adminRepo, roleRepo)
 	activityLogService := service.NewActivityLogService(activityLogRepo)
 	amcPlanService := service.NewAMCPlanService(amcPlanRepo)
 	amcTransactionService := service.NewAMCTransactionService(amcTransactionRepo, userRepo, amcRepo)

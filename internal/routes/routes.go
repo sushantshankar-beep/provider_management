@@ -155,6 +155,7 @@ func SetupRoutes(
 		users.GET("/:id", rbac.Check("users", "view_user_profile"), userAdminHandler.GetByID)
 		users.GET("/:id/activity-logs", rbac.Check("users", "view_user_activity_logs"), activityLogHandler.GetUserActivityLogs)
 		users.PATCH("/:id/status", rbac.Check("users", "change_user_status"), userAdminHandler.UpdateStatus)
+		users.POST("/:id/notes", userAdminHandler.AddNote)
 	}
 
 	providers := admin.Group("/providers")
@@ -167,7 +168,8 @@ func SetupRoutes(
 		providers.PATCH("/verify-document/:id", rbac.Check("providers", "verify_provider_document"), providerAdminHandler.VerifyDocument)
 		providers.PATCH("/account-action/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateAccountAction)
 		providers.PATCH("/commission/:id", rbac.Check("providers", "change_provider_commission"), providerAdminHandler.UpdateCommission)
-		providers.GET("/:id/documents/download", providerAdminHandler.DownloadDocument)
+		providers.GET("/:id/documents/download", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.DownloadDocument)
+		providers.POST("/:id/notes", providerAdminHandler.AddNote)
 
 	}
 

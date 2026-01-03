@@ -21,6 +21,7 @@ import (
 
 type AdminService struct {
 	repo *repository.AdminRepository
+	roleRepo *repository.RoleRepository 
 }
 
 type CreateAdminRequest struct {
@@ -28,6 +29,7 @@ type CreateAdminRequest struct {
 	Email         string
 	Phone         string
 	Password      string
+	RoleID        primitive.ObjectID
 	Role          string
 	RoleName      string
 	ServiceZones  []string
@@ -47,8 +49,11 @@ type UpdateAdminRequest struct {
 	ProfileURL    string
 }
 
-func NewAdminService(repo *repository.AdminRepository) *AdminService{
-	return &AdminService{repo: repo}
+func NewAdminService(repo *repository.AdminRepository, roleRepo *repository.RoleRepository) *AdminService {
+	return &AdminService{
+		repo:     repo,
+		roleRepo: roleRepo,
+	}
 }
 
 func (s *AdminService) Login(ctx context.Context, email, password string) (string, *domain.Admin, error) {
@@ -121,6 +126,12 @@ func (s *AdminService) CreateAdmin(ctx context.Context, req CreateAdminRequest, 
 		return nil, errors.New("Admin already exists with this email or phone")
 	}
 
+	roleType, powerLevel, roleName, err := s.validateAndSetRole(ctx, req.RoleID)
+	if err != nil {
+		return nil, err
+	}
+	
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
 	if err != nil {
 		return nil, err
@@ -131,8 +142,10 @@ func (s *AdminService) CreateAdmin(ctx context.Context, req CreateAdminRequest, 
 		Email:         req.Email,
 		Phone:         req.Phone,
 		Password:      string(hashedPassword),
-		Role:          req.Role,
-		RoleName:     req.RoleName,
+		RoleID:        req.RoleID,
+		Role:          roleType,
+		RoleName:      roleName,
+		PowerLevel:    powerLevel,
 		ServiceZones:  req.ServiceZones,
 		AccessModules: req.AccessModules,
 		ProfileURL:    req.ProfileURL,
@@ -364,4 +377,32 @@ func ValidateEmail(email string) bool {
 	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 	match, _ := regexp.MatchString(pattern, email)
 	return match
+}
+
+func (s *AdminService) validateAndSetRole(ctx context.Context, roleID primitive.ObjectID) (string, int, string, error) {
+	role, err := s.roleRepo.FindByID(ctx, roleID)
+	if err != nil {
+		return "", 0, "", errors.New("Role not found")
+	}
+	
+	if role.Status != domain.RoleActive {
+		return "", 0, "", errors.New("Role is not active")
+	}
+
+	var roleType string
+	var powerLevel int
+	
+	switch role.RoleType {
+	case domain.RoleTypeAdmin:
+		roleType = domain.RoleAdmin
+		powerLevel = domain.PowerLevelAdmin
+	case domain.RoleTypeSubAdmin:
+		roleType = domain.RoleSubAdmin
+		powerLevel = domain.PowerLevelSubAdmin
+	default:
+		roleType = role.RoleType
+		powerLevel = domain.GetPowerLevel(roleType)
+	}
+	
+	return roleType, powerLevel, role.Name, nil
 }
