@@ -105,7 +105,7 @@ func main() {
 	amcOrderHandler := handler.NewOrderHandler(amcOrderService)
 	refundHandler := handler.NewRefundHandler(refundService)
 	amcRefundHandler := handler.NewAMCRefundHandler(amcRefundService)
-	roleHandler := handler.NewRoleHandler(roleRepo, adminRoleService)
+	roleHandler := handler.NewRoleHandler(roleRepo, adminRoleService, adminRepo)
 	zoneHandler := handler.NewZoneHandler(zoneService)
 	vehicleBrandHandler := handler.NewVehicleBrandHandler(vehicleBrandService)
     dashboardHandler := handler.NewDashboardHandler(dashboardService)

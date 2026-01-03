@@ -100,6 +100,7 @@ func SetupRoutes(
 	admin.Use(activityLogMiddleware.LogActivity())
 	roles := admin.Group("/roles")
 	{
+		roles.GET("/my-role", roleHandler.GetMyRole) 
 		roles.POST(
 			"",
 			rbac.Check("roles", "create_new_role"),
