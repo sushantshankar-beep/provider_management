@@ -287,3 +287,45 @@ func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
 
 	c.DataFromReader(http.StatusOK, resp.ContentLength, "application/pdf", resp.Body, nil)
 }
+
+func (h *ProviderAdminHandler) AddNote(c *gin.Context) {
+	providerID := c.Param("id")
+
+	var req service.AddNoteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Invalid request body: " + err.Error(),
+		})
+		return
+	}
+
+	if req.Content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Note content is required",
+		})
+		return
+	}
+
+	if req.AddedBy == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "AddedBy field is required",
+		})
+		return
+	}
+
+	if err := h.svc.AddNote(c.Request.Context(), providerID, req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to add note: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Note added successfully",
+	})
+}
