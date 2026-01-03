@@ -76,6 +76,7 @@ type Provider struct {
 	Tokens               []string      `bson:"tokens,omitempty" json:"-"`
 	IsActive             string        `bson:"isActive" json:"is_active"`
 	CommissionPercentage float64       `bson:"commissionPercentage,omitempty" json:"commission_percentage,omitempty"`
+    Notes               []ProviderNote      `bson:"notes,omitempty" json:"notes,omitempty"`
 	CreatedAt            time.Time     `bson:"createdAt" json:"created_at"`
 	UpdatedAt            time.Time     `bson:"updatedAt" json:"updated_at"`
 	ApprovedAt            time.Time     `bson:"approvedAt" json:"approved_at"`
@@ -98,4 +99,9 @@ type DocumentURLResponse struct {
 	URL          string `json:"url"`
 	FileType     string `json:"fileType"`
 }
-
+type ProviderNote struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Content   string             `bson:"content" json:"content"`
+	AddedBy   string             `bson:"addedBy" json:"addedBy"`
+	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
+}

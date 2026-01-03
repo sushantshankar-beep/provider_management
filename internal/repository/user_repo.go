@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"fmt"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-    "provider_management/internal/dto"
-	"provider_management/internal/domain"
 )
 
 type UserRepo struct {
@@ -235,7 +236,7 @@ func (r *UserRepo) FindByInternalID(
 
 	var user domain.User
 	err := r.col.FindOne(ctx, bson.M{
-		"internalId": internalID,
+		"id": internalID,
 	}).Decode(&user)
 
 	if err != nil {
@@ -353,4 +354,24 @@ func (r *UserRepo) GetStats(ctx context.Context) (dto.UsersStats, error) {
 	}
 
 	return stats, nil
+}
+
+func (r *UserRepo)  AddUserNote(
+	ctx context.Context,
+	userID int64,
+	note domain.UserNote,
+) error {
+	_, err := r.col.UpdateOne(
+		ctx,
+		bson.M{"id": userID}, 
+		bson.M{
+			"$push": bson.M{
+				"notes": note,
+			},
+			"$set": bson.M{
+				"updatedAt": time.Now(),
+			},
+		},
+	)
+	return err
 }

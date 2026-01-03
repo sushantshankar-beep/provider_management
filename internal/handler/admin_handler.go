@@ -31,8 +31,8 @@ type CreateAdminRequestBody struct {
     Email         string   `form:"email" binding:"required,email"`
     Phone         string   `form:"phone" binding:"required"`
     Password      string   `form:"password" binding:"required,min=8"`
+	RoleID        string   `form:"roleId" binding:"required"`
     Role          string   `form:"role" binding:"required"`
-    RoleName      string   `form:"roleName" binding:"required"`
     ServiceZones  []string `form:"serviceZones"`
     AccessModules []string `form:"accessModules"`
 }
@@ -81,6 +81,8 @@ func (h *AdminHandler) Login(c *gin.Context) {
 			"email":         admin.Email,
 			"phone":         admin.Phone,
 			"role":          admin.Role,
+			"roleId":        admin.RoleID,
+			"roleName":      admin.RoleName,
 			"powerLevel":    admin.PowerLevel,
 			"profile":       admin.ProfileURL,
 			"serviceZones":  admin.ServiceZones,
@@ -132,6 +134,12 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 		return
 	}
 
+	roleID, err := primitive.ObjectIDFromHex(req.RoleID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid role ID format"})
+		return
+	}
+	
 	if !isValidPhoneNumber(req.Phone) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "Invalid phone number. Use format (e.g. +919876543210)",
@@ -156,10 +164,8 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 		Email:         req.Email,
 		Phone:         req.Phone,
 		Password:      req.Password,
+		RoleID:        roleID,
 		Role:          req.Role,
-		RoleName:      req.RoleName,
-		ServiceZones:  req.ServiceZones,
-		AccessModules: accessModules,
 		ProfileURL:    profileURL,
 	}
 
@@ -273,8 +279,6 @@ func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
 		Email:         req.Email,
 		Phone:         req.Phone,
 		Role:          req.Role,
-		ServiceZones:  req.ServiceZones,
-		AccessModules: accessModules,
 		ProfileURL:    profileURL,
 	}
 

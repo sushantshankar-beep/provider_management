@@ -7,7 +7,7 @@ import (
 	"math"
 	"strings"
 	"time"
-
+    "strconv"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
 
@@ -613,4 +613,42 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 		ServicesRemaining:  servicesRemaining,
 		PaymentStatus:      amc.PaymentStatus,
 	}, nil
+}
+
+func (s *UserAdminService) AddNote(
+	ctx context.Context,
+	userID string,
+	req AddNoteRequest,
+) error {
+
+	if req.Content == "" {
+		return fmt.Errorf("note content is required")
+	}
+	if req.AddedBy == "" {
+		return fmt.Errorf("addedBy is required")
+	}
+
+	cleanID := strings.TrimPrefix(userID, "VW")
+	internalID, err := strconv.ParseInt(cleanID, 10, 64)
+	log.Println(internalID)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
+	}
+
+	user, err := s.users.FindByInternalID(ctx, internalID)
+	log.Println("cskabcjab",user)
+	if err != nil {
+		return fmt.Errorf("user not found")
+	}
+
+	note := domain.UserNote{
+		ID:        primitive.NewObjectID().Hex(),
+		Content:   req.Content,
+		AddedBy:   req.AddedBy,
+		CreatedAt: time.Now(),
+	}
+
+	log.Println("jdsbhjsb",note)
+	log.Println("hdvw",user.ID)
+	return s.users.AddUserNote(ctx, user.InternalID, note)
 }

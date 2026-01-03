@@ -330,3 +330,12 @@ func (r *ProviderRepo) GetStats(ctx context.Context) (dto.ProvidersStats, error)
 
 	return stats, nil
 }
+
+func (r *ProviderRepo) AddProviderNote(ctx context.Context, providerID primitive.ObjectID, note domain.ProviderNote) error {
+	_, err := r.col.UpdateOne(
+		ctx,
+		bson.M{"_id": providerID},
+		bson.M{"$push": bson.M{"notes": note}},
+	)
+	return err
+}

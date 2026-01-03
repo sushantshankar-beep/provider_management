@@ -36,6 +36,7 @@ type Admin struct {
 	Phone         string               `bson:"phone" json:"phone"`
 	Password      string               `bson:"password" json:"password,omitempty"`
 	ProfileURL    string               `bson:"profileUrl" json:"profileUrl"`
+	RoleID        primitive.ObjectID   `bson:"roleId,omitempty" json:"roleId,omitempty"`
 	Role          string               `bson:"role" json:"role"`
 	RoleName      string               `bson:"roleName" json:"roleName"`
 	PowerLevel    int                  `bson:"powerLevel" json:"powerLevel"`

@@ -689,3 +689,30 @@ func (s *ProviderAdminService) GetDocumentURL(
 		return nil, fmt.Errorf("invalid document type. Use: identity, address, or cancel_cheque")
 	}
 }
+
+func (s *ProviderAdminService) AddNote(
+	ctx context.Context,
+	providerID string,
+	req AddNoteRequest,
+) error {
+	if req.Content == "" {
+		return fmt.Errorf("note content is required")
+	}
+	if req.AddedBy == "" {
+		return fmt.Errorf("addedBy is required")
+	}
+
+	objectID, err := primitive.ObjectIDFromHex(providerID)
+	if err != nil {
+		return fmt.Errorf("invalid provider id")
+	}
+
+	note := domain.ProviderNote{
+		ID:        primitive.NewObjectID(),
+		Content:   req.Content,
+		AddedBy:   req.AddedBy,
+		CreatedAt: time.Now(),
+	}
+
+	return s.providers.AddProviderNote(ctx, objectID, note)
+}
