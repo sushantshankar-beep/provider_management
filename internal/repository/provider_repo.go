@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"provider_management/internal/domain"
-    "provider_management/internal/dto"
+	"provider_management/internal/dto"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -338,4 +339,69 @@ func (r *ProviderRepo) AddProviderNote(ctx context.Context, providerID primitive
 		bson.M{"$push": bson.M{"notes": note}},
 	)
 	return err
+}
+
+func (r *ProviderRepo) Create(ctx context.Context, provider *domain.Provider) error {
+	_, err := r.col.InsertOne(ctx, provider)
+	return err
+}
+
+func (r *ProviderRepo) Update(ctx context.Context, id string, updateData bson.M) (*domain.Provider, error) {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+
+	update := bson.M{"$set": updateData}
+	
+	var provider domain.Provider
+	err = r.col.FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": objID},
+		update,
+		options.FindOneAndUpdate().SetReturnDocument(options.After),
+	).Decode(&provider)
+
+	if err != nil {
+		return nil, err
+	}
+	return &provider, nil
+}
+
+func (r *ProviderRepo) AggregateZoneStats(
+	ctx context.Context,
+	pipeline []bson.M,
+) ([]domain.ZoneStats, error) {
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []domain.ZoneStats
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func (r *ProviderRepo) AggregateActivationTeam(
+    ctx context.Context,
+    pipeline []bson.M,
+) ([]domain.ActivationTeamMember, error) {
+
+    cursor, err := r.col.Aggregate(ctx, pipeline)
+    if err != nil {
+        return nil, err
+    }
+    defer cursor.Close(ctx)
+
+    var results []domain.ActivationTeamMember
+    if err := cursor.All(ctx, &results); err != nil {
+        return nil, err
+    }
+
+    return results, nil
 }

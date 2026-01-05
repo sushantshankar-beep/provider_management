@@ -80,6 +80,8 @@ type Provider struct {
 	CreatedAt            time.Time     `bson:"createdAt" json:"created_at"`
 	UpdatedAt            time.Time     `bson:"updatedAt" json:"updated_at"`
 	ApprovedAt            time.Time     `bson:"approvedAt" json:"approved_at"`
+	CreatedBy         string             `bson:"createdBy" json:"createdBy"`
+	
 }
 
 type Service struct {

@@ -7,13 +7,14 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"provider_management/internal/constants"
 	"provider_management/internal/domain"
+	"provider_management/internal/dto"
 	"provider_management/internal/repository"
-"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/bson"
+	"time"
 )
 
 type ProviderAdminService struct {
@@ -38,71 +39,71 @@ type ProviderListResponse struct {
 }
 
 type ProviderResponse struct {
-	ID               string   `json:"id"`
-	ProviderID       string   `json:"provider_id"`
-	Name             string   `json:"name"`
-	Mobile           string   `json:"mobile"`
-	Email            string   `json:"email"`
-	KYC              string   `json:"kyc"`
-	Account          string   `json:"account"`
-	Vehicle          string   `json:"vehicle"`
-	Zone             string   `json:"zone"`
-	DOJ              string   `json:"doj"`
-	ProfileURL       string   `json:"profile_url"`
-	IsServiceOn      bool     `json:"is_service_on"`
-	IsActive         string   `json:"is_active"`
-	IdentityProof    []domain.Proof       `json:"identity_proof"`
-	AddressProof     []domain.Proof       `json:"address_proof"`
-	CancelCheque     *domain.CancelCheque `json:"cancel_cheque"`
-	Status           string   `json:"status"`
-	TotalJobs        int64    `json:"total_jobs"`
-	CompletedJobs    int64    `json:"completed_jobs"`
+	ID            string               `json:"id"`
+	ProviderID    string               `json:"provider_id"`
+	Name          string               `json:"name"`
+	Mobile        string               `json:"mobile"`
+	Email         string               `json:"email"`
+	KYC           string               `json:"kyc"`
+	Account       string               `json:"account"`
+	Vehicle       string               `json:"vehicle"`
+	Zone          string               `json:"zone"`
+	DOJ           string               `json:"doj"`
+	ProfileURL    string               `json:"profile_url"`
+	IsServiceOn   bool                 `json:"is_service_on"`
+	IsActive      string               `json:"is_active"`
+	IdentityProof []domain.Proof       `json:"identity_proof"`
+	AddressProof  []domain.Proof       `json:"address_proof"`
+	CancelCheque  *domain.CancelCheque `json:"cancel_cheque"`
+	Status        string               `json:"status"`
+	TotalJobs     int64                `json:"total_jobs"`
+	CompletedJobs int64                `json:"completed_jobs"`
 }
 
 type ProviderCounts struct {
-	Total       int64 `json:"total"`
-	Active      int64 `json:"active"`
-	Inactive    int64  `json:"inactive"`
-	PendingKYC  int64 `json:"pending_kyc"`
+	Total      int64 `json:"total"`
+	Active     int64 `json:"active"`
+	Inactive   int64 `json:"inactive"`
+	PendingKYC int64 `json:"pending_kyc"`
 }
 
 type ProviderDetailResponse struct {
-	ID                   string               `json:"id"`
-	ProviderID           string               `json:"provider_id"`
-	Name                 string               `json:"name"`
-	Phone                string               `json:"phone"`
-	Email                string               `json:"email"`
-	AlternateContact     string               `json:"alternate_contact"`
-	ProfileURL           string               `json:"profile_url"`
-	Address              string               `json:"address"`
-	PermanentAddress     string               `json:"permanent_address"`
-	City                 string               `json:"city"`
-	Status               string               `json:"status"`
-	Account              string               `json:"account"`
-	KYC                  string               `json:"kyc"`
-	VehicleType          []string             `json:"vehicle_type"`
-	VehicleNumber        string               `json:"vehicle_number"`
-	ProviderBrands       []string             `json:"provider_brands"`
-	ProviderServices     []string             `json:"provider_services"`
-	GSTNumber            string               `json:"gst_number"`
-	CompanyName          string               `json:"company_name"`
-	Description          string               `json:"description"`
-	Zone                 string               `json:"zone"`
-	DOJ                  string               `json:"doj"`
-	IdentityProof        []domain.Proof       `json:"identity_proof"`
-	AddressProof         []domain.Proof       `json:"address_proof"`
-	CancelCheque         *domain.CancelCheque `json:"cancel_cheque"`
-	BankDetails          *domain.BankDetails  `json:"bank_details"`
-	IsServiceOn          bool                 `json:"is_service_on"`
-	IsActive             string               `json:"is_active"`
-	IsSocketConnected    bool                 `json:"is_socket_connected"`
-	Location             *domain.GeoPoint     `json:"location"`
-	TotalJobs            int64                `json:"total_jobs"`
-	CompletedJobs        int64                `json:"completed_jobs"`
-	RecentServices       []domain.Service     `json:"recent_services"`
-	CommissionPercentage float64              `json:"commission_percentage,omitempty"`
-	Notes                 []domain.ProviderNote  `json:"notes,omitempty"`
-    ApprovedAt           string           `json:"approved_at"`
+	ID                   string                `json:"id"`
+	ProviderID           string                `json:"provider_id"`
+	Name                 string                `json:"name"`
+	Phone                string                `json:"phone"`
+	Email                string                `json:"email"`
+	AlternateContact     string                `json:"alternate_contact"`
+	ProfileURL           string                `json:"profile_url"`
+	Address              string                `json:"address"`
+	PermanentAddress     string                `json:"permanent_address"`
+	City                 string                `json:"city"`
+	Status               string                `json:"status"`
+	Account              string                `json:"account"`
+	KYC                  string                `json:"kyc"`
+	VehicleType          []string              `json:"vehicle_type"`
+	VehicleNumber        string                `json:"vehicle_number"`
+	ProviderBrands       []string              `json:"provider_brands"`
+	ProviderServices     []string              `json:"provider_services"`
+	GSTNumber            string                `json:"gst_number"`
+	CompanyName          string                `json:"company_name"`
+	Description          string                `json:"description"`
+	Zone                 string                `json:"zone"`
+	DOJ                  string                `json:"doj"`
+	IdentityProof        []domain.Proof        `json:"identity_proof"`
+	AddressProof         []domain.Proof        `json:"address_proof"`
+	CancelCheque         *domain.CancelCheque  `json:"cancel_cheque"`
+	BankDetails          *domain.BankDetails   `json:"bank_details"`
+	IsServiceOn          bool                  `json:"is_service_on"`
+	IsActive             string                `json:"is_active"`
+	IsSocketConnected    bool                  `json:"is_socket_connected"`
+	Location             *domain.GeoPoint      `json:"location"`
+	TotalJobs            int64                 `json:"total_jobs"`
+	CompletedJobs        int64                 `json:"completed_jobs"`
+	RecentServices       []domain.Service      `json:"recent_services"`
+	CommissionPercentage float64               `json:"commission_percentage,omitempty"`
+	Notes                []domain.ProviderNote `json:"notes,omitempty"`
+	ApprovedAt           string                `json:"approved_at"`
 }
 
 type DocumentResponse struct {
@@ -113,14 +114,13 @@ type DocumentResponse struct {
 	Verified     string `json:"verified"`
 }
 
-
 func (s *ProviderAdminService) GetAllProviders(
 	ctx context.Context,
 	pageStr, limitStr, sort, search, status, name, mobile,
 	providerID, kycStatus, accountStatus, vehicleType, zone, startDate, filter string,
 	zoneFilter bson.M,
 ) (*ProviderListResponse, error) {
-    
+
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
 		page = 1
@@ -475,7 +475,7 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		CompletedJobs:        completedJobs,
 		RecentServices:       recentServices,
 		CommissionPercentage: provider.CommissionPercentage,
-		Notes: provider.Notes,
+		Notes:                provider.Notes,
 		ApprovedAt:           formatDateDetailed(provider.ApprovedAt),
 	}, nil
 }
@@ -621,7 +621,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 		if len(provider.IdentityProof) == 0 {
 			return nil, fmt.Errorf("no identity proof documents found")
 		}
-		
+
 		if documentID != "" {
 			for _, proof := range provider.IdentityProof {
 				if proof.ID.Hex() == documentID {
@@ -636,7 +636,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 			}
 			return nil, fmt.Errorf("identity document with ID %s not found", documentID)
 		}
-		
+
 		proof := provider.IdentityProof[0]
 		return &DocumentResponse{
 			DocumentID:   proof.ID.Hex(),
@@ -650,7 +650,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 		if len(provider.AddressProof) == 0 {
 			return nil, fmt.Errorf("no address proof documents found")
 		}
-		
+
 		if documentID != "" {
 			for _, proof := range provider.AddressProof {
 				if proof.ID.Hex() == documentID {
@@ -665,7 +665,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 			}
 			return nil, fmt.Errorf("address document with ID %s not found", documentID)
 		}
-		
+
 		proof := provider.AddressProof[0]
 		return &DocumentResponse{
 			DocumentID:   proof.ID.Hex(),
@@ -679,7 +679,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 		if provider.CancelCheque == nil {
 			return nil, fmt.Errorf("no cancel cheque document found")
 		}
-		
+
 		return &DocumentResponse{
 			DocumentType: "cancel_cheque",
 			File:         provider.CancelCheque.File,
@@ -716,4 +716,150 @@ func (s *ProviderAdminService) AddNote(
 	}
 
 	return s.providers.AddProviderNote(ctx, objectID, note)
+}
+
+func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.CreateProviderRequest, createdBy string, role string) (*domain.Provider, error) {
+	providerID := time.Now().UnixNano() / 1000000
+
+	provider := &domain.Provider{
+		ID:               primitive.NewObjectID(),
+		InternalID:       int64(providerID),
+		Name:             req.Name,
+		CompanyName:      req.CompanyName,
+		Phone:            req.Phone,
+		Email:            req.Email,
+		AlternateContact: req.AlternateContact,
+		City:             req.City,
+		Address:          req.Address,
+		PermanentAddress: req.PermanentAddress,
+		VehicleType:      req.VehicleType,
+		VehicleNumber:    req.VehicleNumber,
+		ProviderBrands:   req.ProviderBrands,
+		ProviderServices: req.ProviderServices,
+		GSTNumber:        req.GSTNumber,
+		Description:      req.Description,
+		ProfileURL:       req.ProfileURL,
+		Status:           domain.StatusPending,
+		IsActive:         domain.AccountStatusActive,
+		IsServiceOn:      false,
+		CreatedBy:        createdBy,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+	}
+
+	provider.Location = domain.GeoPoint{
+		Type:        "Point",
+		Coordinates: []float64{0, 0},
+	}
+
+	if len(req.IdentityProofs) > 0 {
+		for i := range req.IdentityProofs {
+			req.IdentityProofs[i].ID = primitive.NewObjectID()
+			req.IdentityProofs[i].Verified = domain.VerificationPending
+		}
+		provider.IdentityProof = req.IdentityProofs
+	}
+
+	if len(req.AddressProofs) > 0 {
+		for i := range req.AddressProofs {
+			req.AddressProofs[i].ID = primitive.NewObjectID()
+			req.AddressProofs[i].Verified = domain.VerificationPending
+		}
+		provider.AddressProof = req.AddressProofs
+	}
+
+	if req.CancelCheque != nil {
+		req.CancelCheque.Verified = domain.VerificationPending
+		provider.CancelCheque = req.CancelCheque
+	}
+
+	if req.BankDetails != nil {
+		provider.BankDetails = req.BankDetails
+	}
+
+	err := s.providers.Create(ctx, provider)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create provider: %v", err)
+	}
+
+	return provider, nil
+}
+
+func (s *ProviderAdminService) UpdateProvider(ctx context.Context, id string, req dto.UpdateProviderRequest, updatedBy string) (*domain.Provider, error) {
+	
+	_ , err := s.providers.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("provider not found: %v", err)
+	}
+
+	updateData := bson.M{
+		"updatedAt": time.Now(),
+		"updatedBy": updatedBy,
+	}
+
+	if req.Name != "" {
+		updateData["name"] = req.Name
+	}
+	if req.CompanyName != "" {
+		updateData["companyName"] = req.CompanyName
+	}
+	if req.Phone != "" {
+		updateData["phone"] = req.Phone
+	}
+	if req.Email != "" {
+		updateData["email"] = req.Email
+	}
+	if req.AlternateContact != "" {
+		updateData["alternateContact"] = req.AlternateContact
+	}
+	if req.City != "" {
+		updateData["city"] = req.City
+	}
+	if req.Address != "" {
+		updateData["address"] = req.Address
+	}
+	if req.PermanentAddress != "" {
+		updateData["permanentAddress"] = req.PermanentAddress
+	}
+	if req.ShopAddress != "" {
+		updateData["shopAddress"] = req.ShopAddress
+	}
+	if len(req.VehicleType) > 0 {
+		updateData["vehicleType"] = req.VehicleType
+	}
+	if req.VehicleNumber != "" {
+		updateData["vehicleNumber"] = req.VehicleNumber
+	}
+	if len(req.ProviderBrands) > 0 {
+		updateData["providerBrands"] = req.ProviderBrands
+	}
+	if len(req.ProviderServices) > 0 {
+		updateData["providerServices"] = req.ProviderServices
+	}
+	if req.GSTNumber != "" {
+		updateData["gstNumber"] = req.GSTNumber
+	}
+	if req.Description != "" {
+		updateData["description"] = req.Description
+	}
+	if req.ProfileURL != "" {
+		updateData["profileURL"] = req.ProfileURL
+	}
+
+	if len(req.IdentityProofs) > 0 {
+		updateData["identityProof"] = req.IdentityProofs
+	}
+	if len(req.AddressProofs) > 0 {
+		updateData["addressProof"] = req.AddressProofs
+	}
+	if req.CancelCheque != nil {
+		updateData["cancelCheque"] = req.CancelCheque
+	}
+
+	if req.BankDetails != nil {
+		updateData["bankDetails"] = req.BankDetails
+	}
+
+
+	return s.providers.Update(ctx, id, updateData)
 }
