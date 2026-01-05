@@ -117,11 +117,10 @@ type DocumentResponse struct {
 func (s *ProviderAdminService) GetAllProviders(
 	ctx context.Context,
 	pageStr, limitStr, sort, search, status, name, mobile,
-	providerID, kycStatus, accountStatus, vehicleType, zone,startDate,filter string,
+	providerID, kycStatus, accountStatus, vehicleType, zone, startDate, filter string,
+	zoneFilter bson.M,
 ) (*ProviderListResponse, error) {
-    log.Println("status",status)
-	log.Println("kycstatus",kycStatus)
-	log.Println("kjedncdkj",filter)
+    
 	page, err := strconv.Atoi(pageStr)
 	if err != nil || page < 1 {
 		page = 1
@@ -137,39 +136,40 @@ func (s *ProviderAdminService) GetAllProviders(
 
 	skip := int64((page - 1) * limit)
 
-	query := bson.M{}
 	var conditions []bson.M
 
+	if len(zoneFilter) > 0 {
+		conditions = append(conditions, zoneFilter)
+	}
+
 	inactiveStatuses := []string{
-        string(domain.AccountStatusSuspended),
-        string(domain.AccountStatusBlacklisted),
-        string(domain.AccountStatusDeactivated),
-    }
+		string(domain.AccountStatusSuspended),
+		string(domain.AccountStatusBlacklisted),
+		string(domain.AccountStatusDeactivated),
+	}
 
 	activeStatus := []string{
 		string(domain.AccountStatusActive),
 	}
 
 	if filter == "inactive" {
-        conditions = append(conditions, bson.M{"isActive": bson.M{"$in": inactiveStatuses}})
-    }
-
-	if filter == "active" {
-		conditions = append(conditions, bson.M{"isActive": bson.M{"$in": activeStatus }})
+		conditions = append(conditions, bson.M{"isActive": bson.M{"$in": inactiveStatuses}})
 	}
 
+	if filter == "active" {
+		conditions = append(conditions, bson.M{"isActive": bson.M{"$in": activeStatus}})
+	}
 
-    if filter != "" {
-        switch (filter) {
-        case "Pending":
-            conditions = append(conditions, bson.M{"status": domain.StatusPending})
-        case "verified":
-            conditions = append(conditions, bson.M{"status": domain.StatusActive})
-        case "rejected":
-            conditions = append(conditions, bson.M{"status": domain.StatusRejected})
-        }
-    }
-
+	if filter != "" {
+		switch filter {
+		case "Pending":
+			conditions = append(conditions, bson.M{"status": domain.StatusPending})
+		case "verified":
+			conditions = append(conditions, bson.M{"status": domain.StatusActive})
+		case "rejected":
+			conditions = append(conditions, bson.M{"status": domain.StatusRejected})
+		}
+	}
 
 	if startDate != "" {
 		if t, err := time.Parse("2006-01-02", startDate); err == nil {
@@ -182,6 +182,7 @@ func (s *ProviderAdminService) GetAllProviders(
 			})
 		}
 	}
+
 	if search != "" {
 		searchConditions := []bson.M{
 			{"name": bson.M{"$regex": search, "$options": "i"}},
@@ -191,7 +192,7 @@ func (s *ProviderAdminService) GetAllProviders(
 			{"address": bson.M{"$regex": search, "$options": "i"}},
 			{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": search, "$options": "i"}}},
 		}
-		
+
 		if strings.HasPrefix(strings.ToUpper(search), "PRO") {
 			idSearch := strings.TrimPrefix(strings.ToUpper(search), "PRO")
 			searchConditions = append(searchConditions, bson.M{
@@ -208,7 +209,7 @@ func (s *ProviderAdminService) GetAllProviders(
 				},
 			})
 		}
-		
+
 		conditions = append(conditions, bson.M{"$or": searchConditions})
 	}
 
@@ -238,7 +239,7 @@ func (s *ProviderAdminService) GetAllProviders(
 	if vehicleType != "" {
 		conditions = append(conditions, bson.M{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": vehicleType, "$options": "i"}}})
 	}
-	
+
 	if status != "" {
 		conditions = append(conditions, bson.M{"status": status})
 	}
@@ -272,17 +273,17 @@ func (s *ProviderAdminService) GetAllProviders(
 		}
 	}
 
+	query := bson.M{}
 	if len(conditions) > 0 {
 		query["$and"] = conditions
 	}
 
+	log.Println("Final Query:", query)
 
 	providers, total, err := s.providers.FindAll(ctx, query, skip, int64(limit), sort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch providers: %v", err)
 	}
-
-
 
 	countQuery := query
 	if andConditions, ok := countQuery["$and"].([]bson.M); ok && len(andConditions) == 1 {
@@ -293,9 +294,8 @@ func (s *ProviderAdminService) GetAllProviders(
 	}
 
 	activeCount, _ := s.providers.CountByStatus(ctx, countQuery, "isActive", domain.AccountStatusActive)
-    
-    inactiveCount, _ := s.providers.CountByMultipleStatuses(ctx, countQuery, "isActive", inactiveStatuses)
-    pendingKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusPending)
+	inactiveCount, _ := s.providers.CountByMultipleStatuses(ctx, countQuery, "isActive", inactiveStatuses)
+	pendingKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusPending)
 
 	formattedProviders := make([]ProviderResponse, len(providers))
 	for i, p := range providers {
@@ -319,15 +319,14 @@ func (s *ProviderAdminService) GetAllProviders(
 		}
 
 		account := "Active"
-			switch p.IsActive {
-			case domain.AccountStatusSuspended:
-				account = "Suspended"
-			case domain.AccountStatusBlacklisted:
-				account = "Blacklisted"
-			default:
-				account = "Active"
-			}
-			
+		switch p.IsActive {
+		case domain.AccountStatusSuspended:
+			account = "Suspended"
+		case domain.AccountStatusBlacklisted:
+			account = "Blacklisted"
+		default:
+			account = "Active"
+		}
 
 		vehicle := "N/A"
 		if len(p.VehicleType) > 0 {
@@ -344,25 +343,25 @@ func (s *ProviderAdminService) GetAllProviders(
 		}
 
 		formattedProviders[i] = ProviderResponse{
-			ID:               p.ID.Hex(),
-			ProviderID:       providerIDStr,
-			Name:             defaultStr(p.Name, "N/A"),
-			Mobile:           p.Phone,
-			Email:            defaultStr(p.Email, "N/A"),
-			KYC:              kyc,
-			Account:          account,
-			Vehicle:          vehicle,
-			Zone:             defaultStr(p.City, defaultStr(p.Address, "N/A")),
-			DOJ:              formatDate(p.CreatedAt),
-			ProfileURL:       p.ProfileURL,
-			IsServiceOn:      p.IsServiceOn,
-			IdentityProof:    p.IdentityProof,
-			AddressProof:     p.AddressProof,
-			CancelCheque:     p.CancelCheque,
-			IsActive:         string(p.IsActive),
-			Status:           p.Status,
-			TotalJobs:        totalJobs,
-			CompletedJobs:    completedJobs,
+			ID:            p.ID.Hex(),
+			ProviderID:    providerIDStr,
+			Name:          defaultStr(p.Name, "N/A"),
+			Mobile:        p.Phone,
+			Email:         defaultStr(p.Email, "N/A"),
+			KYC:           kyc,
+			Account:       account,
+			Vehicle:       vehicle,
+			Zone:          defaultStr(p.City, defaultStr(p.Address, "N/A")),
+			DOJ:           formatDate(p.CreatedAt),
+			ProfileURL:    p.ProfileURL,
+			IsServiceOn:   p.IsServiceOn,
+			IdentityProof: p.IdentityProof,
+			AddressProof:  p.AddressProof,
+			CancelCheque:  p.CancelCheque,
+			IsActive:      string(p.IsActive),
+			Status:        p.Status,
+			TotalJobs:     totalJobs,
+			CompletedJobs: completedJobs,
 		}
 	}
 
@@ -374,10 +373,10 @@ func (s *ProviderAdminService) GetAllProviders(
 	return &ProviderListResponse{
 		Providers: formattedProviders,
 		Counts: ProviderCounts{
-			Total:       total,
-			Active:      activeCount,
-			Inactive:    inactiveCount,
-			PendingKYC:  pendingKycCount,
+			Total:      total,
+			Active:     activeCount,
+			Inactive:   inactiveCount,
+			PendingKYC: pendingKycCount,
 		},
 		Pagination: Pagination{
 			CurrentPage: page,

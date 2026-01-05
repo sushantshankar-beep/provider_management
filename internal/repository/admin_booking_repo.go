@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -787,4 +789,62 @@ func (r *AdminBookingRepo) AddBookingNote(
 		},
 	)
 	return err
+}
+
+
+func (r *AdminBookingRepo) FindServiceRequestsByZones(ctx context.Context, allowedZones []string) ([]primitive.ObjectID, error) {
+
+	cursor, err := r.serviceRequestColl.Find(ctx, bson.M{
+		"status": "accepted",
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	
+	var serviceRequests []struct {
+		ID      primitive.ObjectID `bson:"_id"`
+		Address string             `bson:"address"`
+	}
+	if err := cursor.All(ctx, &serviceRequests); err != nil {
+		return nil, err
+	}
+	
+
+	matchingIDs := []primitive.ObjectID{}
+	for _, sr := range serviceRequests {
+		extractedZone := extractZone(sr.Address)
+
+		for _, allowedZone := range allowedZones {
+			if strings.EqualFold(strings.TrimSpace(extractedZone), strings.TrimSpace(allowedZone)) {
+				matchingIDs = append(matchingIDs, sr.ID)
+				break
+			}
+		}
+	}
+	
+	return matchingIDs, nil
+}
+
+
+func extractZone(address string) string {
+	parts := strings.Split(address, ",")
+	for i := len(parts) - 2; i >= 0; i-- { 
+		part := strings.TrimSpace(parts[i])
+		if part == "" {
+			continue
+		}
+		partNoNumbers := strings.Map(func(r rune) rune {
+			if unicode.IsDigit(r) {
+				return -1
+			}
+			return r
+		}, part)
+
+		partNoNumbers = strings.TrimSpace(partNoNumbers)
+		if partNoNumbers != "" {
+			return partNoNumbers
+		}
+	}
+	return "N/A"
 }

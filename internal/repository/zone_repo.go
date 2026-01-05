@@ -209,3 +209,22 @@ func (r *ZoneRepo) Delete(ctx context.Context, id string) error {
 
 	return nil
 }
+func (r *ZoneRepo) FindActiveStates(ctx context.Context) ([]string, error) {
+	states, err := r.col.Distinct(
+		ctx,
+		"stateName",
+		bson.M{"isActive": true},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []string
+	for _, state := range states {
+		if s, ok := state.(string); ok {
+			result = append(result, s)
+		}
+	}
+
+	return result, nil
+}

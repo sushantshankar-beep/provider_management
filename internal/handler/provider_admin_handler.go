@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
     "fmt"
 	"net/http"
+	"provider_management/internal/middleware"
 	"provider_management/internal/service"
 )
 
@@ -31,10 +32,13 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 	zone := c.Query("zone")
 	startDate := c.Query("startDate")
 	filter := c.Query("filter")
+
+	zoneFilter := middleware.GetZoneFilter(c)
+
 	res, err := h.svc.GetAllProviders(
 		c.Request.Context(),
 		page, limit, sort, search, status, name, mobile,
-		providerID, kycStatus, accountStatus, vehicleType, zone, startDate, filter,
+		providerID, kycStatus, accountStatus, vehicleType, zone, startDate, filter,zoneFilter,
 	)
 
 	if err != nil {

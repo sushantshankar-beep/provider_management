@@ -100,7 +100,6 @@ func SetupRoutes(
 	admin := r.Group("/admin")
 	admin.Use(authMiddleware.AdminAuth())
 	admin.Use(activityLogMiddleware.LogActivity())
-	admin.Use(zoneFilter.ApplyZoneFilter())
 	roles := admin.Group("/roles")
 	{
 		roles.GET("/my-role", roleHandler.GetMyRole)
@@ -151,6 +150,7 @@ func SetupRoutes(
 	}
 
 	users := admin.Group("/users")
+	users.Use(zoneFilter.ApplyZoneFilter("zoneScope"))
 	{
 		users.GET("", rbac.Check("users", "view_users"), userAdminHandler.GetAllUsers)
 		users.GET("/:id", rbac.Check("users", "view_user_profile"), userAdminHandler.GetByID)
@@ -160,6 +160,7 @@ func SetupRoutes(
 	}
 
 	providers := admin.Group("/providers")
+	providers.Use(zoneFilter.ApplyZoneFilter("zoneScope"))
 	{
 		providers.GET("", rbac.Check("providers", "view_providers"), providerAdminHandler.GetAll)
 		providers.GET("/:id", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.GetByID)
@@ -175,6 +176,7 @@ func SetupRoutes(
 	}
 
 	bookings := admin.Group("/bookings")
+	bookings.Use(zoneFilter.ApplyZoneFilter("both"))
 	{
 		bookings.GET("", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetAllBookings)
 		bookings.GET("/stats", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetBookingStats)
@@ -283,6 +285,7 @@ func SetupRoutes(
 		zones.POST("", zoneHandler.Create)
 		zones.GET("", rbac.Check("zones", "view_zones"), zoneHandler.GetAll)
 		zones.GET("/active", zoneHandler.GetActive)
+		zones.GET("/active-states", zoneHandler.GetActiveStates)
 		zones.PUT("/:id", zoneHandler.Update)
 		zones.PATCH("/:id/toggle-status", rbac.Check("zones", "activate/deactivate_zone"), zoneHandler.ToggleStatus)
 		zones.DELETE("/:id", zoneHandler.Delete)

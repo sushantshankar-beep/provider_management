@@ -172,3 +172,19 @@ func (s *ZoneService) DeleteZone(ctx context.Context, id string) error {
 
 	return nil
 }
+
+func (s *ZoneService) GetActiveStates(ctx context.Context) ([]map[string]interface{}, error) {
+	states, err := s.zones.FindActiveStates(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]map[string]interface{}, len(states))
+	for i, state := range states {
+		result[i] = map[string]interface{}{
+			"zoneState": state,
+		}
+	}
+
+	return result, nil
+}
