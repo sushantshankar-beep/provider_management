@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"provider_management/internal/service"
+ "provider_management/internal/middleware"
 )
 
 type AdminBookingHandler struct {
@@ -22,6 +23,8 @@ func (h *AdminBookingHandler) GetAllBookings(c *gin.Context) {
 		}
 	}
 
+	zoneFilter := middleware.GetZoneFilter(c)
+
 	if _, ok := params["page"]; !ok {
 		params["page"] = "1"
 	}
@@ -29,7 +32,7 @@ func (h *AdminBookingHandler) GetAllBookings(c *gin.Context) {
 		params["limit"] = "10"
 	}
 
-	res, err := h.svc.GetAllBookings(c.Request.Context(), params)
+	res, err := h.svc.GetAllBookings(c.Request.Context(), params, zoneFilter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,

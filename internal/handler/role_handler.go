@@ -60,8 +60,14 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 	req.UpdatedAt = time.Now()
 
 	if req.Status == "" {
-		req.Status = domain.RoleInactive
+		req.Status = domain.RoleActive
 	}
+
+	if req.ZoneName == nil {
+		req.ZoneName = []string{} 
+	}
+
+
 	if req.ZoneScope == nil {
 		req.ZoneScope = []string{} 
 	}
@@ -76,6 +82,8 @@ func (h *RoleHandler) CreateRole(c *gin.Context) {
 			"id":     req.ID,
 			"name":   req.Name,
 			"status": req.Status,
+			"zoneName": req.ZoneName,
+			"zoneScope": req.ZoneScope,
 		},
 	})
 }
@@ -253,6 +261,7 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 		Description string              `json:"description"`
 		RoleType    string              `json:"roleType"`
 		ZoneScope   []string              `json:"zoneScope"`
+		ZoneName   []string              `json:"zoneName"`
 		Permissions map[string][]string `json:"permissions"`
 	}
 
@@ -313,6 +322,10 @@ func (h *RoleHandler) UpdateRole(c *gin.Context) {
 	// Zone Scope
 	if body.ZoneScope != nil {
 		update["zoneScope"] = body.ZoneScope
+	}
+
+	if body.ZoneName != nil {
+		update["zoneName"] = body.ZoneName
 	}
 
 	// Permissions

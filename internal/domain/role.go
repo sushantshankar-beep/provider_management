@@ -40,6 +40,7 @@ type Role struct {
 	Name        string              `bson:"name" json:"name"`
 	RoleType    string              `bson:"roleType" json:"roleType"`
 	Status      RoleStatus          `bson:"status" json:"status"`
+	ZoneName  []string            `bson:"zoneName" json:"zoneName"`
 	ZoneScope    []string            `bson:"zoneScope" json:"zoneScope"`
 	Description string              `bson:"description,omitempty" json:"description,omitempty"`
 	Permissions map[string][]string `bson:"permissions" json:"permissions"`

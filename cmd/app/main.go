@@ -68,7 +68,7 @@ func main() {
 	amcRefundRepo := repository.NewAMCRefundRepo(mongoDB)
 	vehicleBrandRepo := repository.NewVehicleBrandRepo(mongoDB)
 	bidRepo := repository.NewBidRepo(mongoDB)
-	zoneFilterMiddleware := middleware.NewZoneFilterMiddleware()
+	zoneFilterMiddleware := middleware.NewZoneFilterMiddleware(mongoDB)
 	permissionRepo := repository. NewPermissionRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
