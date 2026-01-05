@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"provider_management/internal/middleware"
 	"provider_management/internal/service"
+	"provider_management/internal/dto"
 )
 
 type ProviderAdminHandler struct {
@@ -331,5 +332,75 @@ func (h *ProviderAdminHandler) AddNote(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Note added successfully",
+	})
+}
+
+func (h *ProviderAdminHandler) CreateProvider(c *gin.Context) {
+	var req dto.CreateProviderRequest
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	admin := middleware.GetAdminFromContext(c)
+	if admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		return
+	}
+
+    _ , err := h.svc.CreateProvider(c.Request.Context(), req, admin.Name, admin.Role)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to create provider: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"error":   false,
+		"message": "Provider created successfully",
+	})
+}
+
+func (h *ProviderAdminHandler) UpdateProvider(c *gin.Context) {
+	id := c.Param("id")
+	
+	var req dto.UpdateProviderRequest
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	admin := middleware.GetAdminFromContext(c)
+	if admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   true,
+			"message": "Unauthorized",
+		})
+		return
+	}
+
+
+	_ , err := h.svc.UpdateProvider(c.Request.Context(), id, req, admin.Name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to update provider: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Provider updated successfully",
 	})
 }

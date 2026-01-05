@@ -38,6 +38,7 @@ func SetupRoutes(
 	s3Uploader *middleware.S3Uploader,
 	zoneFilter *middleware.ZoneFilterMiddleware,
 	permissionHandler *handler.PermissionHandler,
+	zoneMapHandler *handler.ZoneMapHandler,
 ) {
 
 	r.Use(cors.New(cors.Config{
@@ -164,6 +165,8 @@ func SetupRoutes(
 	{
 		providers.GET("", rbac.Check("providers", "view_providers"), providerAdminHandler.GetAll)
 		providers.GET("/:id", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.GetByID)
+		providers.POST("", providerAdminHandler.CreateProvider)
+		providers.PUT("/:id", providerAdminHandler.UpdateProvider) 
 		providers.GET("/:id/activity-logs", rbac.Check("providers", "view_provider_activity_logs"), activityLogHandler.GetProviderActivityLogs)
 		providers.PATCH("/status/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateStatus)
 		providers.PATCH("/kyc/:id", rbac.Check("providers", "kyc"), providerAdminHandler.UpdateKYC)
@@ -289,6 +292,7 @@ func SetupRoutes(
 		zones.PUT("/:id", zoneHandler.Update)
 		zones.PATCH("/:id/toggle-status", rbac.Check("zones", "activate/deactivate_zone"), zoneHandler.ToggleStatus)
 		zones.DELETE("/:id", zoneHandler.Delete)
+		
 	}
 
 	vehicleBrands := admin.Group("/vehicle-brands")
@@ -305,4 +309,14 @@ func SetupRoutes(
 		panelPermission.PUT("/:id", permissionHandler.UpdatePermission)
 		panelPermission.DELETE("/:id", permissionHandler.DeletePermission)
 	}
+    
+	zoneMap := admin.Group("/zoneMap")
+	{
+		zoneMap.GET("/stats", zoneMapHandler.GetZoneStats)
+		zoneMap.GET("/:zone/activation-team",  zoneMapHandler.GetActivationTeam)
+		zoneMap.GET("/:zone/activators/:activator/providers",zoneMapHandler.GetProvidersByActivator)
+		zoneMap.GET("/my-providers", zoneMapHandler.GetMyProviders)
+		
+	}
+
 }

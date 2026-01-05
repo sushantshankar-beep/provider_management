@@ -90,7 +90,8 @@ func main() {
 	adminRoleService := service.NewRoleService(roleRepo)
 	dashboardService := service.NewDashboardService(providerRepo, userRepo, acceptedServiceRepo, settlementRepo, complaintRepo,transactionRepo, amcPurchaseRepo, bidRepo)   
 	permissionService := service.NewPermissionService(permissionRepo)
-
+    zoneMapService := service.NewZoneMapService(providerRepo,adminRepo,roleRepo,acceptedServiceRepo)
+	 
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
 	vehicleBrandService := service.NewVehicleBrandService(vehicleBrandRepo)
@@ -113,7 +114,7 @@ func main() {
 	vehicleBrandHandler := handler.NewVehicleBrandHandler(vehicleBrandService)
     dashboardHandler := handler.NewDashboardHandler(dashboardService)
 	permissionHandler := handler.NewPermissionHandler(permissionService)
-
+    zoneMapHandler := handler.NewZoneMapHandler(zoneMapService)
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
@@ -146,6 +147,7 @@ func main() {
 		s3Uploader,
 		zoneFilterMiddleware,
 		permissionHandler,
+		zoneMapHandler,
 	)
 
 	srv := &http.Server{
