@@ -5,7 +5,6 @@ import (
 	"provider_management/internal/logger"
 	"provider_management/internal/service"
 	"strconv"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -160,4 +159,14 @@ func (h *ZoneHandler) Delete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Zone deleted successfully"})
+}
+
+func (h *ZoneHandler) GetActiveStates(c *gin.Context) {
+	zones, err := h.svc.GetActiveStates(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": zones})
 }

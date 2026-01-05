@@ -191,6 +191,7 @@ func (r *RoleRepository) FindByIDWithCreator(
 				"roleType":    1,
 				"status":      1,
 				"zoneScope":   1,
+				"zoneName":   1,
 				"description": 1,
 				"permissions": 1,
 				"createdAt":   1,

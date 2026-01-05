@@ -3,16 +3,17 @@ package service
 import (
 	"context"
 	"fmt"
-
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"go.mongodb.org/mongo-driver/bson"
 	"log"
+	"math"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
 	"strconv"
 	"strings"
 	"time"
-    "math"
-	"go.mongodb.org/mongo-driver/bson"
+	"unicode"
 )
 
 type AdminBookingService struct {
@@ -39,7 +40,7 @@ type BookingResponse struct {
 	ServiceType    string      `json:"serviceType"`
 	Problems       []string    `json:"problems"`
 	BookingDate    time.Time   `json:"bookingDate"`
-    CompletedAt   *time.Time `json:"completedAt"`
+	CompletedAt    *time.Time  `json:"completedAt"`
 	Zone           string      `json:"zone"`
 	Status         string      `json:"status"`
 	Amount         float64     `json:"amount"`
@@ -103,9 +104,9 @@ type DetailedBookingResponse struct {
 	ProviderComplaint  *ComplaintInfo          `json:"providerComplaint"`
 	TransactionDetails *TransactionDetailsInfo `json:"transactionDetails"`
 	ProviderEarnings   *ProviderEarningsInfo   `json:"providerEarnings"`
-	Notes              []domain.BookingNote      `bson:"notes,omitempty" json:"notes,omitempty"`
+	Notes              []domain.BookingNote    `bson:"notes,omitempty" json:"notes,omitempty"`
 	AllBookings        []BookingSummary        `json:"allBookings"`
-	IsSettled           bool                `json:"is_settled"`
+	IsSettled          bool                    `json:"is_settled"`
 }
 
 type BookingNote struct {
@@ -284,7 +285,10 @@ func mapStatusLabelToDB(label string) string {
 	}
 }
 
-func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[string]string) (*GetAllBookingsResponse, error) {
+func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[string]string, zoneFilter bson.M) (*GetAllBookingsResponse, error) {
+	log.Printf("🚀 SERVICE - GetAllBookings started")
+	log.Printf("   Zone Filter: %+v", zoneFilter)
+
 	page, _ := strconv.Atoi(params["page"])
 	limit, _ := strconv.Atoi(params["limit"])
 	if page < 1 {
@@ -311,7 +315,6 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		}
 	}
 
-
 	if paymentStatus := params["paymentStatus"]; paymentStatus != "" {
 		filter["paymentStatus"] = paymentStatus
 	}
@@ -319,12 +322,11 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 	if serviceType := params["serviceType"]; serviceType != "" {
 		filter["serviceType"] = serviceType
 	}
-    
+
 	if vehicleType := params["vehicleType"]; vehicleType != "" {
 		filter["vehicleType"] = vehicleType
 	}
-	
-	
+
 	if userID := params["userId"]; userID != "" {
 		if primitive.IsValidObjectID(userID) {
 			objID, _ := primitive.ObjectIDFromHex(userID)
@@ -444,7 +446,31 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		}
 	}
 
+	allowedZones := s.extractAllowedZones(zoneFilter)
 
+	if len(allowedZones) > 0 {
+
+		matchingSRs, err := s.repo.FindServiceRequestsByZones(ctx, allowedZones)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(matchingSRs) == 0 {
+			stats, _ := s.GetBookingStats(ctx, params)
+			return &GetAllBookingsResponse{
+				Bookings:    []BookingResponse{},
+				TotalPages:  0,
+				CurrentPage: page,
+				Total:       0,
+				Stats:       *stats,
+			}, nil
+		}
+
+		filter["serviceRequest"] = bson.M{"$in": matchingSRs}
+
+	} else {
+		log.Printf("ℹ️ SERVICE - No zone restrictions (SuperAdmin or no zones defined)")
+	}
 
 	skip := int64((page - 1) * limit)
 	sort := params["sort"]
@@ -536,7 +562,6 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 			booking.CustomerName = user.Name
 			booking.Phone = user.Phone
 			booking.Email = user.Email
-			booking.Zone = user.SelectedCityName
 		}
 
 		if provider, ok := providerMap[svc.ProviderID.Hex()]; ok {
@@ -548,6 +573,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 			booking.VehicleType = sr.VehicleType
 			booking.ServiceBidType = sr.ServiceBidType
 			booking.Problems = sr.Problems
+			booking.Zone = extractZone(sr.Address)
 		}
 
 		if serviceRatings, ok := ratingsMap[svc.ID.Hex()]; ok {
@@ -583,7 +609,6 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		Stats:       *stats,
 	}, nil
 }
-
 func (s *AdminBookingService) GetBookingStats(ctx context.Context, params map[string]string) (*BookingStats, error) {
 	baseFilter := bson.M{}
 
@@ -606,15 +631,14 @@ func (s *AdminBookingService) GetBookingStats(ctx context.Context, params map[st
 
 	total, _ := s.repo.CountAcceptedServices(ctx, baseFilter)
 
-
 	pendingFilter := bson.M{}
 	for k, v := range baseFilter {
 		pendingFilter[k] = v
 	}
 	pendingFilter["status"] = StatusNotStarted
 	pending, _ := s.repo.CountAcceptedServices(ctx, pendingFilter)
- 
-   inProgressFilter := bson.M{}
+
+	inProgressFilter := bson.M{}
 	for k, v := range baseFilter {
 		inProgressFilter[k] = v
 	}
@@ -706,23 +730,10 @@ func (s *AdminBookingService) GetBookingByID(
 		Description:   sr.Description,
 		Location:      sr.Address,
 		IsSettled:     svc.IsSettled,
-		Notes: svc.Notes,
+		Notes:         svc.Notes,
 	}
 
-	addressParts := strings.Split(sr.Address, ",")
-	if len(addressParts) >= 2 {
-		zone := strings.TrimSpace(addressParts[len(addressParts)-2])
-		zone = strings.Map(func(r rune) rune {
-			if r >= '0' && r <= '9' {
-				return -1
-			}
-			return r
-		}, zone)
-		booking.Zone = strings.TrimSpace(zone)
-	}
-	if booking.Zone == "" {
-		booking.Zone = "N/A"
-	}
+	booking.Zone = extractZone(sr.Address)
 
 	if user, err := s.repo.FindUserByID(ctx, svc.UserID); err == nil {
 		booking.UserID = fmt.Sprintf("VW%06d", user.InternalID)
@@ -748,8 +759,6 @@ func (s *AdminBookingService) GetBookingByID(
 	if basePrice > finalPrice {
 		discount = basePrice - finalPrice
 	}
-	
-
 
 	booking.PaymentDetails = &PaymentDetailsInfo{
 		ServiceCharge: basePrice,
@@ -1042,7 +1051,6 @@ func (s *AdminBookingService) mapStatus(status string) string {
 	}
 }
 
-
 func (s *AdminBookingService) mapPaymentStatus(status string) string {
 	if status == "success" || status == "paid" {
 		return "paid"
@@ -1167,7 +1175,6 @@ func getProviderName(provider *domain.Provider) string {
 	return provider.Name
 }
 
-
 func (s *AdminBookingService) AddNote(
 	ctx context.Context,
 	bookingID string,
@@ -1208,7 +1215,64 @@ func (s *AdminBookingService) AddNote(
 	return s.repo.AddBookingNote(ctx, svcs[0].ID, note)
 }
 
-
 func round2(val float64) float64 {
 	return math.Round(val*100) / 100
+}
+
+func extractZone(address string) string {
+	parts := strings.Split(address, ",")
+	for i := len(parts) - 2; i >= 0; i-- {
+		part := strings.TrimSpace(parts[i])
+		if part == "" {
+			continue
+		}
+		partNoNumbers := strings.Map(func(r rune) rune {
+			if unicode.IsDigit(r) {
+				return -1
+			}
+			return r
+		}, part)
+
+		partNoNumbers = strings.TrimSpace(partNoNumbers)
+		if partNoNumbers != "" {
+			return partNoNumbers
+		}
+	}
+	return "N/A"
+}
+
+func (s *AdminBookingService) extractAllowedZones(zoneFilter bson.M) []string {
+	zones := []string{}
+
+	if stateFilter, ok := zoneFilter["state"]; ok {
+		if inMap, ok := stateFilter.(bson.M); ok {
+			if inArray, ok := inMap["$in"]; ok {
+				if arr, ok := inArray.([]string); ok {
+					zones = append(zones, arr...)
+				}
+			}
+		}
+	}
+
+	if cityFilter, ok := zoneFilter["city"]; ok {
+		if inMap, ok := cityFilter.(bson.M); ok {
+			if inArray, ok := inMap["$in"]; ok {
+				if arr, ok := inArray.([]string); ok {
+					zones = append(zones, arr...)
+				}
+			}
+		}
+	}
+
+	if orFilter, ok := zoneFilter["$or"]; ok {
+		if orArray, ok := orFilter.([]bson.M); ok {
+			for idx, condition := range orArray {
+				log.Printf("  Processing $or condition %d: %+v", idx, condition)
+				extractedFromOr := s.extractAllowedZones(condition)
+				zones = append(zones, extractedFromOr...)
+			}
+		}
+	}
+	
+	return zones
 }

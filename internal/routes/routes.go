@@ -38,6 +38,7 @@ func SetupRoutes(
 	s3Uploader *middleware.S3Uploader,
 	zoneFilter *middleware.ZoneFilterMiddleware,
 	permissionHandler *handler.PermissionHandler,
+	zoneMapHandler *handler.ZoneMapHandler,
 ) {
 	r.GET("/health", func(c *gin.Context) {
         c.JSON(200, gin.H{"status": "ok"})
@@ -103,7 +104,6 @@ func SetupRoutes(
 	admin := r.Group("/admin")
 	admin.Use(authMiddleware.AdminAuth())
 	admin.Use(activityLogMiddleware.LogActivity())
-	admin.Use(zoneFilter.ApplyZoneFilter())
 	roles := admin.Group("/roles")
 	{
 		roles.GET("/my-role", roleHandler.GetMyRole)
@@ -154,6 +154,7 @@ func SetupRoutes(
 	}
 
 	users := admin.Group("/users")
+	users.Use(zoneFilter.ApplyZoneFilter("zoneScope"))
 	{
 		users.GET("", rbac.Check("users", "view_users"), userAdminHandler.GetAllUsers)
 		users.GET("/:id", rbac.Check("users", "view_user_profile"), userAdminHandler.GetByID)
@@ -163,9 +164,12 @@ func SetupRoutes(
 	}
 
 	providers := admin.Group("/providers")
+	providers.Use(zoneFilter.ApplyZoneFilter("zoneScope"))
 	{
 		providers.GET("", rbac.Check("providers", "view_providers"), providerAdminHandler.GetAll)
 		providers.GET("/:id", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.GetByID)
+		providers.POST("", providerAdminHandler.CreateProvider)
+		providers.PUT("/:id", providerAdminHandler.UpdateProvider) 
 		providers.GET("/:id/activity-logs", rbac.Check("providers", "view_provider_activity_logs"), activityLogHandler.GetProviderActivityLogs)
 		providers.PATCH("/status/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateStatus)
 		providers.PATCH("/kyc/:id", rbac.Check("providers", "kyc"), providerAdminHandler.UpdateKYC)
@@ -178,6 +182,7 @@ func SetupRoutes(
 	}
 
 	bookings := admin.Group("/bookings")
+	bookings.Use(zoneFilter.ApplyZoneFilter("both"))
 	{
 		bookings.GET("", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetAllBookings)
 		bookings.GET("/stats", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetBookingStats)
@@ -286,9 +291,11 @@ func SetupRoutes(
 		zones.POST("", zoneHandler.Create)
 		zones.GET("", rbac.Check("zones", "view_zones"), zoneHandler.GetAll)
 		zones.GET("/active", zoneHandler.GetActive)
+		zones.GET("/active-states", zoneHandler.GetActiveStates)
 		zones.PUT("/:id", zoneHandler.Update)
 		zones.PATCH("/:id/toggle-status", rbac.Check("zones", "activate/deactivate_zone"), zoneHandler.ToggleStatus)
 		zones.DELETE("/:id", zoneHandler.Delete)
+		
 	}
 
 	vehicleBrands := admin.Group("/vehicle-brands")
@@ -305,4 +312,14 @@ func SetupRoutes(
 		panelPermission.PUT("/:id", permissionHandler.UpdatePermission)
 		panelPermission.DELETE("/:id", permissionHandler.DeletePermission)
 	}
+    
+	zoneMap := admin.Group("/zoneMap")
+	{
+		zoneMap.GET("/stats", zoneMapHandler.GetZoneStats)
+		zoneMap.GET("/:zone/activation-team",  zoneMapHandler.GetActivationTeam)
+		zoneMap.GET("/:zone/activators/:activator/providers",zoneMapHandler.GetProvidersByActivator)
+		zoneMap.GET("/my-providers", zoneMapHandler.GetMyProviders)
+		
+	}
+
 }
