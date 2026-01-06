@@ -388,20 +388,46 @@ func (r *ProviderRepo) AggregateZoneStats(
 }
 
 func (r *ProviderRepo) AggregateActivationTeam(
-    ctx context.Context,
-    pipeline []bson.M,
+	ctx context.Context,
+	pipeline []bson.M,
 ) ([]domain.ActivationTeamMember, error) {
 
-    cursor, err := r.col.Aggregate(ctx, pipeline)
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []domain.ActivationTeamMember
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func (r *ProviderRepo) CountByCreator(ctx context.Context, adminID primitive.ObjectID) (int, error) {
+    filter := bson.M{
+        "createdBy": adminID,
+    }
+    
+    count, err := r.col.CountDocuments(ctx, filter)
     if err != nil {
-        return nil, err
+        return 0, err
     }
-    defer cursor.Close(ctx)
+    
+    return int(count), nil
+}
 
-    var results []domain.ActivationTeamMember
-    if err := cursor.All(ctx, &results); err != nil {
-        return nil, err
+func (r *ProviderRepo) CountByCreators(ctx context.Context, adminIDs []primitive.ObjectID) (int, error) {
+    filter := bson.M{
+        "createdBy": bson.M{"$in": adminIDs},
     }
-
-    return results, nil
+    
+    count, err := r.col.CountDocuments(ctx, filter)
+    if err != nil {
+        return 0, err
+    }
+    
+    return int(count), nil
 }

@@ -1,7 +1,9 @@
 package domain
 
+import "go.mongodb.org/mongo-driver/bson/primitive"
 type ActivationTeamMember struct {
-    ActivationPersonName    string `bson:"activationPersonName" json:"activationPersonName"`
-    AssignZone              string `bson:"assignZone" json:"assignZone"`
-    TotalActivatedProviders int64  `bson:"totalActivatedProviders" json:"totalActivatedProviders"`
+	PersonID        primitive.ObjectID `json:"personId" bson:"_id"`
+	PersonName      string             `json:"personName" bson:"personName"`
+	AssignZone      string             `json:"assignZone" bson:"assignZone"`
+	TotalProviders  int64              `json:"totalProviders" bson:"totalProviders"`
 }

@@ -21,6 +21,12 @@ func NewRoleRepository(db *mongo.Database) *RoleRepository {
 	}
 }
 
+type ZoneStatsAggResult struct {
+	TotalActivationMembers int `bson:"totalActivationMembers"`
+	TotalProviders         int `bson:"totalProviders"`
+}
+
+
 func (r *RoleRepository) Create(ctx context.Context, role *domain.Role) error {
 	role.CreatedAt = time.Now()
 	role.UpdatedAt = time.Now()
@@ -250,4 +256,108 @@ func (r *RoleRepository) FindByRoleType(ctx context.Context, roleType string) ([
 		return nil, err
 	}
 	return roles, nil
+}
+
+func (r *RoleRepository) FindRoleIDsByZoneName(ctx context.Context, zoneName string) ([]primitive.ObjectID, error) {
+	filter := bson.M{
+		"zoneName": zoneName,
+		"status":   "active",
+	}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var roleIDs []primitive.ObjectID
+	for cursor.Next(ctx) {
+		var role struct {
+			ID primitive.ObjectID `bson:"_id"`
+		}
+		if err := cursor.Decode(&role); err != nil {
+			continue
+		}
+		roleIDs = append(roleIDs, role.ID)
+	}
+
+	return roleIDs, nil
+}
+
+func (r *RoleRepository) AggregateZoneStats(ctx context.Context, zoneName string) ([]ZoneStatsAggResult, error) {
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"zoneName": zoneName,
+				"status":   "active",
+			},
+		},
+		{
+			"$lookup": bson.M{
+				"from":         "admins",
+				"localField":   "_id",
+				"foreignField": "roleId",
+				"as":           "admins",
+			},
+		},
+		{
+			"$addFields": bson.M{
+				"admins": bson.M{
+					"$filter": bson.M{
+						"input": "$admins",
+						"as":    "admin",
+						"cond":  bson.M{"$eq": []interface{}{"$$admin.status", "active"}},
+					},
+				},
+			},
+		},
+		{
+			"$addFields": bson.M{
+				"adminIds": "$admins._id",
+			},
+		},
+		{
+			"$lookup": bson.M{
+				"from": "providers",
+				"let":  bson.M{"adminIds": "$adminIds"},
+				"pipeline": []bson.M{
+					{
+						"$match": bson.M{
+							"$expr": bson.M{
+								"$in": []interface{}{"$createdBy", "$$adminIds"},
+							},
+						},
+					},
+				},
+				"as": "providers",
+			},
+		},
+		{
+			"$group": bson.M{
+				"_id":                    nil,
+				"totalActivationMembers": bson.M{"$sum": bson.M{"$size": "$adminIds"}},
+				"totalProviders":         bson.M{"$sum": bson.M{"$size": "$providers"}},
+			},
+		},
+		{
+			"$project": bson.M{
+				"_id":                    0,
+				"totalActivationMembers": 1,
+				"totalProviders":         1,
+			},
+		},
+	}
+
+	cursor, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []ZoneStatsAggResult
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }

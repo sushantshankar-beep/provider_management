@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -31,6 +32,7 @@ func NewS3Uploader(sess *session.Session, bucketName string) *S3Uploader {
 
 func (u *S3Uploader) UploadMiddleware(fieldConfigs []FieldConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
+
 		form, err := c.MultipartForm()
 		if err != nil {
 			c.Next()
@@ -38,7 +40,7 @@ func (u *S3Uploader) UploadMiddleware(fieldConfigs []FieldConfig) gin.HandlerFun
 		}
 
 		uploadedURLs := make(map[string][]string)
-
+        log.Println("hbhjvh",uploadedURLs)
 		for _, config := range fieldConfigs {
 			files := form.File[config.FormFieldName]
 			if len(files) == 0 {
@@ -97,11 +99,8 @@ func (u *S3Uploader) UploadMiddleware(fieldConfigs []FieldConfig) gin.HandlerFun
 		}
 
 		for key, urls := range uploadedURLs {
-			if len(urls) == 1 {
-				c.Set(key, urls[0])
-			} else {
+			
 				c.Set(key, urls)
-			}
 		}
 
 		c.Next()
@@ -119,7 +118,9 @@ func GetUploadedURL(c *gin.Context, key string) (string, bool) {
 }
 
 func GetUploadedURLs(c *gin.Context, key string) ([]string, bool) {
+	log.Println("skjabcjxsba",key)
 	value, exists := c.Get(key)
+	log.Println("valueee")
 	if !exists {
 		return nil, false
 	}

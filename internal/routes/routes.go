@@ -147,7 +147,7 @@ func SetupRoutes(
 
 	dashboard := admin.Group("/dashboard")
 	{
-		dashboard.GET("/stats",rbac.Check("dashboard", "view_dashboard"), dashboardHandler.GetDashboardStats)
+		dashboard.GET("/stats", rbac.Check("dashboard", "view_dashboard"), dashboardHandler.GetDashboardStats)
 	}
 
 	users := admin.Group("/users")
@@ -161,12 +161,30 @@ func SetupRoutes(
 	}
 
 	providers := admin.Group("/providers")
-	providers.Use(zoneFilter.ApplyZoneFilter("zoneScope"))
+	providers.Use(zoneFilter.ApplyZoneFilter("zoneName"))
 	{
 		providers.GET("", rbac.Check("providers", "view_providers"), providerAdminHandler.GetAll)
 		providers.GET("/:id", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.GetByID)
-		providers.POST("", providerAdminHandler.CreateProvider)
-		providers.PUT("/:id", providerAdminHandler.UpdateProvider) 
+		providers.POST("",
+			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
+				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
+				{FormFieldName: "identityProof", ContextKey: "identityProof"},
+				{FormFieldName: "addressProof", ContextKey: "addressProof"},
+				{FormFieldName: "cancelCheque", ContextKey: "cancelCheque"},
+			}),
+			providerAdminHandler.CreateProvider,
+		)
+
+		providers.PUT("/:id",
+    s3Uploader.UploadMiddleware([]middleware.FieldConfig{
+        {FormFieldName: "profileImage", ContextKey: "profileUrl"},
+        {FormFieldName: "identityProof", ContextKey: "identityProof"},
+        {FormFieldName: "addressProof", ContextKey: "addressProof"},
+        {FormFieldName: "cancelCheque", ContextKey: "cancelCheque"},
+    }),
+    providerAdminHandler.UpdateProvider,
+)
+
 		providers.GET("/:id/activity-logs", rbac.Check("providers", "view_provider_activity_logs"), activityLogHandler.GetProviderActivityLogs)
 		providers.PATCH("/status/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateStatus)
 		providers.PATCH("/kyc/:id", rbac.Check("providers", "kyc"), providerAdminHandler.UpdateKYC)
@@ -175,6 +193,9 @@ func SetupRoutes(
 		providers.PATCH("/commission/:id", rbac.Check("providers", "change_provider_commission"), providerAdminHandler.UpdateCommission)
 		providers.GET("/:id/documents/download", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.DownloadDocument)
 		providers.POST("/:id/notes", providerAdminHandler.AddNote)
+		providers.GET("/zones/stats", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneStats)
+		providers.GET("/zones/:zone/activation-team", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneActivationTeam)
+		providers.GET("/zones/:zone/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
 
 	}
 
@@ -292,7 +313,7 @@ func SetupRoutes(
 		zones.PUT("/:id", zoneHandler.Update)
 		zones.PATCH("/:id/toggle-status", rbac.Check("zones", "activate/deactivate_zone"), zoneHandler.ToggleStatus)
 		zones.DELETE("/:id", zoneHandler.Delete)
-		
+
 	}
 
 	vehicleBrands := admin.Group("/vehicle-brands")
@@ -309,14 +330,13 @@ func SetupRoutes(
 		panelPermission.PUT("/:id", permissionHandler.UpdatePermission)
 		panelPermission.DELETE("/:id", permissionHandler.DeletePermission)
 	}
-    
+
 	zoneMap := admin.Group("/zoneMap")
 	{
 		zoneMap.GET("/stats", zoneMapHandler.GetZoneStats)
-		zoneMap.GET("/:zone/activation-team",  zoneMapHandler.GetActivationTeam)
-		zoneMap.GET("/:zone/activators/:activator/providers",zoneMapHandler.GetProvidersByActivator)
+		zoneMap.GET("/:zone/activation-team", zoneMapHandler.GetActivationTeam)
+		zoneMap.GET("/:zone/activators/:activator/providers", zoneMapHandler.GetProvidersByActivator)
 		zoneMap.GET("/my-providers", zoneMapHandler.GetMyProviders)
-		
 	}
 
 }
