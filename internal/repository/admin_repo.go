@@ -117,3 +117,29 @@ func (r *AdminRepository) FindOne(ctx context.Context, filter bson.M) (*domain.A
 	}
 	return &admin, nil
 }
+
+func (a *AdminRepository) FindAdminIDsByRoleIDs(ctx context.Context, roleIDs []primitive.ObjectID) ([]primitive.ObjectID, error) {
+	filter := bson.M{
+		"roleId": bson.M{"$in": roleIDs},
+		"status": "active",
+	}
+
+	cursor, err := a.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var adminIDs []primitive.ObjectID
+	for cursor.Next(ctx) {
+		var admin struct {
+			ID primitive.ObjectID `bson:"_id"`
+		}
+		if err := cursor.Decode(&admin); err != nil {
+			continue
+		}
+		adminIDs = append(adminIDs, admin.ID)
+	}
+
+	return adminIDs, nil
+}

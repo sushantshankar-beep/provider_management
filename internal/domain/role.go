@@ -6,9 +6,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// --------------------
-// Role Status
-// --------------------
 type RoleStatus string
 
 const (
@@ -16,25 +13,11 @@ const (
 	RoleInactive RoleStatus = "inactive"
 )
 
-// --------------------
-// Role Type
-// --------------------
 const (
 	RoleTypeAdmin    = "admin"
 	RoleTypeSubAdmin = "subAdmin"
 )
 
-// --------------------
-// Zone Scope
-// --------------------
-// const (
-// 	ZoneScopeAll      = "all"
-// 	ZoneScopeAssigned = "assigned"
-// )
-
-// --------------------
-// Role Model
-// --------------------
 type Role struct {
 	ID          primitive.ObjectID  `bson:"_id,omitempty" json:"_id"`
 	Name        string              `bson:"name" json:"name"`

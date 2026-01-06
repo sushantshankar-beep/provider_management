@@ -1,12 +1,16 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
-    "fmt"
+	"fmt"
+
 	"net/http"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
 	"provider_management/internal/middleware"
 	"provider_management/internal/service"
-	"provider_management/internal/dto"
+
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ProviderAdminHandler struct {
@@ -39,7 +43,7 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 	res, err := h.svc.GetAllProviders(
 		c.Request.Context(),
 		page, limit, sort, search, status, name, mobile,
-		providerID, kycStatus, accountStatus, vehicleType, zone, startDate, filter,zoneFilter,
+		providerID, kycStatus, accountStatus, vehicleType, zone, startDate, filter, zoneFilter,
 	)
 
 	if err != nil {
@@ -254,8 +258,8 @@ func (h *ProviderAdminHandler) UpdateCommission(c *gin.Context) {
 
 func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
 	id := c.Param("id")
-	documentType := c.Query("documentType") 
-	documentID := c.Query("documentId")  
+	documentType := c.Query("documentType")
+	documentID := c.Query("documentId")
 
 	if documentType == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -337,42 +341,8 @@ func (h *ProviderAdminHandler) AddNote(c *gin.Context) {
 
 func (h *ProviderAdminHandler) CreateProvider(c *gin.Context) {
 	var req dto.CreateProviderRequest
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   true,
-			"message": "Invalid request: " + err.Error(),
-		})
-		return
-	}
 
-	admin := middleware.GetAdminFromContext(c)
-	if admin == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
-		return
-	}
-
-    _ , err := h.svc.CreateProvider(c.Request.Context(), req, admin.Name, admin.Role)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   true,
-			"message": "Failed to create provider: " + err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"error":   false,
-		"message": "Provider created successfully",
-	})
-}
-
-func (h *ProviderAdminHandler) UpdateProvider(c *gin.Context) {
-	id := c.Param("id")
-	
-	var req dto.UpdateProviderRequest
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
 			"message": "Invalid request: " + err.Error(),
@@ -390,11 +360,137 @@ func (h *ProviderAdminHandler) UpdateProvider(c *gin.Context) {
 	}
 
 
-	_ , err := h.svc.UpdateProvider(c.Request.Context(), id, req, admin.Name)
-	if err != nil {
+	if urls, exists := middleware.GetUploadedURLs(c, "profileUrl"); exists && len(urls) > 0 {
+		req.ProfileURL = urls[0]
+	}
+
+
+	if identityProofURLs, exists := middleware.GetUploadedURLs(c, "identityProof"); exists {
+		req.IdentityProofs = make([]domain.Proof, len(identityProofURLs))
+		for i, url := range identityProofURLs {
+			req.IdentityProofs[i] = domain.Proof{
+				ID:       primitive.NewObjectID(), 
+				File:     url,
+				Type:     "", 
+				Verified: domain.VerificationPending,
+			}
+		}
+	}
+
+	if addressProofURLs, exists := middleware.GetUploadedURLs(c, "addressProof"); exists {
+		req.AddressProofs = make([]domain.Proof, len(addressProofURLs))
+		for i, url := range addressProofURLs {
+			req.AddressProofs[i] = domain.Proof{
+				ID:       primitive.NewObjectID(), 
+				File:     url,
+				Type:     "", 
+				Verified: domain.VerificationPending,
+			}
+		}
+	}
+
+	if urls, exists := middleware.GetUploadedURLs(c, "cancelCheque"); exists && len(urls) > 0 {
+		req.CancelCheque = &domain.CancelCheque{
+			File:     urls[0],
+			Verified: domain.VerificationPending,
+		}
+	}
+
+	if _, err := h.svc.CreateProvider(
+		c.Request.Context(),
+		req,
+		admin.ID,
+		admin.Role,
+	); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
-			"message": "Failed to update provider: " + err.Error(),
+			"message": "Failed to create provider: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"error":   false,
+		"message": "Provider created successfully",
+	})
+}
+
+func (h *ProviderAdminHandler) UpdateProvider(c *gin.Context) {
+	id := c.Param("id")
+
+	var req dto.UpdateProviderRequest
+
+	if err := c.ShouldBind(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	admin := middleware.GetAdminFromContext(c)
+	if admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": true,
+		})
+		return
+	}
+
+	if urls, exists := middleware.GetUploadedURLs(c, "profileUrl"); exists && len(urls) > 0 {
+		req.ProfileURL = urls[0]
+	}
+
+	identityTypes := c.PostFormArray("identityProofTypes[]")
+	addressTypes := c.PostFormArray("addressProofTypes[]")
+
+	if urls, exists := middleware.GetUploadedURLs(c, "identityProof"); exists && len(urls) > 0 {
+		req.IdentityProofs = make([]domain.Proof, len(urls))
+		for i, url := range urls {
+			pt := ""
+			if i < len(identityTypes) {
+				pt = identityTypes[i]
+			}
+			req.IdentityProofs[i] = domain.Proof{
+				ID:       primitive.NewObjectID(),
+				File:     url,
+				Type:     pt,
+				Verified: domain.VerificationPending,
+			}
+		}
+	}
+
+	if urls, exists := middleware.GetUploadedURLs(c, "addressProof"); exists && len(urls) > 0 {
+		req.AddressProofs = make([]domain.Proof, len(urls))
+		for i, url := range urls {
+			pt := ""
+			if i < len(addressTypes) {
+				pt = addressTypes[i]
+			}
+			req.AddressProofs[i] = domain.Proof{
+				ID:       primitive.NewObjectID(),
+				File:     url,
+				Type:     pt,
+				Verified: domain.VerificationPending,
+			}
+		}
+	}
+
+	if urls, exists := middleware.GetUploadedURLs(c, "cancelCheque"); exists && len(urls) > 0 {
+		req.CancelCheque = &domain.CancelCheque{
+			File:     urls[0],
+			Verified: domain.VerificationPending,
+		}
+	}
+
+	if _, err := h.svc.UpdateProvider(
+		c.Request.Context(),
+		id,
+		req,
+		admin.ID,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": err.Error(),
 		})
 		return
 	}
@@ -402,5 +498,93 @@ func (h *ProviderAdminHandler) UpdateProvider(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Provider updated successfully",
+	})
+}
+
+func (h *ProviderAdminHandler) GetZoneStats(c *gin.Context) {
+	adminZones := middleware.GetAdminZones(c)
+
+	admin := middleware.GetAdminFromContext(c)
+	if admin == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   true,
+			"message": "Admin authentication required",
+		})
+		return
+	}
+
+	res, err := h.svc.GetZoneStats(c.Request.Context(), adminZones, admin.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to fetch zone statistics",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Zone statistics fetched successfully",
+		"data":    res,
+	})
+}
+
+func (h *ProviderAdminHandler) GetZoneActivationTeam(c *gin.Context) {
+	zoneName := c.Param("zone")
+
+	adminZones := middleware.GetAdminZones(c)
+
+	res, err := h.svc.GetZoneActivationTeam(c.Request.Context(), zoneName, adminZones)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to fetch activation team",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Activation team fetched successfully",
+		"data":    res,
+	})
+}
+
+func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
+	zoneName := c.Param("zone")
+	personID := c.Param("person") // This is now the admin ID
+
+	page := c.DefaultQuery("page", "1")
+	limit := c.DefaultQuery("limit", "10")
+	sort := c.DefaultQuery("sort", "-createdAt")
+	search := c.Query("search")
+
+	adminZones := middleware.GetAdminZones(c)
+
+	res, err := h.svc.GetActivationPersonProviders(
+		c.Request.Context(),
+		zoneName,
+		personID,
+		page,
+		limit,
+		sort,
+		search,
+		adminZones,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to fetch providers",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Providers fetched successfully",
+		"data":    res,
 	})
 }

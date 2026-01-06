@@ -55,8 +55,8 @@ type Provider struct {
 	PermanentAddress     string        `bson:"permanentAddress,omitempty" json:"permanent_address,omitempty"`
 	Status               string        `bson:"status" json:"status"`
 	GSTNumber            string        `bson:"GSTNumber,omitempty" json:"gst_number,omitempty"`
-	IdentityProof        []Proof       `bson:"identityProof,omitempty" json:"identity_proof,omitempty"`
-	AddressProof         []Proof       `bson:"addressProof,omitempty" json:"address_proof,omitempty"`
+	IdentityProof        []Proof       `bson:"identityProof" json:"identity_proof"`
+	AddressProof         []Proof       `bson:"addressProof" json:"address_proof"`
 	CancelCheque         *CancelCheque `bson:"cancelCheque,omitempty" json:"cancel_cheque,omitempty"`
 	BankDetails          *BankDetails  `bson:"bankDetails,omitempty" json:"bank_details,omitempty"`
 	VehicleNumber        string        `bson:"vehicleNumber,omitempty" json:"vehicle_number,omitempty"`
@@ -80,7 +80,7 @@ type Provider struct {
 	CreatedAt            time.Time     `bson:"createdAt" json:"created_at"`
 	UpdatedAt            time.Time     `bson:"updatedAt" json:"updated_at"`
 	ApprovedAt            time.Time     `bson:"approvedAt" json:"approved_at"`
-	CreatedBy         string             `bson:"createdBy" json:"createdBy"`
+	CreatedBy           primitive.ObjectID             `bson:"createdBy" json:"createdBy"`
 	
 }
 
