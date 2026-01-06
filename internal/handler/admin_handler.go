@@ -27,23 +27,23 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 type CreateAdminRequestBody struct {
-    Name          string   `form:"name" binding:"required"`
-    Email         string   `form:"email" binding:"required,email"`
-    Phone         string   `form:"phone" binding:"required"`
-    Password      string   `form:"password" binding:"required,min=8"`
+	Name          string   `form:"name" binding:"required"`
+	Email         string   `form:"email" binding:"required,email"`
+	Phone         string   `form:"phone" binding:"required"`
+	Password      string   `form:"password" binding:"required,min=8"`
 	RoleID        string   `form:"roleId" binding:"required"`
-    Role          string   `form:"role" binding:"required"`
-    ServiceZones  []string `form:"serviceZones"`
-    AccessModules []string `form:"accessModules"`
+	Role          string   `form:"role" binding:"required"`
+	ServiceZones  []string `form:"serviceZones"`
+	AccessModules []string `form:"accessModules"`
 }
 type UpdateAdminRequestBody struct {
-    Name          string   `form:"name"`
-    Email         string   `form:"email"`
-    Phone         string   `form:"phone"`
-    Password      string   `form:"password"`
-    Role          string   `form:"role"`
-    ServiceZones  []string `form:"serviceZones"`
-    AccessModules []string `form:"accessModules"`
+	Name          string   `form:"name"`
+	Email         string   `form:"email"`
+	Phone         string   `form:"phone"`
+	Password      string   `form:"password"`
+	Role          string   `form:"role"`
+	ServiceZones  []string `form:"serviceZones"`
+	AccessModules []string `form:"accessModules"`
 }
 
 type ChangePasswordRequest struct {
@@ -119,7 +119,6 @@ func isValidPhoneNumber(phone string) bool {
 	return re.MatchString(phone)
 }
 
-
 func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 	var req CreateAdminRequestBody
 	if err := c.ShouldBind(&req); err != nil {
@@ -139,7 +138,7 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid role ID format"})
 		return
 	}
-	
+
 	if !isValidPhoneNumber(req.Phone) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "Invalid phone number. Use format (e.g. +919876543210)",
@@ -148,8 +147,8 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 	}
 
 	var profileURL string
-	if url, exists := middleware.GetUploadedURL(c, "profileUrl"); exists {
-		profileURL = url
+	if urls, exists := middleware.GetUploadedURLs(c, "profileUrl"); exists && len(urls) > 0 {
+		profileURL = urls[0]
 	}
 
 	var accessModules []primitive.ObjectID
@@ -160,13 +159,13 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 	}
 
 	serviceReq := service.CreateAdminRequest{
-		Name:          req.Name,
-		Email:         req.Email,
-		Phone:         req.Phone,
-		Password:      req.Password,
-		RoleID:        roleID,
-		Role:          req.Role,
-		ProfileURL:    profileURL,
+		Name:       req.Name,
+		Email:      req.Email,
+		Phone:      req.Phone,
+		Password:   req.Password,
+		RoleID:     roleID,
+		Role:       req.Role,
+		ProfileURL: profileURL,
 	}
 
 	admin := middleware.GetAdminFromContext(c)
@@ -181,8 +180,6 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 		"admin":   newAdmin,
 	})
 }
-
-
 
 func (h *AdminHandler) GetAllAdmins(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "10"), 10, 64)
@@ -227,7 +224,7 @@ func (h *AdminHandler) GetAdminByID(c *gin.Context) {
 
 func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
 	log.Println("UpdateAdmin handler called")
-	
+
 	id, err := primitive.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid admin ID"})
@@ -258,11 +255,8 @@ func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
 	}
 
 	var profileURL string
-	if url, exists := middleware.GetUploadedURL(c, "profileUrl"); exists {
-		profileURL = url
-		log.Println("Profile URL from S3:", profileURL)
-	} else {
-		log.Println("No profile image uploaded")
+	if urls, exists := middleware.GetUploadedURLs(c, "profileUrl"); exists && len(urls) > 0 {
+		profileURL = urls[0]
 	}
 
 	var accessModules []primitive.ObjectID
@@ -275,11 +269,11 @@ func (h *AdminHandler) UpdateAdmin(c *gin.Context) {
 	}
 
 	serviceReq := service.UpdateAdminRequest{
-		Name:          req.Name,
-		Email:         req.Email,
-		Phone:         req.Phone,
-		Role:          req.Role,
-		ProfileURL:    profileURL,
+		Name:       req.Name,
+		Email:      req.Email,
+		Phone:      req.Phone,
+		Role:       req.Role,
+		ProfileURL: profileURL,
 	}
 
 	log.Printf("Service request: %+v\n", serviceReq)

@@ -20,15 +20,24 @@ import (
 type ProviderAdminService struct {
 	providers *repository.ProviderRepo
 	services  *repository.AcceptedServiceRepo
+	admin     *repository.AdminRepository
+	zone      *repository.ZoneRepo
+	role      *repository.RoleRepository
 }
 
 func NewProviderAdminService(
 	p *repository.ProviderRepo,
 	s *repository.AcceptedServiceRepo,
+	a *repository.AdminRepository,
+	z *repository.ZoneRepo,
+	r *repository.RoleRepository,
 ) *ProviderAdminService {
 	return &ProviderAdminService{
 		providers: p,
 		services:  s,
+		admin:     a,
+		zone:      z,
+		role:      r,
 	}
 }
 
@@ -112,6 +121,17 @@ type DocumentResponse struct {
 	Type         string `json:"type,omitempty"`
 	File         string `json:"file"`
 	Verified     string `json:"verified"`
+}
+
+type ZoneStatsResponse struct {
+	Zones []domain.ZoneStats `json:"zones"`
+}
+
+type ActivationTeamResponse struct {
+	ZoneName        string                        `json:"zoneName"`
+	TotalProviders  int64                         `json:"totalProviders"`
+	TotalActivators int64                         `json:"totalActivators"`
+	Team            []domain.ActivationTeamMember `json:"team"`
 }
 
 func (s *ProviderAdminService) GetAllProviders(
@@ -717,8 +737,7 @@ func (s *ProviderAdminService) AddNote(
 
 	return s.providers.AddProviderNote(ctx, objectID, note)
 }
-
-func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.CreateProviderRequest, createdBy string, role string) (*domain.Provider, error) {
+func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.CreateProviderRequest, createdBy primitive.ObjectID, role string) (*domain.Provider, error) {
 	providerID := time.Now().UnixNano() / 1000000
 
 	provider := &domain.Provider{
@@ -752,29 +771,32 @@ func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.Creat
 		Coordinates: []float64{0, 0},
 	}
 
-	if len(req.IdentityProofs) > 0 {
-		for i := range req.IdentityProofs {
-			req.IdentityProofs[i].ID = primitive.NewObjectID()
-			req.IdentityProofs[i].Verified = domain.VerificationPending
+	// Handle bank details
+	if req.AccountHolderName != "" || req.AccountNumber != "" {
+		provider.BankDetails = &domain.BankDetails{
+			AccountHolderName: req.AccountHolderName,
+			AccountNumber:     req.AccountNumber,
+			IfscCode:          req.IfscCode,
+			BranchName:        req.BranchName,
+			Upi:               req.Upi,
 		}
+	}
+	// ALWAYS initialize
+	provider.IdentityProof = []domain.Proof{}
+	provider.AddressProof = []domain.Proof{}
+
+	// Then overwrite if data exists
+	if len(req.IdentityProofs) > 0 {
 		provider.IdentityProof = req.IdentityProofs
 	}
 
 	if len(req.AddressProofs) > 0 {
-		for i := range req.AddressProofs {
-			req.AddressProofs[i].ID = primitive.NewObjectID()
-			req.AddressProofs[i].Verified = domain.VerificationPending
-		}
 		provider.AddressProof = req.AddressProofs
 	}
 
+	// Cancel cheque is already populated with S3 URL in handler
 	if req.CancelCheque != nil {
-		req.CancelCheque.Verified = domain.VerificationPending
 		provider.CancelCheque = req.CancelCheque
-	}
-
-	if req.BankDetails != nil {
-		provider.BankDetails = req.BankDetails
 	}
 
 	err := s.providers.Create(ctx, provider)
@@ -785,81 +807,595 @@ func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.Creat
 	return provider, nil
 }
 
-func (s *ProviderAdminService) UpdateProvider(ctx context.Context, id string, req dto.UpdateProviderRequest, updatedBy string) (*domain.Provider, error) {
-	
-	_ , err := s.providers.FindByID(ctx, id)
+func (s *ProviderAdminService) UpdateProvider(
+	ctx context.Context,
+	id string,
+	req dto.UpdateProviderRequest,
+	updatedBy primitive.ObjectID,
+) (*domain.Provider, error) {
+
+	_, err := s.providers.FindByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("provider not found: %v", err)
+		return nil, fmt.Errorf("provider not found")
 	}
 
-	updateData := bson.M{
+	update := bson.M{
 		"updatedAt": time.Now(),
 		"updatedBy": updatedBy,
 	}
 
 	if req.Name != "" {
-		updateData["name"] = req.Name
+		update["name"] = req.Name
 	}
 	if req.CompanyName != "" {
-		updateData["companyName"] = req.CompanyName
+		update["companyName"] = req.CompanyName
 	}
 	if req.Phone != "" {
-		updateData["phone"] = req.Phone
+		update["phone"] = req.Phone
 	}
 	if req.Email != "" {
-		updateData["email"] = req.Email
-	}
-	if req.AlternateContact != "" {
-		updateData["alternateContact"] = req.AlternateContact
+		update["email"] = req.Email
 	}
 	if req.City != "" {
-		updateData["city"] = req.City
+		update["city"] = req.City
 	}
 	if req.Address != "" {
-		updateData["address"] = req.Address
-	}
-	if req.PermanentAddress != "" {
-		updateData["permanentAddress"] = req.PermanentAddress
-	}
-	if req.ShopAddress != "" {
-		updateData["shopAddress"] = req.ShopAddress
-	}
-	if len(req.VehicleType) > 0 {
-		updateData["vehicleType"] = req.VehicleType
-	}
-	if req.VehicleNumber != "" {
-		updateData["vehicleNumber"] = req.VehicleNumber
-	}
-	if len(req.ProviderBrands) > 0 {
-		updateData["providerBrands"] = req.ProviderBrands
-	}
-	if len(req.ProviderServices) > 0 {
-		updateData["providerServices"] = req.ProviderServices
-	}
-	if req.GSTNumber != "" {
-		updateData["gstNumber"] = req.GSTNumber
-	}
-	if req.Description != "" {
-		updateData["description"] = req.Description
+		update["address"] = req.Address
 	}
 	if req.ProfileURL != "" {
-		updateData["profileURL"] = req.ProfileURL
+		update["profileUrl"] = req.ProfileURL
+	}
+	if len(req.VehicleType) > 0 {
+		update["vehicleType"] = req.VehicleType
 	}
 
+	// Bank details
+	if req.AccountHolderName != "" || req.AccountNumber != "" {
+		update["bankDetails"] = &domain.BankDetails{
+			AccountHolderName: req.AccountHolderName,
+			AccountNumber:     req.AccountNumber,
+			IfscCode:          req.IfscCode,
+			BranchName:        req.BranchName,
+			Upi:               req.Upi,
+		}
+	}
+
+	// Replace proofs ONLY when provided
 	if len(req.IdentityProofs) > 0 {
-		updateData["identityProof"] = req.IdentityProofs
+		update["identityProof"] = req.IdentityProofs
 	}
+
 	if len(req.AddressProofs) > 0 {
-		updateData["addressProof"] = req.AddressProofs
+		update["addressProof"] = req.AddressProofs
 	}
+
 	if req.CancelCheque != nil {
-		updateData["cancelCheque"] = req.CancelCheque
+		update["cancelCheque"] = req.CancelCheque
 	}
 
-	if req.BankDetails != nil {
-		updateData["bankDetails"] = req.BankDetails
+	return s.providers.Update(ctx, id, update)
+}
+
+func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[string][]string, adminID primitive.ObjectID) (*ZoneStatsResponse, error) {
+	zoneNames := adminZones["zoneName"]
+
+	if len(zoneNames) == 0 {
+		return &ZoneStatsResponse{Zones: []domain.ZoneStats{}}, nil
 	}
 
+	results := make([]domain.ZoneStats, 0, len(zoneNames))
 
-	return s.providers.Update(ctx, id, updateData)
+	for _, zoneName := range zoneNames {
+		subAdminIDs, err := s.getSubAdminsByZone(ctx, zoneName)
+		if err != nil {
+			results = append(results, domain.ZoneStats{
+				ZoneName:               zoneName,
+				TotalProviders:         0,
+				TotalActivationMembers: 0,
+			})
+			continue
+		}
+
+		totalActivationMembers := len(subAdminIDs)
+
+		if totalActivationMembers == 0 {
+			results = append(results, domain.ZoneStats{
+				ZoneName:               zoneName,
+				TotalProviders:         0,
+				TotalActivationMembers: 0,
+			})
+			continue
+		}
+
+		totalProviders, err := s.countProvidersByCreators(ctx, subAdminIDs)
+		if err != nil {
+			results = append(results, domain.ZoneStats{
+				ZoneName:               zoneName,
+				TotalProviders:         0,
+				TotalActivationMembers: totalActivationMembers,
+			})
+			continue
+		}
+
+		results = append(results, domain.ZoneStats{
+			ZoneName:               zoneName,
+			TotalProviders:         totalProviders,
+			TotalActivationMembers: totalActivationMembers,
+		})
+	}
+
+	return &ZoneStatsResponse{Zones: results}, nil
+}
+
+// Helper method to get sub-admins by zone
+func (s *ProviderAdminService) getSubAdminsByZone(ctx context.Context, zoneName string) ([]primitive.ObjectID, error) {
+	// First, get role IDs for this zone
+	roleIDs, err := s.role.FindRoleIDsByZoneName(ctx, zoneName)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(roleIDs) == 0 {
+		return []primitive.ObjectID{}, nil
+	}
+
+	// Get all admin IDs with these roles
+	adminIDs, err := s.admin.FindAdminIDsByRoleIDs(ctx, roleIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter to get only sub-admins (not all admins)
+	subAdminIDs := make([]primitive.ObjectID, 0, len(adminIDs))
+
+	for _, adminID := range adminIDs {
+		// Get admin details to check role
+		admin, err := s.admin.FindByID(ctx, adminID)
+		if err != nil {
+			continue // Skip if error
+		}
+
+		// Check if this admin is a sub-admin
+		if admin.Role == domain.RoleTypeSubAdmin {
+			subAdminIDs = append(subAdminIDs, adminID)
+		}
+	}
+
+	return subAdminIDs, nil
+}
+
+// Method to count providers for MULTIPLE creators
+func (s *ProviderAdminService) countProvidersByCreators(ctx context.Context, adminIDs []primitive.ObjectID) (int, error) {
+	return s.providers.CountByCreators(ctx, adminIDs)
+}
+
+// Alternative: Using MongoDB Aggregation Pipeline (More Efficient)
+// func (s *ProviderAdminService) GetZoneStatsAggregation(ctx context.Context, adminZones map[string][]string) (*ZoneStatsResponse, error) {
+// 	zoneNames := adminZones["zoneName"]
+
+// 	if len(zoneNames) == 0 {
+// 		return &ZoneStatsResponse{Zones: []domain.ZoneStats{}}, nil
+// 	}
+
+// 	results := make([]domain.ZoneStats, 0, len(zoneNames))
+
+// 	for _, zoneName := range zoneNames {
+// 		// Aggregation pipeline to:
+// 		// 1. Match roles with zoneName
+// 		// 2. Lookup admins with those roleIds
+// 		// 3. Lookup providers created by those admins
+// 		// 4. Count everything
+// 		pipeline := []bson.M{
+// 			// Stage 1: Match roles with this zoneName
+// 			{
+// 				"$match": bson.M{
+// 					"zoneName": zoneName,
+// 					"status":   "active",
+// 				},
+// 			},
+// 			// Stage 2: Lookup admins with these role IDs
+// 			{
+// 				"$lookup": bson.M{
+// 					"from":         "admins", // Your admin collection name
+// 					"localField":   "_id",
+// 					"foreignField": "roleId",
+// 					"as":           "admins",
+// 				},
+// 			},
+// 			// Stage 3: Filter only active admins
+// 			{
+// 				"$addFields": bson.M{
+// 					"admins": bson.M{
+// 						"$filter": bson.M{
+// 							"input": "$admins",
+// 							"as":    "admin",
+// 							"cond":  bson.M{"$eq": []interface{}{"$$admin.status", "active"}},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			// Stage 4: Extract admin IDs
+// 			{
+// 				"$addFields": bson.M{
+// 					"adminIds": "$admins._id",
+// 				},
+// 			},
+// 			// Stage 5: Lookup providers created by these admins
+// 			{
+// 				"$lookup": bson.M{
+// 					"from": "providers", // Your provider collection name
+// 					"let":  bson.M{"adminIds": "$adminIds"},
+// 					"pipeline": []bson.M{
+// 						{
+// 							"$match": bson.M{
+// 								"$expr": bson.M{
+// 									"$in": []interface{}{"$createdBy", "$$adminIds"},
+// 								},
+// 							},
+// 						},
+// 					},
+// 					"as": "providers",
+// 				},
+// 			},
+// 			// Stage 6: Project final results
+// 			{
+// 				"$project": bson.M{
+// 					"_id":                    0,
+// 					"zoneName":               zoneName,
+// 					"totalActivationMembers": bson.M{"$size": "$adminIds"},
+// 					"totalProviders":         bson.M{"$size": "$providers"},
+// 				},
+// 			},
+// 		}
+
+// 		// Execute aggregation on roles collection
+// 		cursor, err := s.role.Aggregate(ctx, pipeline)
+// 		if err != nil {
+// 			continue
+// 		}
+
+// 		var aggResults []struct {
+// 			ZoneName               string `bson:"zoneName"`
+// 			TotalActivationMembers int    `bson:"totalActivationMembers"`
+// 			TotalProviders         int    `bson:"totalProviders"`
+// 		}
+
+// 		if err := cursor.All(ctx, &aggResults); err != nil {
+// 			cursor.Close(ctx)
+// 			continue
+// 		}
+// 		cursor.Close(ctx)
+
+// 		if len(aggResults) > 0 {
+// 			results = append(results, domain.ZoneStats{
+// 				ZoneName:               zoneName,
+// 				TotalProviders:         aggResults[0].TotalProviders,
+// 				TotalActivationMembers: aggResults[0].TotalActivationMembers,
+// 			})
+// 		} else {
+// 			results = append(results, domain.ZoneStats{
+// 				ZoneName:               zoneName,
+// 				TotalProviders:         0,
+// 				TotalActivationMembers: 0,
+// 			})
+// 		}
+// 	}
+
+// 	return &ZoneStatsResponse{Zones: results}, nil
+// }
+
+func (s *ProviderAdminService) GetZoneActivationTeam(
+	ctx context.Context,
+	zoneName string,
+	adminZones map[string][]string,
+) (*ActivationTeamResponse, error) {
+
+	// Step 1: Find all roles that have this zoneName
+	roleIDs, err := s.role.FindRoleIDsByZoneName(ctx, zoneName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find roles: %v", err)
+	}
+
+	if len(roleIDs) == 0 {
+		return &ActivationTeamResponse{
+			ZoneName:        zoneName,
+			TotalProviders:  0,
+			TotalActivators: 0,
+			Team:            []domain.ActivationTeamMember{},
+		}, nil
+	}
+
+	// Step 2: Find all admins with these roleIDs
+	adminIDs, err := s.admin.FindAdminIDsByRoleIDs(ctx, roleIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find admins: %v", err)
+	}
+
+	if len(adminIDs) == 0 {
+		return &ActivationTeamResponse{
+			ZoneName:        zoneName,
+			TotalProviders:  0,
+			TotalActivators: 0,
+			Team:            []domain.ActivationTeamMember{},
+		}, nil
+	}
+
+	// Step 3: Get activation team details with provider counts
+	team, err := s.getActivationTeamDetails(ctx, adminIDs, zoneName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activation team details: %v", err)
+	}
+
+	// Calculate total providers
+	var totalProviders int64
+	for _, member := range team {
+		totalProviders += member.TotalProviders
+	}
+
+	return &ActivationTeamResponse{
+		ZoneName:        zoneName,
+		TotalProviders:  totalProviders,
+		TotalActivators: int64(len(team)),
+		Team:            team,
+	}, nil
+}
+
+// ADD THIS NEW HELPER METHOD
+func (s *ProviderAdminService) getActivationTeamDetails(
+	ctx context.Context,
+	adminIDs []primitive.ObjectID,
+	zoneName string,
+) ([]domain.ActivationTeamMember, error) {
+
+	pipeline := []bson.M{
+		// Stage 1: Match providers created by these admins
+		{
+			"$match": bson.M{
+				"createdBy": bson.M{"$in": adminIDs},
+			},
+		},
+		// Stage 2: Group by createdBy (admin) and count providers
+		{
+			"$group": bson.M{
+				"_id":            "$createdBy",
+				"totalProviders": bson.M{"$sum": 1},
+			},
+		},
+		// Stage 3: Lookup admin details
+		{
+			"$lookup": bson.M{
+				"from":         "admins",
+				"localField":   "_id",
+				"foreignField": "_id",
+				"as":           "adminDetails",
+			},
+		},
+		// Stage 4: Unwind admin details
+		{
+			"$unwind": bson.M{
+				"path":                       "$adminDetails",
+				"preserveNullAndEmptyArrays": false,
+			},
+		},
+		// Stage 5: Project final structure
+		{
+			"$project": bson.M{
+				"_id":            1,
+				"personName":     "$adminDetails.name",
+				"assignZone":     zoneName,
+				"totalProviders": 1,
+			},
+		},
+		// Stage 6: Sort by total providers descending
+		{
+			"$sort": bson.M{"totalProviders": -1},
+		},
+	}
+
+	team, err := s.providers.AggregateActivationTeam(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	return team, nil
+}
+func (s *ProviderAdminService) GetActivationPersonProviders(
+	ctx context.Context,
+	zoneName, personID, pageStr, limitStr, sort, search string,
+	adminZones map[string][]string,
+) (*ProviderListResponse, error) {
+
+	// Convert personID string to ObjectID
+	adminObjectID, err := primitive.ObjectIDFromHex(personID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid person ID: %v", err)
+	}
+
+	// Step 1: Verify this admin belongs to a role with this zoneName
+	admin, err := s.admin.FindByID(ctx, adminObjectID)
+	if err != nil {
+		return nil, fmt.Errorf("admin not found: %v", err)
+	}
+
+	// Step 2: Verify the admin's role has this zoneName
+	role, err := s.role.FindByID(ctx, admin.RoleID)
+	if err != nil {
+		return nil, fmt.Errorf("role not found: %v", err)
+	}
+
+	// Check if role has the requested zoneName
+	hasZone := false
+	for _, zn := range role.ZoneName {
+		if zn == zoneName {
+			hasZone = true
+			break
+		}
+	}
+
+	if !hasZone {
+		return nil, fmt.Errorf("admin does not have access to zone: %s", zoneName)
+	}
+
+	// Parse pagination
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	skip := int64((page - 1) * limit)
+
+	// Build query conditions
+	var conditions []bson.M
+
+	// Match providers created by this admin
+	conditions = append(conditions, bson.M{
+		"createdBy": adminObjectID,
+	})
+
+	// Add search conditions if provided
+	if search != "" {
+		searchConditions := []bson.M{
+			{"name": bson.M{"$regex": search, "$options": "i"}},
+			{"phone": bson.M{"$regex": search, "$options": "i"}},
+			{"email": bson.M{"$regex": search, "$options": "i"}},
+		}
+
+		if strings.HasPrefix(strings.ToUpper(search), "PRO") {
+			idSearch := strings.TrimPrefix(strings.ToUpper(search), "PRO")
+			searchConditions = append(searchConditions, bson.M{
+				"$or": []bson.M{
+					{"id": bson.M{"$regex": idSearch, "$options": "i"}},
+					{"_id": bson.M{"$regex": idSearch, "$options": "i"}},
+				},
+			})
+		}
+
+		conditions = append(conditions, bson.M{"$or": searchConditions})
+	}
+
+	query := bson.M{}
+	if len(conditions) > 0 {
+		query["$and"] = conditions
+	}
+
+	// Fetch providers
+	providers, total, err := s.providers.FindAll(ctx, query, skip, int64(limit), sort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch providers: %v", err)
+	}
+
+	// Build count query
+	countQuery := query
+	if andConditions, ok := countQuery["$and"].([]bson.M); ok && len(andConditions) == 1 {
+		for k, v := range andConditions[0] {
+			countQuery[k] = v
+		}
+		delete(countQuery, "$and")
+	}
+
+	// Get counts
+	inactiveStatuses := []string{
+		string(domain.AccountStatusSuspended),
+		string(domain.AccountStatusBlacklisted),
+		string(domain.AccountStatusDeactivated),
+	}
+
+	activeCount, _ := s.providers.CountByStatus(ctx, countQuery, "isActive", domain.AccountStatusActive)
+	inactiveCount, _ := s.providers.CountByMultipleStatuses(ctx, countQuery, "isActive", inactiveStatuses)
+	pendingKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusPending)
+
+	// Format providers
+	formattedProviders := make([]ProviderResponse, len(providers))
+	for i, p := range providers {
+		totalJobs, completedJobs, _ := s.services.GetServiceStats(ctx, p.ID.Hex())
+
+		kyc := "Not Submitted"
+		if len(p.IdentityProof) > 0 {
+			switch p.IdentityProof[0].Verified {
+			case domain.VerificationApproved:
+				kyc = "Verified"
+			case domain.VerificationRejected:
+				kyc = "Rejected"
+			default:
+				kyc = "Pending"
+			}
+		}
+
+		account := "Active"
+		switch p.IsActive {
+		case domain.AccountStatusSuspended:
+			account = "Suspended"
+		case domain.AccountStatusBlacklisted:
+			account = "Blacklisted"
+		default:
+			account = "Active"
+		}
+
+		vehicle := "N/A"
+		if len(p.VehicleType) > 0 {
+			vehicle = strings.Join(p.VehicleType, ", ")
+		}
+
+		providerIDStr := fmt.Sprintf("PRO%d", p.InternalID)
+		if p.InternalID == 0 {
+			if len(p.ID.Hex()) >= 6 {
+				providerIDStr = fmt.Sprintf("PRO%s", p.ID.Hex()[len(p.ID.Hex())-6:])
+			} else {
+				providerIDStr = fmt.Sprintf("PRO%s", p.ID.Hex())
+			}
+		}
+
+		formattedProviders[i] = ProviderResponse{
+			ID:            p.ID.Hex(),
+			ProviderID:    providerIDStr,
+			Name:          defaultStr(p.Name, "N/A"),
+			Mobile:        p.Phone,
+			Email:         defaultStr(p.Email, "N/A"),
+			KYC:           kyc,
+			Account:       account,
+			Vehicle:       vehicle,
+			Zone:          defaultStr(p.City, defaultStr(p.Address, "N/A")),
+			DOJ:           formatDate(p.CreatedAt),
+			ProfileURL:    p.ProfileURL,
+			IsServiceOn:   p.IsServiceOn,
+			IdentityProof: p.IdentityProof,
+			AddressProof:  p.AddressProof,
+			CancelCheque:  p.CancelCheque,
+			IsActive:      string(p.IsActive),
+			Status:        p.Status,
+			TotalJobs:     totalJobs,
+			CompletedJobs: completedJobs,
+		}
+	}
+
+	totalPages := 1
+	if total > 0 && limit > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(limit)))
+	}
+
+	return &ProviderListResponse{
+		Providers: formattedProviders,
+		Counts: ProviderCounts{
+			Total:      total,
+			Active:     activeCount,
+			Inactive:   inactiveCount,
+			PendingKYC: pendingKycCount,
+		},
+		Pagination: Pagination{
+			CurrentPage: page,
+			TotalPages:  totalPages,
+			Total:       total,
+			Limit:       limit,
+			HasNext:     page < totalPages,
+			HasPrev:     page > 1,
+		},
+	}, nil
 }

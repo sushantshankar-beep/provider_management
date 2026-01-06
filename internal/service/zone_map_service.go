@@ -8,10 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ZoneMapService struct {
@@ -35,11 +36,6 @@ func NewZoneMapService(
 	}
 }
 
-type ZoneStatsResponse struct {
-	ZoneName           string `json:"zoneName"`
-	ActivationTeam     int    `json:"activationTeam"`
-	TotalProviders     int64  `json:"totalProviders"`
-}
 
 type ActivationTeamMember struct {
 	ActivationPersonName      string `json:"activationPersonName"`
@@ -83,21 +79,20 @@ func (s *ZoneMapService) GetZoneStats(
 	adminID string,
 ) ([]domain.ZoneStats, error) {
 
-	// 1️⃣ Validate admin access
 	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
 	if err != nil {
 		return nil, err
 	}
 
-	if adminWithRole.Role.RoleType != "admin" {
+	if adminWithRole.Role.RoleType != domain.RoleTypeAdmin {
 		return nil, errors.New("only admin can access zone statistics")
 	}
 
 	// 2️⃣ Zone scope filtering
 	matchStage := bson.M{}
-	if len(adminWithRole.Role.ZoneScope) > 0 {
-		matchStage["city"] = bson.M{
-			"$in": adminWithRole.Role.ZoneScope,
+	if len(adminWithRole.Role.ZoneName) > 0 {
+		matchStage["zoneName"] = bson.M{
+			"$in": adminWithRole.Role.ZoneName,
 		}
 	}
 
@@ -107,7 +102,7 @@ func (s *ZoneMapService) GetZoneStats(
 		},
 		{
 			"$group": bson.M{
-				"_id":            "$city",
+				"_id":            "$zoneName",
 				"totalProviders": bson.M{"$sum": 1},
 				"activationTeam": bson.M{"$addToSet": "$createdBy"},
 			},
