@@ -54,7 +54,7 @@ type Provider struct {
 	Address              string        `bson:"address,omitempty" json:"address,omitempty"`
 	PermanentAddress     string        `bson:"permanentAddress,omitempty" json:"permanent_address,omitempty"`
 	Status               string        `bson:"status" json:"status"`
-	GSTNumber            string        `bson:"gstNumber,omitempty" json:"gst_number,omitempty"`
+	GSTNumber            string        `bson:"GSTNumber,omitempty" json:"gst_number,omitempty"`
 	IdentityProof        []Proof       `bson:"identityProof" json:"identity_proof"`
 	AddressProof         []Proof       `bson:"addressProof" json:"address_proof"`
 	CancelCheque         *CancelCheque `bson:"cancelCheque,omitempty" json:"cancel_cheque,omitempty"`
