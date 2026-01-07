@@ -115,6 +115,7 @@ func main() {
     dashboardHandler := handler.NewDashboardHandler(dashboardService)
 	permissionHandler := handler.NewPermissionHandler(permissionService)
     zoneMapHandler := handler.NewZoneMapHandler(zoneMapService)
+	vehicleHandler := handler.NewVehicleHandler(logg)
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
@@ -147,6 +148,7 @@ func main() {
 		zoneFilterMiddleware,
 		permissionHandler,
 		zoneMapHandler,
+		vehicleHandler,
 	)
 
 	srv := &http.Server{

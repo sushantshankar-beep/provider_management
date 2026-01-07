@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 
 	"net/http"
 	"provider_management/internal/domain"
@@ -532,8 +533,8 @@ func (h *ProviderAdminHandler) GetZoneStats(c *gin.Context) {
 
 func (h *ProviderAdminHandler) GetZoneActivationTeam(c *gin.Context) {
 	zoneName := c.Param("zone")
-
-	adminZones := middleware.GetAdminZones(c)
+     log.Println("dcslkcklsnlkc")
+ 	adminZones := middleware.GetAdminZones(c)
 
 	res, err := h.svc.GetZoneActivationTeam(c.Request.Context(), zoneName, adminZones)
 	if err != nil {
@@ -553,8 +554,8 @@ func (h *ProviderAdminHandler) GetZoneActivationTeam(c *gin.Context) {
 }
 
 func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
-	zoneName := c.Param("zone")
-	personID := c.Param("person") // This is now the admin ID
+	personID := c.Param("person")
+	zoneName := c.Param("zone") 
 
 	page := c.DefaultQuery("page", "1")
 	limit := c.DefaultQuery("limit", "10")
@@ -565,8 +566,8 @@ func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
 
 	res, err := h.svc.GetActivationPersonProviders(
 		c.Request.Context(),
-		zoneName,
 		personID,
+		zoneName,
 		page,
 		limit,
 		sort,
@@ -574,10 +575,9 @@ func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
 		adminZones,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusForbidden, gin.H{
 			"error":   true,
-			"message": "Failed to fetch providers",
-			"details": err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
@@ -588,3 +588,6 @@ func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
 		"data":    res,
 	})
 }
+
+
+

@@ -104,8 +104,8 @@ func (s *ZoneService) ListZones(ctx context.Context, pageStr, limitStr, search, 
 	return zones, stats, total, nil
 }
 
-func (s *ZoneService) GetActiveZones(ctx context.Context) ([]map[string]interface{}, error) {
-	zones, err := s.zones.FindActive(ctx)
+func (s *ZoneService) GetActiveZones(ctx context.Context, state string) ([]map[string]interface{}, error) {
+	zones, err := s.zones.FindActive(ctx, state)
 	if err != nil {
 		return nil, err
 	}
@@ -188,3 +188,4 @@ func (s *ZoneService) GetActiveStates(ctx context.Context) ([]map[string]interfa
 
 	return result, nil
 }
+
