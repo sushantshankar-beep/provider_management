@@ -143,23 +143,26 @@ func (r *ZoneRepo) FindWithFilter(ctx context.Context, skip, limit int64, search
 	return zones, total, nil
 }
 
-func (r *ZoneRepo) FindActive(ctx context.Context) ([]domain.Zone, error) {
-	opts := options.Find().SetProjection(bson.M{"_id": 1, "zoneName": 1})
+func (r *ZoneRepo) FindActive(ctx context.Context, state string) ([]domain.Zone, error) {
+	filter := bson.M{"isActive": true}
 
-	cursor, err := r.col.Find(ctx, bson.M{"isActive": true}, opts)
+	if state != "" {
+		filter["stateName"] = state
+	}
+
+	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
 	var zones []domain.Zone
-	if err := cursor.All(ctx, &zones); err != nil {
+	if err = cursor.All(ctx, &zones); err != nil {
 		return nil, err
 	}
 
 	return zones, nil
 }
-
 func (r *ZoneRepo) CountActive(ctx context.Context, search string, isActive bool) (int64, error) {
 	filter := bson.M{"isActive": isActive}
 

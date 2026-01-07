@@ -5,6 +5,7 @@ import (
 	"provider_management/internal/logger"
 	"provider_management/internal/service"
 	"strconv"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -88,7 +89,9 @@ func (h *ZoneHandler) GetAll(c *gin.Context) {
 }
 
 func (h *ZoneHandler) GetActive(c *gin.Context) {
-	zones, err := h.svc.GetActiveZones(c)
+	state := c.Query("state") 
+
+	zones, err := h.svc.GetActiveZones(c,state)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Internal server error"})
 		return
