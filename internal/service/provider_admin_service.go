@@ -846,7 +846,7 @@ func (s *ProviderAdminService) UpdateProvider(
 		update["vehicleType"] = req.VehicleType
 	}
 	if req.GSTNumber != "" {
-		update["gstNumber"] = req.GSTNumber
+		update["GSTNumber"] = req.GSTNumber
 	}
 
 	if len(req.ProviderBrands) > 0 {
