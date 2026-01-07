@@ -1084,6 +1084,8 @@ func (s *ProviderAdminService) countProvidersByCreators(ctx context.Context, adm
 // 	return &ZoneStatsResponse{Zones: results}, nil
 // }
 
+
+
 func (s *ProviderAdminService) GetZoneActivationTeam(
 	ctx context.Context,
 	zoneName string,
@@ -1091,7 +1093,6 @@ func (s *ProviderAdminService) GetZoneActivationTeam(
 ) (*ActivationTeamResponse, error) {
 
 	roleIDs, err := s.role.FindRoleIDsByZoneName(ctx, zoneName)
-	log.Println("cdsjbdjcs",roleIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find roles: %v", err)
 	}
@@ -1108,7 +1109,7 @@ func (s *ProviderAdminService) GetZoneActivationTeam(
 	adminIDs, err := s.admin.FindAdminIDsByRoleIDs(ctx, roleIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find admins: %v", err)
-	} 
+	}
 
 	if len(adminIDs) == 0 {
 		return &ActivationTeamResponse{
@@ -1119,20 +1120,40 @@ func (s *ProviderAdminService) GetZoneActivationTeam(
 		}, nil
 	}
 
-	team, err := s.getActivationTeamDetails(ctx, adminIDs, zoneName)
+	subAdminIDs := make([]primitive.ObjectID, 0)
+	for _, adminID := range adminIDs {
+		admin, err := s.admin.FindByID(ctx, adminID)
+		if err != nil {
+			continue
+		}
+		if admin.Role == domain.RoleTypeSubAdmin {
+			subAdminIDs = append(subAdminIDs, adminID)
+		}
+	}
+
+	if len(subAdminIDs) == 0 {
+		return &ActivationTeamResponse{
+			ZoneName:        zoneName,
+			TotalProviders:  0,
+			TotalActivators: 0,
+			Team:            []domain.ActivationTeamMember{},
+		}, nil
+	}
+
+	totalProviders, err := s.providers.CountByCreatedBy(ctx, subAdminIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count providers: %v", err)
+	}
+
+	team, err := s.getActivationTeamDetails(ctx, subAdminIDs, zoneName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get activation team details: %v", err)
 	}
 
-	var totalProviders int64
-	for _, member := range team {
-		totalProviders += member.TotalProviders
-	}
-
 	return &ActivationTeamResponse{
 		ZoneName:        zoneName,
-		TotalProviders:  totalProviders,
-		TotalActivators: int64(len(team)),
+		TotalProviders:  int64(totalProviders),
+		TotalActivators: int64(len(subAdminIDs)),
 		Team:            team,
 	}, nil
 }
@@ -1146,33 +1167,27 @@ func (s *ProviderAdminService) getActivationTeamDetails(
 	pipeline := []bson.M{
 		{
 			"$match": bson.M{
-				"createdBy": bson.M{"$in": adminIDs},
-			},
-		},
-		{
-			"$group": bson.M{
-				"_id":            "$createdBy",
-				"totalProviders": bson.M{"$sum": 1},
+				"_id":  bson.M{"$in": adminIDs},
+				"role": domain.RoleTypeSubAdmin,
 			},
 		},
 		{
 			"$lookup": bson.M{
-				"from":         "admins",
+				"from":         "providerschemas",
 				"localField":   "_id",
-				"foreignField": "_id",
-				"as":           "adminDetails",
+				"foreignField": "createdBy",
+				"as":           "providers",
 			},
 		},
 		{
-			"$unwind": bson.M{
-				"path":                       "$adminDetails",
-				"preserveNullAndEmptyArrays": false,
+			"$addFields": bson.M{
+				"totalProviders": bson.M{"$size": "$providers"},
 			},
 		},
 		{
 			"$project": bson.M{
 				"_id":            1,
-				"personName":     "$adminDetails.name",
+				"personName":     "$name",
 				"assignZone":     zoneName,
 				"totalProviders": 1,
 			},
@@ -1182,13 +1197,14 @@ func (s *ProviderAdminService) getActivationTeamDetails(
 		},
 	}
 
-	team, err := s.providers.AggregateActivationTeam(ctx, pipeline)
+	team, err := s.admin.AggregateActivationTeam(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
 
 	return team, nil
 }
+
 func (s *ProviderAdminService) GetActivationPersonProviders(
 	ctx context.Context,
 	personID string,

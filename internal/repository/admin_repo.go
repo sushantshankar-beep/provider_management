@@ -143,3 +143,18 @@ func (a *AdminRepository) FindAdminIDsByRoleIDs(ctx context.Context, roleIDs []p
 
 	return adminIDs, nil
 }
+
+func (r *AdminRepository) AggregateActivationTeam(ctx context.Context, pipeline []bson.M) ([]domain.ActivationTeamMember, error) {
+	cursor, err := r.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var team []domain.ActivationTeamMember
+	if err := cursor.All(ctx, &team); err != nil {
+		return nil, err
+	}
+
+	return team, nil
+}
