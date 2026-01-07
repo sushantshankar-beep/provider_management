@@ -1228,6 +1228,7 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 		}
 	}
 
+	
 	page, _ := strconv.Atoi(pageStr)
 	if page < 1 {
 		page = 1
@@ -1309,8 +1310,18 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 			vehicle = strings.Join(p.VehicleType, ", ")
 		}
 
+		providerIDStr := fmt.Sprintf("PRO%d", p.InternalID)
+		if p.InternalID == 0 {
+			if len(p.ID) >= 6 {
+				providerIDStr = fmt.Sprintf("PRO%s", p.ID[len(p.ID)-6:])
+			} else {
+				providerIDStr = fmt.Sprintf("PRO%s", p.ID)
+			}
+		}
+
 		formatted[i] = ProviderResponse{
 			ID:            p.ID.Hex(),
+			ProviderID:    providerIDStr,
 			Name:          defaultStr(p.Name, "N/A"),
 			Mobile:        p.Phone,
 			Email:         defaultStr(p.Email, "N/A"),
