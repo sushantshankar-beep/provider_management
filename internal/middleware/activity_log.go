@@ -125,7 +125,9 @@ func parseAction(path, method string) (action, entityType, entityID string) {
 			}
 		} else if method == "POST" && strings.Contains(path, "/create") {
 			action = "Create User"
-		} else if method == "PUT" {
+		} else if strings.Contains(path, "/notes") {
+			action = "Add Booking Note"
+		}else if method == "PUT" {
 			action = "Update User"
 		} else if method == "DELETE" {
 			action = "Delete User"
@@ -143,7 +145,9 @@ func parseAction(path, method string) (action, entityType, entityID string) {
 			action = "Update Provider Account Action"
 		} else if strings.Contains(path, "/commission") {
 			action = "Update Provider Commission"
-		} else if method == "POST" && strings.Contains(path, "/create") {
+	    } else if strings.Contains(path, "/notes") {
+			action = "Add Booking Note"
+		}else if method == "POST" && strings.Contains(path, "/create") {
 			action = "Create Provider"
 		} else if method == "PUT" && !strings.Contains(path, "/status") && 
 			!strings.Contains(path, "/kyc") && !strings.Contains(path, "/verify-document") &&

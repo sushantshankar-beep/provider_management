@@ -39,6 +39,7 @@ func SetupRoutes(
 	zoneFilter *middleware.ZoneFilterMiddleware,
 	permissionHandler *handler.PermissionHandler,
 	zoneMapHandler *handler.ZoneMapHandler,
+	vehicleHandler *handler.VehicleHandler,
 ) {
 
 	r.Use(cors.New(cors.Config{
@@ -196,6 +197,7 @@ func SetupRoutes(
 		providers.GET("/zones/stats", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneStats)
 		providers.GET("/zones/:zone/activation-team", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneActivationTeam)
 		providers.GET("/zones/:zone/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
+		providers.GET("/activation-team/:person",rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders )
 
 	}
 
@@ -339,4 +341,9 @@ func SetupRoutes(
 		zoneMap.GET("/my-providers", zoneMapHandler.GetMyProviders)
 	}
 
+	vehicle := admin.Group("/vehicle")
+	{
+		vehicle.GET("/brands", vehicleHandler.GetVehicleBrands)
+		vehicle.GET("/services", vehicleHandler.GetVehicleServices)
+	}
 }
