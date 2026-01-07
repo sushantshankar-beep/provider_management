@@ -1325,6 +1325,7 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 			Name:          defaultStr(p.Name, "N/A"),
 			Mobile:        p.Phone,
 			Email:         defaultStr(p.Email, "N/A"),
+			Zone: p.City,
 			KYC:           kyc,
 			Account:       account,
 			Vehicle:       vehicle,
