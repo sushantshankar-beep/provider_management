@@ -77,30 +77,30 @@ type ComplaintNote struct {
 }
 
 type Complaint struct {
-	ID                string            `bson:"_id,omitempty" json:"_id"`
-	InternalID        int64             `bson:"id" json:"id"`
-	AcceptedServiceID string            `bson:"acceptedService" json:"accepted_service_id"`
-	AcceptedServiceNo int64             `bson:"acceptedServiceId" json:"accepted_service_no"`
-	UserID            string            `bson:"userId,omitempty" json:"user_id,omitempty"`
-	ProviderID        string            `bson:"providerId,omitempty" json:"provider_id,omitempty"`
-	RaisedBy          string            `bson:"raisedBy" json:"raised_by"`
-	Problem           string            `bson:"problem" json:"problem"`
-	Photos            []string          `bson:"photos" json:"photos"`
-	Status            string            `bson:"status" json:"status"`
-	Timeline          ComplaintTimeline `bson:"timeline" json:"timeline"`
-	UpdatedByAdmin    string            `bson:"updatedByAdmin,omitempty" json:"updated_by_admin,omitempty"`
-	AdminUpdatedAt    *time.Time        `bson:"adminUpdatedAt,omitempty" json:"admin_updated_at,omitempty"`
-	CreatedAt         time.Time         `bson:"createdAt" json:"created_at"`
-	UpdatedAt         time.Time         `bson:"updatedAt" json:"updated_at"`
-
-	Category         string               `bson:"category,omitempty" json:"category,omitempty"`
-	Assessment       *ComplaintAssessment `bson:"assessment,omitempty" json:"assessment,omitempty"`
-	Notes            []ComplaintNote      `bson:"notes,omitempty" json:"notes,omitempty"`
-	ActionsTriggered []string             `bson:"actionsTriggered,omitempty" json:"actions_triggered,omitempty"`
-    PaymentTracking  *PaymentActionTracking `bson:"paymentTracking,omitempty" json:"payment_tracking,omitempty"`
-	UserName      string `bson:"userName,omitempty" json:"user_name,omitempty"`
-	ProviderName  string `bson:"providerName,omitempty" json:"provider_name,omitempty"`
-	BookingNumber string `bson:"bookingNumber,omitempty" json:"booking_number,omitempty"`
+	ID                string                  `bson:"_id,omitempty" json:"_id"`
+	InternalID        int64                   `bson:"id" json:"id"`
+	AcceptedServiceID string                  `bson:"acceptedService" json:"accepted_service_id"`
+	AcceptedServiceNo int64                   `bson:"acceptedServiceId" json:"accepted_service_no"`
+	UserID            string                  `bson:"userId,omitempty" json:"user_id,omitempty"`
+	ProviderID        string                  `bson:"providerId,omitempty" json:"provider_id,omitempty"`
+	RaisedBy          string                  `bson:"raisedBy" json:"raised_by"`
+	Problem           string                  `bson:"problem" json:"problem"`
+	Photos            []string                `bson:"photos" json:"photos"`
+	Status            string                  `bson:"status" json:"status"`
+	Timeline          ComplaintTimeline       `bson:"timeline" json:"timeline"`
+	UpdatedByAdmin    string                  `bson:"updatedByAdmin,omitempty" json:"updated_by_admin,omitempty"`
+	AdminUpdatedAt    *time.Time              `bson:"adminUpdatedAt,omitempty" json:"admin_updated_at,omitempty"`
+	CreatedAt         time.Time               `bson:"createdAt" json:"created_at"`
+	UpdatedAt         time.Time               `bson:"updatedAt" json:"updated_at"`
+	Category          string                  `bson:"category,omitempty" json:"category,omitempty"`
+	Assessment        *ComplaintAssessment    `bson:"assessment,omitempty" json:"assessment,omitempty"`
+	Notes             []ComplaintNote         `bson:"notes,omitempty" json:"notes,omitempty"`
+	ActionsTriggered  []string                `bson:"actionsTriggered,omitempty" json:"actions_triggered,omitempty"`
+	PaymentTracking   *PaymentActionTracking  `bson:"paymentTracking,omitempty" json:"payment_tracking,omitempty"`
+	UserName          string                  `bson:"userName,omitempty" json:"user_name,omitempty"`
+	ProviderName      string                  `bson:"providerName,omitempty" json:"provider_name,omitempty"`
+	BookingNumber     string                  `bson:"bookingNumber,omitempty" json:"booking_number,omitempty"`
+	DeductionPayout   *DeductionPayoutRequest `bson:"deductionPayout,omitempty" json:"deduction_payout,omitempty"`
 }
 
 type UserDetails struct {
@@ -143,11 +143,11 @@ type ComplaintFilter struct {
 }
 
 type ComplaintStats struct {
-	TotalComplaints   int64 `json:"total_complaints"`
-	StatusResolved    int64 `json:"status_resolved"`
-	StatusUnresolved  int64 `json:"status_unresolved"`
-	RaisedByYou       int64 `json:"raised_by_you"`
-	RaisedByProviders int64 `json:"raised_by_providers"`
+	TotalComplaints    int64 `json:"total_complaints"`
+	StatusResolved     int64 `json:"status_resolved"`
+	StatusUnresolved   int64 `json:"status_unresolved"`
+	RaisedByYou        int64 `json:"raised_by_you"`
+	RaisedByProviders  int64 `json:"raised_by_providers"`
 	UserComplaints     int64 `json:"user_complaints"`
 	ProviderComplaints int64 `json:"provider_complaints"`
 }
@@ -157,4 +157,15 @@ type BookingDetails struct {
 	InternalID int64   `json:"internal_id"`
 	BasePrice  float64 `json:"base_price"`
 	FinalPrice float64 `json:"final_price"`
+}
+
+type DeductionPayoutRequest struct {
+	ProviderID          string
+	BookingID           string
+	OriginalAmount      float64
+	DeductionAmount     float64
+	RemainingAmount     float64
+	Reason              string
+	ComplaintID         string
+	ComplaintInternalID int64
 }

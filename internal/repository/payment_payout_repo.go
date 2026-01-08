@@ -157,3 +157,145 @@ func (r *PaymentPayoutRepo) FindByInternalID(ctx context.Context, id primitive.O
 	}
 	return &payout, nil
 }
+
+func (r *PaymentPayoutRepo) GetProviderDeductions(
+	ctx context.Context,
+	providerID primitive.ObjectID,
+) ([]domain.PaymentPayout, error) {
+	// Filter for deduction payouts that are not yet settled
+	filter := bson.M{
+		"providerId":   providerID,
+		"isDeduction":  true,                                              // NEW: Only deduction payouts
+		"status":       bson.M{"$in": []string{"pending", "complaint"}},  // NEW: Only pending ones
+	}
+
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var payouts []domain.PaymentPayout
+	if err := cursor.All(ctx, &payouts); err != nil {
+		return nil, err
+	}
+
+	return payouts, nil
+}
+
+func (r *PaymentPayoutRepo) GetPayoutsForSettlement(
+	ctx context.Context,
+	payoutIDs []primitive.ObjectID,
+) ([]domain.PaymentPayout, error) {
+	filter := bson.M{
+		"_id": bson.M{"$in": payoutIDs},
+	}
+
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var payouts []domain.PaymentPayout
+	if err := cursor.All(ctx, &payouts); err != nil {
+		return nil, err
+	}
+
+	return payouts, nil
+}
+
+
+func (r *PaymentPayoutRepo) UpdateMultipleStatus(
+	ctx context.Context,
+	payoutIDs []primitive.ObjectID,
+	status domain.PaymentPayoutStatus,
+	settlementID *primitive.ObjectID,
+) error {
+	update := bson.M{
+		"$set": bson.M{
+			"status":    status,
+			"updatedAt": time.Now(),
+		},
+	}
+
+	if settlementID != nil {
+		update["$set"].(bson.M)["settlementId"] = settlementID
+	}
+
+	_, err := r.col.UpdateMany(
+		ctx,
+		bson.M{"_id": bson.M{"$in": payoutIDs}},
+		update,
+	)
+	return err
+}
+
+func (r *PaymentPayoutRepo) FindPendingByProvider(
+	ctx context.Context,
+	providerID primitive.ObjectID,
+) (*domain.PaymentPayout, error) {
+
+	filter := bson.M{
+		"providerId": providerID,
+		"status":     domain.PayoutStatusPending,
+	}
+
+	var payout domain.PaymentPayout
+	err := r.col.FindOne(ctx, filter).Decode(&payout)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &payout, nil
+}
+
+func (r *PaymentPayoutRepo) Update(ctx context.Context, payout *domain.PaymentPayout) error {
+	_, err := r.col.UpdateByID(
+		ctx,
+		payout.ID,
+		bson.M{"$set": payout},
+	)
+	return err
+}
+
+func (r *PaymentPayoutRepo) FindLatestByProvider(
+	ctx context.Context,
+	providerID primitive.ObjectID,
+) (*domain.PaymentPayout, error) {
+
+	filter := bson.M{"providerId": providerID}
+	opts := options.FindOne().
+		SetSort(bson.D{{Key: "createdAt", Value: -1}})
+
+	var payout domain.PaymentPayout
+	err := r.col.FindOne(ctx, filter, opts).Decode(&payout)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &payout, nil
+}
+
+
+func (r *PaymentPayoutRepo) AddServiceToPayout(
+	ctx context.Context,
+	payoutID primitive.ObjectID,
+	serviceID primitive.ObjectID,
+) error {
+
+	update := bson.M{
+		"$addToSet": bson.M{
+			"serviceIds": serviceID,
+		},
+	}
+
+	_, err := r.col.UpdateByID(ctx, payoutID, update)
+	return err
+}
