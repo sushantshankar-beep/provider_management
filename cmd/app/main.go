@@ -78,7 +78,7 @@ func main() {
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo)
-	complaintService := service.NewComplaintService(complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService)
+	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo, roleRepo)
 	activityLogService := service.NewActivityLogService(activityLogRepo)

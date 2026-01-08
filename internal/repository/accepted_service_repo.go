@@ -309,8 +309,13 @@ func (r *AcceptedServiceRepo) MarkAsSettled(
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
 		"$or": []bson.M{
+			
 			{"isSettled": false},
 			{"isSettled": bson.M{"$exists": false}},
+			{
+				"isSettled":              true,
+				"hasComplaintAdjustment": true,
+			},
 		},
 	}
 
@@ -321,6 +326,11 @@ func (r *AcceptedServiceRepo) MarkAsSettled(
 			"settledAt":    now,
 			"updatedAt":    now,
 		},
+
+		"$unset": bson.M{
+			"hasComplaintAdjustment": "",
+			"pendingDeductionAmount": "",
+		},
 	}
 
 	res, err := r.col.UpdateMany(ctx, filter, update)
@@ -329,11 +339,11 @@ func (r *AcceptedServiceRepo) MarkAsSettled(
 	}
 
 	if res.MatchedCount == 0 {
-		return fmt.Errorf("no unsettled services found to settle")
+		return fmt.Errorf("no eligible services found for settlement")
 	}
 
 	if res.MatchedCount != int64(len(serviceIDs)) {
-		return fmt.Errorf("some services are already settled or not found")
+		return fmt.Errorf("some services are not eligible for settlement")
 	}
 
 	return nil
@@ -579,7 +589,6 @@ func (r *AcceptedServiceRepo) GetTopServices(ctx context.Context) ([]dto.TopServ
         percentage := 0.0
         if totalCount > 0 {
             percentage = (float64(r.Count) / float64(totalCount)) * 100
-            // Round to nearest whole number as shown in your screenshot
             percentage = math.Round(percentage)
         }
         services[i] = dto.TopService{
@@ -590,4 +599,20 @@ func (r *AcceptedServiceRepo) GetTopServices(ctx context.Context) ([]dto.TopServ
     }
 
     return services, nil
+}
+
+func (r *AcceptedServiceRepo) UpdateComplaintFlags(ctx context.Context, serviceID string, flags map[string]any) error {
+    objID, err := primitive.ObjectIDFromHex(serviceID)
+    if err != nil {
+        return fmt.Errorf("invalid service ID: %w", err)
+    }
+
+    update := bson.M{"$set": flags}
+
+    _, err = r.col.UpdateByID(ctx, objID, update)
+    if err != nil {
+        return fmt.Errorf("failed to update accepted service: %w", err)
+    }
+
+    return nil
 }
