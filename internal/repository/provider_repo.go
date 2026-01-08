@@ -431,3 +431,13 @@ func (r *ProviderRepo) CountByCreators(ctx context.Context, adminIDs []primitive
     
     return int(count), nil
 }
+
+func (r *ProviderRepo) CountByCreatedBy(ctx context.Context, adminIDs []primitive.ObjectID) (int, error) {
+	count, err := r.col.CountDocuments(ctx, bson.M{
+		"createdBy": bson.M{"$in": adminIDs},
+	})
+	if err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}

@@ -180,14 +180,14 @@ func SetupRoutes(
 		)
 
 		providers.PUT("/:id",
-    s3Uploader.UploadMiddleware([]middleware.FieldConfig{
-        {FormFieldName: "profileImage", ContextKey: "profileUrl"},
-        {FormFieldName: "identityProof", ContextKey: "identityProof"},
-        {FormFieldName: "addressProof", ContextKey: "addressProof"},
-        {FormFieldName: "cancelCheque", ContextKey: "cancelCheque"},
-    }),
-    providerAdminHandler.UpdateProvider,
-)
+			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
+				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
+				{FormFieldName: "identityProof", ContextKey: "identityProof"},
+				{FormFieldName: "addressProof", ContextKey: "addressProof"},
+				{FormFieldName: "cancelCheque", ContextKey: "cancelCheque"},
+			}),
+			providerAdminHandler.UpdateProvider,
+		)
 
 		providers.GET("/:id/activity-logs", rbac.Check("providers", "view_provider_activity_logs"), activityLogHandler.GetProviderActivityLogs)
 		providers.PATCH("/status/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateStatus)
@@ -200,7 +200,7 @@ func SetupRoutes(
 		providers.GET("/zones/stats", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneStats)
 		providers.GET("/zones/:zone/activation-team", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneActivationTeam)
 		providers.GET("/zones/:zone/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
-		providers.GET("/activation-team/:person",rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders )
+		providers.GET("/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
 
 	}
 

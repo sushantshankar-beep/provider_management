@@ -28,6 +28,7 @@ type ProviderSettlement struct {
 	IfscCode      string               `bson:"ifscCode" json:"ifsc_code"`
 	TotalAmount   float64              `bson:"totalAmount" json:"total_amount"`
 	PaymentMode   string               `bson:"paymentMode" json:"payment_mode"`
+	DeductionAmount   float64             `bson:"deductionAmount" json:"deduction_amount"`   
 	PaymentMethod string               `bson:"paymentMethod" json:"payment_method"`
 	Justification string               `bson:"justification,omitempty" json:"justification,omitempty"`
 	Status        SettlementStatus     `bson:"status" json:"status"`
