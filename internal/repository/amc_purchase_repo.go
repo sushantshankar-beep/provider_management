@@ -41,6 +41,7 @@ func (r *AMCPurchaseRepo) FindActiveByUserID(ctx context.Context, userID primiti
 func (r *AMCPurchaseRepo) FindActiveByUserIDs(ctx context.Context, userIDs []primitive.ObjectID) ([]domain.AMCPurchase, error) {
 	cursor, err := r.col.Find(ctx, bson.M{
 		"user":          bson.M{"$in": userIDs},
+		"planStatus":    "active",
 		"paymentStatus": "success",
 	})
 	if err != nil {
@@ -57,10 +58,9 @@ func (r *AMCPurchaseRepo) FindActiveByUserIDs(ctx context.Context, userIDs []pri
 }
 
 func (r *AMCPurchaseRepo) FindActiveAMCs(ctx context.Context) ([]domain.AMCPurchase, error) {
-	now := time.Now()
 	filter := bson.M{
-		"planEndDate":   bson.M{"$gt": now},
-		"paymentStatus": "paid",
+		"planStatus":    "active",
+		"paymentStatus": "success",
 	}
 
 	var amcs []domain.AMCPurchase
@@ -137,5 +137,5 @@ func (r *AMCPurchaseRepo) UpdateRefundStatusAndPlanStatus(ctx context.Context, i
 }
 
 func (r *AMCPurchaseRepo) CountActive(ctx context.Context) (int64, error) {
-	return r.col.CountDocuments(ctx, bson.M{"planStatus": "pending"})
+	return r.col.CountDocuments(ctx, bson.M{"planStatus": "active"})
 }

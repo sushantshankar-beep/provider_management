@@ -161,7 +161,7 @@ func SetupRoutes(
 		users.GET("/:id", rbac.Check("users", "view_user_profile"), userAdminHandler.GetByID)
 		users.GET("/:id/activity-logs", rbac.Check("users", "view_user_activity_logs"), activityLogHandler.GetUserActivityLogs)
 		users.PATCH("/:id/status", rbac.Check("users", "change_user_status"), userAdminHandler.UpdateStatus)
-		users.POST("/:id/notes", userAdminHandler.AddNote)
+		users.POST("/:id/notes",rbac.Check("users", "add_user_notes"), userAdminHandler.AddNote)
 	}
 
 	providers := admin.Group("/providers")
@@ -170,6 +170,7 @@ func SetupRoutes(
 		providers.GET("", rbac.Check("providers", "view_providers"), providerAdminHandler.GetAll)
 		providers.GET("/:id", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.GetByID)
 		providers.POST("",
+		    rbac.Check("providers", "create_provider_profile"),
 			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
 				{FormFieldName: "identityProof", ContextKey: "identityProof"},
@@ -180,6 +181,7 @@ func SetupRoutes(
 		)
 
 		providers.PUT("/:id",
+		    rbac.Check("providers", "edit_provider_profile"),
 			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
 				{FormFieldName: "identityProof", ContextKey: "identityProof"},
@@ -196,7 +198,7 @@ func SetupRoutes(
 		providers.PATCH("/account-action/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateAccountAction)
 		providers.PATCH("/commission/:id", rbac.Check("providers", "change_provider_commission"), providerAdminHandler.UpdateCommission)
 		providers.GET("/:id/documents/download", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.DownloadDocument)
-		providers.POST("/:id/notes", providerAdminHandler.AddNote)
+		providers.POST("/:id/notes",  rbac.Check("providers", "edit_provider_profile"),providerAdminHandler.AddNote)
 		providers.GET("/zones/stats", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneStats)
 		providers.GET("/zones/:zone/activation-team", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneActivationTeam)
 		providers.GET("/zones/:zone/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)

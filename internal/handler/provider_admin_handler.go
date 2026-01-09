@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"log"
 
 	"net/http"
 	"provider_management/internal/domain"
@@ -360,19 +359,17 @@ func (h *ProviderAdminHandler) CreateProvider(c *gin.Context) {
 		return
 	}
 
-
 	if urls, exists := middleware.GetUploadedURLs(c, "profileUrl"); exists && len(urls) > 0 {
 		req.ProfileURL = urls[0]
 	}
-
 
 	if identityProofURLs, exists := middleware.GetUploadedURLs(c, "identityProof"); exists {
 		req.IdentityProofs = make([]domain.Proof, len(identityProofURLs))
 		for i, url := range identityProofURLs {
 			req.IdentityProofs[i] = domain.Proof{
-				ID:       primitive.NewObjectID(), 
+				ID:       primitive.NewObjectID(),
 				File:     url,
-				Type:     "", 
+				Type:     "",
 				Verified: domain.VerificationPending,
 			}
 		}
@@ -382,9 +379,9 @@ func (h *ProviderAdminHandler) CreateProvider(c *gin.Context) {
 		req.AddressProofs = make([]domain.Proof, len(addressProofURLs))
 		for i, url := range addressProofURLs {
 			req.AddressProofs[i] = domain.Proof{
-				ID:       primitive.NewObjectID(), 
+				ID:       primitive.NewObjectID(),
 				File:     url,
-				Type:     "", 
+				Type:     "",
 				Verified: domain.VerificationPending,
 			}
 		}
@@ -533,8 +530,7 @@ func (h *ProviderAdminHandler) GetZoneStats(c *gin.Context) {
 
 func (h *ProviderAdminHandler) GetZoneActivationTeam(c *gin.Context) {
 	zoneName := c.Param("zone")
-     log.Println("dcslkcklsnlkc")
- 	adminZones := middleware.GetAdminZones(c)
+	adminZones := middleware.GetAdminZones(c)
 
 	res, err := h.svc.GetZoneActivationTeam(c.Request.Context(), zoneName, adminZones)
 	if err != nil {
@@ -555,7 +551,7 @@ func (h *ProviderAdminHandler) GetZoneActivationTeam(c *gin.Context) {
 
 func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
 	personID := c.Param("person")
-	zoneName := c.Param("zone") 
+	zoneName := c.Param("zone")
 
 	page := c.DefaultQuery("page", "1")
 	limit := c.DefaultQuery("limit", "10")
@@ -588,6 +584,3 @@ func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
 		"data":    res,
 	})
 }
-
-
-
