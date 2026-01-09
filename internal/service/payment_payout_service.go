@@ -124,7 +124,7 @@ func (s *PayoutService) CreatePayoutLast6Hours(ctx context.Context) error {
 				ServiceIDs:            data.ServiceIDs,
 				BaseAmount:            utils.RoundTo2(data.Total),
 				PartialAmount:         0,
-				ServicePartialAmounts: make(map[string]float64), 
+				ServicePartialAmounts: make(map[string]float64),
 				CommissionPercent:     commissionPercent,
 				CommissionAmount:      utils.RoundTo2(commission),
 				GSTPercent:            gstPercent,
@@ -156,7 +156,6 @@ func (s *PayoutService) GetPayouts(
 	page, limit int64,
 	search, providerID, status, periodFromStr, periodToStr, sortBy, sortOrder string,
 ) ([]map[string]any, int64, int64, error) {
-
 	skip := (page - 1) * limit
 	filter := bson.M{}
 
@@ -235,12 +234,33 @@ func (s *PayoutService) GetPayouts(
 		return nil, 0, 0, err
 	}
 
+	providerIDSet := make(map[primitive.ObjectID]struct{})
+	for _, p := range payouts {
+		providerIDSet[p.ProviderID] = struct{}{}
+	}
+
+	providerIDs := make([]primitive.ObjectID, 0, len(providerIDSet))
+	for id := range providerIDSet {
+		providerIDs = append(providerIDs, id)
+	}
+
+	providers, err := s.providerRepo.FindByObjectIDs(ctx, providerIDs)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	
+	providerMap := make(map[primitive.ObjectID]string)
+	for _, pr := range providers {
+		providerMap[pr.ID] = pr.Name
+	}
+
 	responseData := make([]map[string]any, len(payouts))
 	for i, p := range payouts {
 		responseData[i] = map[string]any{
 			"id":                 p.ID.Hex(),
 			"payout_id":          "PAY" + strconv.FormatInt(p.PayoutID, 10),
 			"provider_id":        p.ProviderID.Hex(),
+			"provider_name":      providerMap[p.ProviderID], 
 			"service_ids":        p.ServiceIDs,
 			"base_amount":        utils.RoundTo2(p.BaseAmount),
 			"commission_percent": p.CommissionPercent,
@@ -571,7 +591,7 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 	partialAmount := req.PartialAmount
 
 	if existing != nil {
-		
+
 		if existing.ServicePartialAmounts == nil {
 			existing.ServicePartialAmounts = make(map[string]float64)
 		}
@@ -596,7 +616,6 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 				existing.ServicePartialAmounts[serviceIDs[0].Hex()] = partialAmount
 			}
 		}
-
 
 		totalEffectiveAmount := 0.0
 
@@ -728,15 +747,15 @@ func (s *PayoutService) ProcessDeductionPayout(ctx context.Context, req Deductio
 		ComplaintID:           &complaintObjID,
 		ComplaintInternalID:   &req.ComplaintInternalID,
 		BaseAmount:            req.OriginalAmount,
-		PartialAmount:         req.DeductionAmount, 
+		PartialAmount:         req.DeductionAmount,
 		ServicePartialAmounts: servicePartialAmounts,
 		CommissionPercent:     commissionPercent,
 		CommissionAmount:      0,
 		GSTPercent:            gstPercent,
-		GSTAmount:             0,                  
+		GSTAmount:             0,
 		NetPayable:            -req.DeductionAmount,
 		PayoutType:            domain.PayoutTypeComplaint,
-		IsDeduction:           true, 
+		IsDeduction:           true,
 		Status:                domain.PayoutStatusPending,
 		PeriodFrom:            time.Now().Add(-24 * time.Hour),
 		PeriodTo:              time.Now(),

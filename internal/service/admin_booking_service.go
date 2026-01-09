@@ -301,7 +301,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 	filter := bson.M{}
 
 	if status := params["status"]; status != "" {
-		if status == "InProgress" || status == "in_progress_group" {
+		if status == "in_progress" {
 			filter["status"] = bson.M{
 				"$in": []string{
 					StatusStarted,

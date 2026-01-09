@@ -587,21 +587,21 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 		}, nil
 	}
 
-	servicesUsed, err := s.bookings.CountCompletedInDateRange(ctx, userObjID, amc.PlanStartDate, amc.PlanEndDate)
-	if err != nil {
-		servicesUsed = 0
-	}
+	// servicesUsed, err := s.bookings.CountCompletedInDateRange(ctx, userObjID, amc.PlanStartDate, amc.PlanEndDate)
+	// if err != nil {
+	// 	servicesUsed = 0
+	// }
 
 	amcStatus := "Expired"
 	if amc.PlanEndDate.After(time.Now()) {
 		amcStatus = "Active"
 	}
 
-	totalServices := len(amc.PlanServicesIncluded)
-	servicesRemaining := totalServices - int(servicesUsed)
-	if servicesRemaining < 0 {
-		servicesRemaining = 0
-	}
+	// totalServices := len(amc.PlanServicesIncluded)
+	// servicesRemaining := totalServices - int(servicesUsed)
+	// if servicesRemaining < 0 {
+	// 	servicesRemaining = 0
+	// }
 
 	return &AMCInfo{
 		AMCStatus:          amcStatus,
@@ -609,10 +609,10 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 		StartDate:          amc.PlanStartDate,
 		EndDate:            amc.PlanEndDate,
 		ActivationDate:     amc.CreatedAt,
-		BoundVehicleNumber: defaultStr(amc.VehicleNumber, "—"),
-		TotalServices:      totalServices,
-		ServicesUsed:       int(servicesUsed),
-		ServicesRemaining:  servicesRemaining,
+		BoundVehicleNumber: amc.Vehicle.VehicleNumber,
+		// TotalServices:      totalServices,
+		// ServicesUsed:       int(servicesUsed),
+		// ServicesRemaining:  servicesRemaining,
 		PaymentStatus:      amc.PaymentStatus,
 	}, nil
 }

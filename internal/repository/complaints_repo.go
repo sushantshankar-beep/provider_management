@@ -187,7 +187,11 @@ func (r *ComplaintRepository) List(ctx context.Context, filter domain.ComplaintF
 				{"$count": "count"},
 			},
 			"unresolved": []bson.M{
-				{"$match": bson.M{"status": bson.M{"$ne": "resolved"}}},
+				{"$match": bson.M{"status": "in_review"}},
+				{"$count": "count"},
+			},
+			"initiated": []bson.M{
+				{"$match": bson.M{"status": "initiated"}},
 				{"$count": "count"},
 			},
 			"raisedByUser": []bson.M{
@@ -232,6 +236,13 @@ func (r *ComplaintRepository) List(ctx context.Context, filter domain.ComplaintF
 			if unresolvedDoc, ok := unresolvedArr[0].(bson.M); ok {
 				if count, ok := unresolvedDoc["count"].(int32); ok {
 					stats.StatusUnresolved = int64(count)
+				}
+			}
+		}
+		if initiatedArr, ok := result["initiated"].(bson.A); ok && len(initiatedArr) > 0 {
+			if initiatedDoc, ok := initiatedArr[0].(bson.M); ok {
+				if count, ok := initiatedDoc["count"].(int32); ok {
+					stats.StatusInitiated = int64(count)
 				}
 			}
 		}

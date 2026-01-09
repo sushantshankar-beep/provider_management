@@ -202,7 +202,7 @@ func (s *SettlementService) CreateSettlement(
 		PaymentMode:   req.PaymentMode,
 		PaymentMethod: req.PaymentMethod,
 		Justification: req.Justification,
-		Status:        "settled",
+		Status:        "pending",
 		SettledAt:     &now,
 		CreatedAt:     now,
 	}
