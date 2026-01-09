@@ -2,7 +2,8 @@ package handler
 
 import (
 	"fmt"
-
+     "io"
+	 "log"
 	"net/http"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
@@ -288,15 +289,53 @@ func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	filename := fmt.Sprintf("%s_%s.pdf", documentType, documentID)
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to fetch file from storage",
+		})
+		return
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	extension := ".pdf"
+	switch contentType {
+	case "image/jpeg", "image/jpg":
+		extension = ".jpg"
+	case "image/png":
+		extension = ".png"
+	case "image/gif":
+		extension = ".gif"
+	case "image/webp":
+		extension = ".webp"
+	case "application/pdf":
+		extension = ".pdf"
+	}
+
+	filename := fmt.Sprintf("%s_%s%s", documentType, documentID, extension)
+	
 	c.Header("Content-Description", "File Transfer")
 	c.Header("Content-Transfer-Encoding", "binary")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.Header("Content-Type", contentType)
+	c.Header("Cache-Control", "no-cache")
+	
+	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
+		c.Header("Content-Length", contentLength)
+	}
 
-	c.DataFromReader(http.StatusOK, resp.ContentLength, "application/pdf", resp.Body, nil)
+	written, err := io.Copy(c.Writer, resp.Body)
+	if err != nil {
+		log.Printf("Error copying file: %v", err)
+		return
+	}
+	
+	log.Printf("Successfully streamed %d bytes of %s", written, contentType)
 }
-
 func (h *ProviderAdminHandler) AddNote(c *gin.Context) {
 	providerID := c.Param("id")
 

@@ -125,6 +125,10 @@ type DocumentResponse struct {
 
 type ZoneStatsResponse struct {
 	Zones []domain.ZoneStats `json:"zones"`
+	TotalZones               int                `json:"totalZones"`
+    TotalProviders           int                `json:"totalProviders"`
+    TotalActivationMembers   int                `json:"totalActivationMembers"`
+	NewlyActivatedProviders  int                `json:"newlyActivatedProviders"`
 }
 
 type ActivationTeamResponse struct {
@@ -883,54 +887,71 @@ func (s *ProviderAdminService) UpdateProvider(
 }
 
 func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[string][]string, adminID primitive.ObjectID) (*ZoneStatsResponse, error) {
-	zoneNames := adminZones["zoneName"]
+    zoneNames := adminZones["zoneName"]
 
-	if len(zoneNames) == 0 {
-		return &ZoneStatsResponse{Zones: []domain.ZoneStats{}}, nil
-	}
+    if len(zoneNames) == 0 {
+        return &ZoneStatsResponse{
+            Zones: []domain.ZoneStats{},
+            TotalZones: 0,
+            TotalProviders: 0,
+            TotalActivationMembers: 0,
+        }, nil
+    }
 
-	results := make([]domain.ZoneStats, 0, len(zoneNames))
+    results := make([]domain.ZoneStats, 0, len(zoneNames))
+    
+    totalProvidersAcrossZones := 0
+    totalActivationMembersAcrossZones := 0
 
-	for _, zoneName := range zoneNames {
-		subAdminIDs, err := s.getSubAdminsByZone(ctx, zoneName)
-		if err != nil {
-			results = append(results, domain.ZoneStats{
-				ZoneName:               zoneName,
-				TotalProviders:         0,
-				TotalActivationMembers: 0,
-			})
-			continue
-		}
+    for _, zoneName := range zoneNames {
+        subAdminIDs, err := s.getSubAdminsByZone(ctx, zoneName)
+        if err != nil {
+            results = append(results, domain.ZoneStats{
+                ZoneName:               zoneName,
+                TotalProviders:         0,
+                TotalActivationMembers: 0,
+            })
+            continue
+        }
 
-		totalActivationMembers := len(subAdminIDs)
+        totalActivationMembers := len(subAdminIDs)
+        totalActivationMembersAcrossZones += totalActivationMembers
 
-		if totalActivationMembers == 0 {
-			results = append(results, domain.ZoneStats{
-				ZoneName:               zoneName,
-				TotalProviders:         0,
-				TotalActivationMembers: 0,
-			})
-			continue
-		}
+        if totalActivationMembers == 0 {
+            results = append(results, domain.ZoneStats{
+                ZoneName:               zoneName,
+                TotalProviders:         0,
+                TotalActivationMembers: 0,
+            })
+            continue
+        }
 
-		totalProviders, err := s.countProvidersByCreators(ctx, subAdminIDs)
-		if err != nil {
-			results = append(results, domain.ZoneStats{
-				ZoneName:               zoneName,
-				TotalProviders:         0,
-				TotalActivationMembers: totalActivationMembers,
-			})
-			continue
-		}
+        totalProviders, err := s.countProvidersByCreators(ctx, subAdminIDs)
+        if err != nil {
+            results = append(results, domain.ZoneStats{
+                ZoneName:               zoneName,
+                TotalProviders:         0,
+                TotalActivationMembers: totalActivationMembers,
+            })
+            continue
+        }
 
-		results = append(results, domain.ZoneStats{
-			ZoneName:               zoneName,
-			TotalProviders:         totalProviders,
-			TotalActivationMembers: totalActivationMembers,
-		})
-	}
+        totalProvidersAcrossZones += totalProviders
 
-	return &ZoneStatsResponse{Zones: results}, nil
+        results = append(results, domain.ZoneStats{
+            ZoneName:               zoneName,
+            TotalProviders:         totalProviders,
+            TotalActivationMembers: totalActivationMembers,
+        })
+    }
+
+    return &ZoneStatsResponse{
+        Zones:                    results,
+        TotalZones:               len(results),
+        TotalProviders:           totalProvidersAcrossZones,
+		NewlyActivatedProviders:   totalProvidersAcrossZones,
+        TotalActivationMembers:   totalActivationMembersAcrossZones,
+    }, nil
 }
 
 func (s *ProviderAdminService) getSubAdminsByZone(ctx context.Context, zoneName string) ([]primitive.ObjectID, error) {
@@ -968,123 +989,6 @@ func (s *ProviderAdminService) getSubAdminsByZone(ctx context.Context, zoneName 
 func (s *ProviderAdminService) countProvidersByCreators(ctx context.Context, adminIDs []primitive.ObjectID) (int, error) {
 	return s.providers.CountByCreators(ctx, adminIDs)
 }
-
-// Alternative: Using MongoDB Aggregation Pipeline (More Efficient)
-// func (s *ProviderAdminService) GetZoneStatsAggregation(ctx context.Context, adminZones map[string][]string) (*ZoneStatsResponse, error) {
-// 	zoneNames := adminZones["zoneName"]
-
-// 	if len(zoneNames) == 0 {
-// 		return &ZoneStatsResponse{Zones: []domain.ZoneStats{}}, nil
-// 	}
-
-// 	results := make([]domain.ZoneStats, 0, len(zoneNames))
-
-// 	for _, zoneName := range zoneNames {
-// 		// Aggregation pipeline to:
-// 		// 1. Match roles with zoneName
-// 		// 2. Lookup admins with those roleIds
-// 		// 3. Lookup providers created by those admins
-// 		// 4. Count everything
-// 		pipeline := []bson.M{
-// 			// Stage 1: Match roles with this zoneName
-// 			{
-// 				"$match": bson.M{
-// 					"zoneName": zoneName,
-// 					"status":   "active",
-// 				},
-// 			},
-// 			// Stage 2: Lookup admins with these role IDs
-// 			{
-// 				"$lookup": bson.M{
-// 					"from":         "admins", // Your admin collection name
-// 					"localField":   "_id",
-// 					"foreignField": "roleId",
-// 					"as":           "admins",
-// 				},
-// 			},
-// 			// Stage 3: Filter only active admins
-// 			{
-// 				"$addFields": bson.M{
-// 					"admins": bson.M{
-// 						"$filter": bson.M{
-// 							"input": "$admins",
-// 							"as":    "admin",
-// 							"cond":  bson.M{"$eq": []interface{}{"$$admin.status", "active"}},
-// 						},
-// 					},
-// 				},
-// 			},
-// 			// Stage 4: Extract admin IDs
-// 			{
-// 				"$addFields": bson.M{
-// 					"adminIds": "$admins._id",
-// 				},
-// 			},
-// 			// Stage 5: Lookup providers created by these admins
-// 			{
-// 				"$lookup": bson.M{
-// 					"from": "providers", // Your provider collection name
-// 					"let":  bson.M{"adminIds": "$adminIds"},
-// 					"pipeline": []bson.M{
-// 						{
-// 							"$match": bson.M{
-// 								"$expr": bson.M{
-// 									"$in": []interface{}{"$createdBy", "$$adminIds"},
-// 								},
-// 							},
-// 						},
-// 					},
-// 					"as": "providers",
-// 				},
-// 			},
-// 			// Stage 6: Project final results
-// 			{
-// 				"$project": bson.M{
-// 					"_id":                    0,
-// 					"zoneName":               zoneName,
-// 					"totalActivationMembers": bson.M{"$size": "$adminIds"},
-// 					"totalProviders":         bson.M{"$size": "$providers"},
-// 				},
-// 			},
-// 		}
-
-// 		// Execute aggregation on roles collection
-// 		cursor, err := s.role.Aggregate(ctx, pipeline)
-// 		if err != nil {
-// 			continue
-// 		}
-
-// 		var aggResults []struct {
-// 			ZoneName               string `bson:"zoneName"`
-// 			TotalActivationMembers int    `bson:"totalActivationMembers"`
-// 			TotalProviders         int    `bson:"totalProviders"`
-// 		}
-
-// 		if err := cursor.All(ctx, &aggResults); err != nil {
-// 			cursor.Close(ctx)
-// 			continue
-// 		}
-// 		cursor.Close(ctx)
-
-// 		if len(aggResults) > 0 {
-// 			results = append(results, domain.ZoneStats{
-// 				ZoneName:               zoneName,
-// 				TotalProviders:         aggResults[0].TotalProviders,
-// 				TotalActivationMembers: aggResults[0].TotalActivationMembers,
-// 			})
-// 		} else {
-// 			results = append(results, domain.ZoneStats{
-// 				ZoneName:               zoneName,
-// 				TotalProviders:         0,
-// 				TotalActivationMembers: 0,
-// 			})
-// 		}
-// 	}
-
-// 	return &ZoneStatsResponse{Zones: results}, nil
-// }
-
-
 
 func (s *ProviderAdminService) GetZoneActivationTeam(
 	ctx context.Context,
