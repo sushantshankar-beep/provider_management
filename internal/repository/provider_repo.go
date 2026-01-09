@@ -441,3 +441,26 @@ func (r *ProviderRepo) CountByCreatedBy(ctx context.Context, adminIDs []primitiv
 	}
 	return int(count), nil
 }
+
+func (r *ProviderRepo) FindByObjectIDs(
+	ctx context.Context,
+	ids []primitive.ObjectID,
+) ([]domain.Provider, error) {
+
+	filter := bson.M{
+		"_id": bson.M{"$in": ids},
+	}
+
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var providers []domain.Provider
+	if err := cursor.All(ctx, &providers); err != nil {
+		return nil, err
+	}
+
+	return providers, nil
+}

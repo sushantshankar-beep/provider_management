@@ -146,6 +146,7 @@ type ComplaintStats struct {
 	TotalComplaints    int64 `json:"total_complaints"`
 	StatusResolved     int64 `json:"status_resolved"`
 	StatusUnresolved   int64 `json:"status_unresolved"`
+	StatusInitiated   int64 `json:"status_initiated"`
 	RaisedByYou        int64 `json:"raised_by_you"`
 	RaisedByProviders  int64 `json:"raised_by_providers"`
 	UserComplaints     int64 `json:"user_complaints"`

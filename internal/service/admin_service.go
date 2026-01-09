@@ -330,7 +330,6 @@ func (s *AdminService) GetDashboardStats(ctx context.Context) (map[string]int64,
 			},
 		},
 	})
-	log.Println("wdbjh")
 	if err != nil {
 		return nil, err
 	}
