@@ -166,8 +166,21 @@ func (s *PayoutService) GetPayouts(
 	}
 
 	if status != "" {
-		filter["status"] = status
+		switch strings.ToLower(status) {
+	
+		case "pending":
+			filter["status"] = bson.M{
+				"$in": []string{
+					string(domain.PayoutStatusPending),
+					string(domain.PayoutStatusPartiallySettled),
+				},
+			}
+	
+		default:
+			filter["status"] = status
+		}
 	}
+	
 
 	if periodFromStr != "" && periodToStr != "" {
 		from, err1 := time.Parse(time.RFC3339, periodFromStr)
@@ -321,19 +334,29 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			continue
 		}
 
-		// Get partial amount for THIS specific booking only
 		partialAmount := 0.0
 		hasPartialAmount := false
+		isDeduction := false
+		
 		if payout.ServicePartialAmounts != nil {
 			if amt, exists := payout.ServicePartialAmounts[serviceID.Hex()]; exists {
 				partialAmount = amt
-				hasPartialAmount = true
+				if amt == 0 {
+					isDeduction = true
+				} else {
+					hasPartialAmount = true
+				}
 			}
 		}
 
 		var serviceCommission, serviceGST, serviceNet float64
 
-		if hasPartialAmount {
+		if isDeduction {
+			serviceCommission = service.FinalPrice * payout.CommissionPercent / 100
+			serviceGST = serviceCommission * payout.GSTPercent / 100
+			serviceNet = service.FinalPrice - serviceCommission - serviceGST
+			partialAmount = 0
+		} else if hasPartialAmount {
 			serviceCommission = partialAmount * payout.CommissionPercent / 100
 			serviceGST = serviceCommission * payout.GSTPercent / 100
 			serviceNet = partialAmount - serviceCommission - serviceGST
@@ -368,6 +391,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			"has_complaint_adjustment":  service.HasComplaintAdjustment,
 			"pending_settlement":        utils.RoundTo2(service.PendingDeductionAmount),
 			"show_complaint_adjustment": showComplaintAdjustment,
+			"is_deduction":              isDeduction,
 		}
 
 		services = append(services, serviceData)
@@ -532,7 +556,7 @@ func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID s
 			for _, settlement := range settlements {
 				settlementHistory = append(settlementHistory, map[string]any{
 					"date":          settlement.SettledAt,
-					"settlement_id": fmt.Sprintf("UP%06d", settlement.SettlementID),
+					"settlement_id": fmt.Sprintf("SET%06d", settlement.SettlementID),
 					"amount":        utils.RoundTo2(settlement.TotalAmount),
 					"payment_mode":  settlement.PaymentMode,
 					"method":        settlement.PaymentMethod,
@@ -567,8 +591,10 @@ func (s *PayoutService) GetProviderPayoutDetails(ctx context.Context, payoutID s
 }
 
 func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) error {
+
 	providerObjID, err := primitive.ObjectIDFromHex(req.ProviderID)
 	if err != nil {
+		log.Printf("ERROR ProcessPayout: Invalid ProviderID: %v", err)
 		return err
 	}
 
@@ -584,14 +610,15 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 
 	existing, err := s.payoutRepo.FindPendingByProvider(ctx, providerObjID)
 	if err != nil {
+		log.Printf("ERROR ProcessPayout: FindPendingByProvider failed: %v", err)
 		return err
 	}
 
 	baseAmount := req.Amount
 	partialAmount := req.PartialAmount
+	isDeduction := partialAmount == 0 && baseAmount > 0
 
 	if existing != nil {
-
 		if existing.ServicePartialAmounts == nil {
 			existing.ServicePartialAmounts = make(map[string]float64)
 		}
@@ -607,28 +634,29 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 		if !bookingExists && len(serviceIDs) > 0 {
 			existing.ServiceIDs = append(existing.ServiceIDs, serviceIDs...)
 			existing.BaseAmount += baseAmount
-
-			if partialAmount > 0 {
-				existing.ServicePartialAmounts[serviceIDs[0].Hex()] = partialAmount
-			}
+			existing.ServicePartialAmounts[serviceIDs[0].Hex()] = partialAmount
 		} else if bookingExists && len(serviceIDs) > 0 {
-			if partialAmount > 0 {
-				existing.ServicePartialAmounts[serviceIDs[0].Hex()] = partialAmount
-			}
+			existing.ServicePartialAmounts[serviceIDs[0].Hex()] = partialAmount
 		}
 
 		totalEffectiveAmount := 0.0
 
 		for _, serviceID := range existing.ServiceIDs {
-			service, err := s.serviceRepo.FindByID(ctx, serviceID.Hex())
-			if err != nil {
-				log.Printf("Warning: Cannot fetch service %s for calculation: %v", serviceID.Hex(), err)
-				continue
-			}
-
-			if partialAmt, exists := existing.ServicePartialAmounts[serviceID.Hex()]; exists && partialAmt > 0 {
-				totalEffectiveAmount += partialAmt
+			if partialAmt, exists := existing.ServicePartialAmounts[serviceID.Hex()]; exists {
+				if partialAmt == 0 {
+					service, err := s.serviceRepo.FindByID(ctx, serviceID.Hex())
+					if err != nil {
+						continue
+					}
+					totalEffectiveAmount += service.FinalPrice
+				} else {
+					totalEffectiveAmount += partialAmt
+				}
 			} else {
+				service, err := s.serviceRepo.FindByID(ctx, serviceID.Hex())
+				if err != nil {
+					continue
+				}
 				totalEffectiveAmount += service.FinalPrice
 			}
 		}
@@ -647,24 +675,30 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 		existing.NetPayable = utils.RoundTo2(totalEffectiveAmount - commission - gst)
 		existing.UpdatedAt = time.Now()
 
-		log.Printf("ProcessPayout - Updated existing payout: TotalEffective=%.2f, Commission=%.2f, GST=%.2f, NetPayable=%.2f",
-			totalEffectiveAmount, commission, gst, existing.NetPayable)
-
 		return s.payoutRepo.Update(ctx, existing)
 	}
 
 	servicePartialAmounts := make(map[string]float64)
-	if partialAmount > 0 && len(serviceIDs) > 0 {
+	if len(serviceIDs) > 0 {
 		servicePartialAmounts[serviceIDs[0].Hex()] = partialAmount
 	}
 
-	effectiveAmount := baseAmount
-	if partialAmount > 0 {
+	var effectiveAmount float64
+	var pendingAmount float64
+	if isDeduction {
+		effectiveAmount = baseAmount
+		pendingAmount = baseAmount - (baseAmount * commissionPercent / 100) - ((baseAmount * commissionPercent / 100) * gstPercent / 100)
+	} else if partialAmount > 0 {
 		effectiveAmount = partialAmount
+		pendingAmount = 0
+	} else {
+		effectiveAmount = baseAmount
+		pendingAmount = 0
 	}
 
 	commission := effectiveAmount * commissionPercent / 100
 	gst := commission * gstPercent / 100
+	netPayable := effectiveAmount - commission - gst
 
 	complaintObjID, _ := primitive.ObjectIDFromHex(req.ComplaintID)
 
@@ -681,7 +715,7 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 		CommissionAmount:      utils.RoundTo2(commission),
 		GSTPercent:            gstPercent,
 		GSTAmount:             utils.RoundTo2(gst),
-		NetPayable:            utils.RoundTo2(effectiveAmount - commission - gst),
+		NetPayable:            utils.RoundTo2(netPayable),
 		PayoutType:            domain.PayoutTypeComplaint,
 		IsDeduction:           true,
 		Status:                domain.PayoutStatusPending,
@@ -692,8 +726,8 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 		Remarks:               req.Reason,
 	}
 
-	log.Printf("ProcessPayout - Created new payout: Effective=%.2f, Commission=%.2f, GST=%.2f, NetPayable=%.2f",
-		effectiveAmount, commission, gst, payout.NetPayable)
+	log.Printf("ProcessPayout - Created new payout: BaseAmount=%.2f, PartialAmount=%.2f, Effective=%.2f, Commission=%.2f, GST=%.2f, NetPayable=%.2f, PendingDeduction=%.2f",
+		baseAmount, partialAmount, effectiveAmount, commission, gst, netPayable, pendingAmount)
 
 	return s.payoutRepo.Create(ctx, payout)
 }

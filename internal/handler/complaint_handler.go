@@ -191,8 +191,6 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 	id := c.Param("id")
 	id = strings.TrimPrefix(id, "CMP")
 
-	log.Println("Assessing complaint with ID:", id)
-
 	var req service.AssessComplaintRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -228,7 +226,7 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 
 	complaint, err := h.complaintService.GetComplaint(c.Request.Context(), id)
 	if err != nil {
-		log.Println("Failed to fetch complaint:", err)
+
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   true,
 			"message": "Complaint not found",
@@ -238,7 +236,6 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 
 	acceptedService, err := h.acceptedServiceRepo.FindByID(c.Request.Context(), complaint.AcceptedServiceID)
 	if err != nil {
-		log.Println("Failed to fetch accepted service:", err)
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   true,
 			"message": "Accepted service not found",
@@ -247,7 +244,6 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 	}
 
 	if acceptedService.OrderID == "" {
-		log.Println("No OrderID found in accepted service")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
 			"message": "No transaction associated with this booking",
@@ -256,10 +252,8 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 	}
 
 	req.TxnID = acceptedService.OrderID
-	log.Printf("Using TxnID from accepted service: %s", req.TxnID)
 
 	if err := h.complaintService.AssessComplaint(c.Request.Context(), id, req); err != nil {
-		log.Println("Assessment error:", err)
 	
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
