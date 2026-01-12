@@ -41,6 +41,9 @@ func SetupRoutes(
 	zoneMapHandler *handler.ZoneMapHandler,
 	vehicleHandler *handler.VehicleHandler,
 ) {
+	r.GET("/health", func(c *gin.Context) {
+        c.JSON(200, gin.H{"status": "ok"})
+    })
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
