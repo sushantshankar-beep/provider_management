@@ -238,9 +238,15 @@ func (r *PaymentPayoutRepo) FindPendingByProvider(
 
 	filter := bson.M{
 		"providerId": providerID,
-		"status":     domain.PayoutStatusPending,
+		"status": bson.M{
+			"$in": []domain.PaymentPayoutStatus{
+				domain.PayoutStatusPending,
+				domain.PayoutStatusPartiallySettled,
+			},
+		},
 	}
-
+	
+	
 	var payout domain.PaymentPayout
 	err := r.col.FindOne(ctx, filter).Decode(&payout)
 	if err != nil {

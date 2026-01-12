@@ -27,7 +27,7 @@ type RefundType string
 const (
 	RefundTypeFull    RefundType = "Full Refund"
 	RefundTypePartial RefundType = "Partial Refund"
-	RefundTypeNone    RefundType = "none"
+	RefundTypeNone    RefundType = "No Refund"
 )
 
 type PayoutType string
@@ -35,7 +35,7 @@ type PayoutType string
 const (
 	PayoutTypeFull    PayoutType = "Full Payout"
 	PayoutTypePartial PayoutType = "Partial Payout"
-	PayoutTypeNone    PayoutType = "none"
+	PayoutTypeNone    PayoutType = "No Payout"
 )
 
 type PaymentActionStatus string
