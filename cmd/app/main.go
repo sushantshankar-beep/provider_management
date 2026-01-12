@@ -119,7 +119,6 @@ func main() {
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
-
 	routes.SetupRoutes(
 		r,
 		cfg.AllowedOrigins,
@@ -156,7 +155,6 @@ func main() {
 		Addr:    cfg.HTTPAddr,
 		Handler: r,
 	}
-
 	go func() {
 		log.Println("🚀 Starting HTTP server on", cfg.HTTPAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
