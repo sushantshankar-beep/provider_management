@@ -183,8 +183,9 @@ func (s *SettlementService) CreateSettlement(
 		}
 
 		commission := baseAmount * (payout.CommissionPercent / 100)
-		gst := commission * (payout.GSTPercent / 100)
-		net := baseAmount - commission - gst
+		afterCommission := baseAmount - commission
+		gst := afterCommission * (payout.GSTPercent / 100)
+		net := afterCommission - gst
 
 		settlementAmount += net
 	}
