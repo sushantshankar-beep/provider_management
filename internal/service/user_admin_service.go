@@ -89,6 +89,7 @@ type VehicleInfo struct {
 }
 
 type AMCInfo struct {
+	AMCID        string    `json:"amcId"`
 	AMCStatus          string    `json:"amcStatus"`
 	CurrentPlanName    string    `json:"currentPlanName"`
 	StartDate          time.Time `json:"startDate,omitempty"`
@@ -604,6 +605,7 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 	// }
 
 	return &AMCInfo{
+		AMCID:        amc.ID.Hex(),
 		AMCStatus:          amcStatus,
 		CurrentPlanName:    defaultStr(amc.PlanName, "—"),
 		StartDate:          amc.PlanStartDate,
