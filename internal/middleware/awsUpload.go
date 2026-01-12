@@ -3,14 +3,20 @@ package middleware
 import (
 	"bytes"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"log"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
+	"github.com/nfnt/resize"
 )
 
 type S3Uploader struct {
@@ -30,9 +36,35 @@ func NewS3Uploader(sess *session.Session, bucketName string) *S3Uploader {
 	}
 }
 
+func (u *S3Uploader) compressImage(fileBytes []byte, contentType string) ([]byte, error) {
+	img, _, err := image.Decode(bytes.NewReader(fileBytes))
+	if err != nil {
+		return fileBytes, err
+	}
+
+	resized := resize.Resize(1920, 0, img, resize.Lanczos3)
+
+	var compressed bytes.Buffer
+	switch contentType {
+	case "image/png":
+		err = png.Encode(&compressed, resized)
+	default:
+		err = jpeg.Encode(&compressed, resized, &jpeg.Options{Quality: 80})
+	}
+	log.Println("COMPRESSION ERRORsssss", contentType)
+    log.Println("COMPRESSION ERROR", err)
+	if err != nil {
+		return fileBytes, err
+	}
+
+	if compressed.Len() < len(fileBytes) {
+		return compressed.Bytes(), nil
+	}
+	return fileBytes, nil
+}
+
 func (u *S3Uploader) UploadMiddleware(fieldConfigs []FieldConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		form, err := c.MultipartForm()
 		if err != nil {
 			c.Next()
@@ -40,7 +72,7 @@ func (u *S3Uploader) UploadMiddleware(fieldConfigs []FieldConfig) gin.HandlerFun
 		}
 
 		uploadedURLs := make(map[string][]string)
-        log.Println("hbhjvh",uploadedURLs)
+
 		for _, config := range fieldConfigs {
 			files := form.File[config.FormFieldName]
 			if len(files) == 0 {
@@ -68,13 +100,25 @@ func (u *S3Uploader) UploadMiddleware(fieldConfigs []FieldConfig) gin.HandlerFun
 					return
 				}
 
+				fileBytes := buf.Bytes()
+				contentType := fileHeader.Header.Get("Content-Type")
+				ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+
+				if contentType == "image/jpeg" || contentType == "image/jpg" || contentType == "image/png" ||
+					ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
+					compressedBytes, err := u.compressImage(fileBytes, contentType)
+					if err == nil {
+						fileBytes = compressedBytes
+					}
+				}
+
 				key := fmt.Sprintf("%d_%s", time.Now().UnixNano()/int64(time.Millisecond), fileHeader.Filename)
 
 				uploadInput := &s3.PutObjectInput{
 					Bucket:      aws.String(u.bucketName),
 					Key:         aws.String(key),
-					Body:        bytes.NewReader(buf.Bytes()),
-					ContentType: aws.String(fileHeader.Header.Get("Content-Type")),
+					Body:        bytes.NewReader(fileBytes),
+					ContentType: aws.String(contentType),
 					ACL:         aws.String("public-read"),
 				}
 
@@ -99,8 +143,7 @@ func (u *S3Uploader) UploadMiddleware(fieldConfigs []FieldConfig) gin.HandlerFun
 		}
 
 		for key, urls := range uploadedURLs {
-			
-				c.Set(key, urls)
+			c.Set(key, urls)
 		}
 
 		c.Next()
@@ -118,9 +161,7 @@ func GetUploadedURL(c *gin.Context, key string) (string, bool) {
 }
 
 func GetUploadedURLs(c *gin.Context, key string) ([]string, bool) {
-	log.Println("skjabcjxsba",key)
 	value, exists := c.Get(key)
-	log.Println("valueee")
 	if !exists {
 		return nil, false
 	}
