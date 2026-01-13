@@ -242,6 +242,7 @@ func (r *PaymentPayoutRepo) FindPendingByProvider(
 			"$in": []domain.PaymentPayoutStatus{
 				domain.PayoutStatusPending,
 				domain.PayoutStatusPartiallySettled,
+				domain.PayoutStatusComplaint,
 			},
 		},
 	}
@@ -303,5 +304,39 @@ func (r *PaymentPayoutRepo) AddServiceToPayout(
 	}
 
 	_, err := r.col.UpdateByID(ctx, payoutID, update)
+	return err
+}
+
+func (r *PaymentPayoutRepo) FindPendingByProviderAndService(ctx context.Context, providerID, serviceID primitive.ObjectID) (*domain.PaymentPayout, error) {
+	filter := bson.M{
+		"providerId": providerID,
+		"serviceIds": serviceID,
+		"status":     domain.PayoutStatusPending,
+	}
+
+	var payout domain.PaymentPayout
+	err := r.col.FindOne(ctx, filter).Decode(&payout)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &payout, nil
+}
+
+func (r *PaymentPayoutRepo) UpdateFields(ctx context.Context, payoutID string, update bson.M) error {
+	objID, err := primitive.ObjectIDFromHex(payoutID)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.col.UpdateOne(
+		ctx,
+		bson.M{"_id": objID},
+		update,
+	)
+
 	return err
 }

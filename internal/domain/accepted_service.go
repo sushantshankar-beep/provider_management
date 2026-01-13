@@ -20,6 +20,15 @@ type ServiceLocation struct {
 	Lon float64 `bson:"lon" json:"lon"`
 }
 
+type PayoutStatus string
+
+const (
+	PayoutStatusRegular                  PayoutStatus = "regular_payout"
+	PayoutStatusRegularComplaint         PayoutStatus = "regular_complaint"
+	PayoutStatusCancelled                PayoutStatus = "payout_cancelled"
+	PayoutStatusComplaintAfterSettlement PayoutStatus = "complaint_after_settlement"
+)
+
 type AcceptedService struct {
 	ID                     primitive.ObjectID  `bson:"_id,omitempty"`
 	InternalID             int64               `bson:"id" json:"id"`
@@ -55,8 +64,12 @@ type AcceptedService struct {
 	Notes                  []BookingNote       `bson:"notes,omitempty" json:"notes,omitempty"`
 	PayoutCreated          bool                `bson:"payoutCreated,omitempty" json:"payoutCreated,omitempty"`
 	PayoutCreatedAt        time.Time           `bson:"payoutCreatedAt,omitempty" json:"payoutCreatedAt,omitempty"`
+	IsPayoutCancelled      bool                `bson:"isPayoutCancelled" json:"isPayoutCancelled"`
+	PayoutCancelledAt      *time.Time          `bson:"payoutCancelledAt" json:"payoutCancelledAt",omitempty"`
+	PayoutStatus           PayoutStatus        `bson:"payoutStatus" json:"payoutStatus"`
 	HasComplaintAdjustment bool                `bson:"hasComplaintAdjustment" json:"has_complaint_adjustment"`
 	PendingDeductionAmount float64             `bson:"pendingDeductionAmount" json:"pending_deduction_amount"`
+	ComplaintResolvedAt    *time.Time          `bson:"complaintResolvedAt,omitempty"`
 	CreatedAt              time.Time           `bson:"createdAt" json:"created_at"`
 	UpdatedAt              time.Time           `bson:"updatedAt" json:"updated_at"`
 }

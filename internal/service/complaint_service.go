@@ -47,6 +47,18 @@ type AddNoteRequest struct {
 	AddedBy string `json:"addedBy" binding:"required"`
 }
 
+
+type AdjustPayoutRequest struct {
+	ProviderID          string
+	BookingID           string
+	ServiceInternalID   int64
+	DeductionAmount     float64
+	NetDeduction        float64
+	ComplaintID         string
+	ComplaintInternalID int64
+	Reason              string
+}
+
 func NewComplaintService(
 	paymentPayoutRepo *repository.PaymentPayoutRepo,
 	complaintRepo *repository.ComplaintRepository,
@@ -179,36 +191,36 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	if err != nil {
 		return fmt.Errorf("failed to get accepted service: %w", err)
 	}
-
+   
 	originalAmount := acceptedService.BasePrice
-
 	if originalAmount <= 0 {
 		return fmt.Errorf("invalid original booking amount: %.2f", originalAmount)
 	}
-
-	if req.RefundToUser == domain.RefundTypeFull {
-		req.RefundAmount = originalAmount
+	
+	commission := originalAmount * 20.0 / 100
+	afterCommission := originalAmount - commission
+	gst := afterCommission * 18.0 / 100
+	netAmount := originalAmount - commission - gst
+	
+	if netAmount <= 0 {
+		return fmt.Errorf("invalid original booking amount: %.2f", netAmount)
 	}
 
+	if req.RefundToUser == domain.RefundTypeFull {
+		req.RefundAmount = netAmount
+	}
 	if req.PayoutToProvider == domain.PayoutTypeFull {
-		req.PayoutAmount = originalAmount
+		req.PayoutAmount = netAmount
 	}
 
 	if req.RefundToUser == domain.RefundTypePartial {
-		if req.RefundAmount <= 0 {
-			return fmt.Errorf("refund_amount must be greater than 0 when refund_to_user is 'partial'")
-		}
-		if req.RefundAmount > originalAmount {
-			return fmt.Errorf("refund_amount cannot exceed original booking amount: %.2f", originalAmount)
+		if req.RefundAmount <= 0 || req.RefundAmount > originalAmount {
+			return fmt.Errorf("invalid refund amount: %.2f", req.RefundAmount)
 		}
 	}
-
 	if req.PayoutToProvider == domain.PayoutTypePartial {
-		if req.PayoutAmount <= 0 {
-			return fmt.Errorf("payout_amount must be greater than 0 when payout_to_provider is 'partial'")
-		}
-		if req.PayoutAmount > originalAmount {
-			return fmt.Errorf("payout_amount cannot exceed original booking amount: %.2f", originalAmount)
+		if req.PayoutAmount <= 0 || req.PayoutAmount > originalAmount {
+			return fmt.Errorf("invalid payout amount: %.2f", req.PayoutAmount)
 		}
 	}
 
@@ -248,11 +260,10 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	if req.RefundToUser != domain.RefundTypeNone && req.RefundAmount > 0 {
 		paymentTracking.RefundStatus = domain.PaymentActionPending
 		refundReason := req.Remarks
-
 		if req.RefundToUser == domain.RefundTypeFull {
 			refundReason = "Full Refund - " + refundReason
 		} else {
-			refundReason = fmt.Sprintf("Partial Refund -" + refundReason)
+			refundReason = fmt.Sprintf("Partial Refund - %s", refundReason)
 		}
 
 		if err := s.refundService.ProcessRefund(ctx, RefundRequest{
@@ -279,81 +290,109 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 
 	if !acceptedService.ProviderID.IsZero() {
 		providerID := acceptedService.ProviderID.Hex()
+		isNoPayout := req.PayoutToProvider == domain.PayoutTypeNone || req.PayoutToProvider == "No Payout"
 
-		isNoPayout := req.PayoutToProvider == domain.PayoutTypeNone || 
-			req.PayoutToProvider == "No Payout"
-
-		if !isNoPayout && req.PayoutAmount > 0 {
-			paymentTracking.PayoutStatus = domain.PaymentActionPending
-
-			err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
-				ProviderID:          providerID,
-				BookingID:           complaint.AcceptedServiceID,
-				Amount:              originalAmount,
-				PartialAmount:       req.PayoutAmount,
-				Reason:              fmt.Sprintf("Complaint CMP%d", complaint.InternalID),
-				ComplaintID:         complaint.ID,
-				ComplaintInternalID: complaint.InternalID,
-			})
-
-			if err != nil {
-				log.Printf("Warning: Failed to process payout: %v", err)
-			} else {
-				actions = append(actions, fmt.Sprintf("Payout of %.2f processed", req.PayoutAmount))
-			}
-
-			if acceptedService.IsSettled {
-				deductionAmount := originalAmount - req.PayoutAmount
-				commission := deductionAmount * 20.0 / 100
-				gst := commission * 18.0 / 100
-				netDeduction := deductionAmount - commission - gst
-
-				_ = s.acceptedServiceRepo.UpdateComplaintFlags(
-					ctx,
-					acceptedService.ID.Hex(),
-					map[string]any{
-						"hasComplaintAdjustment": true,
-						"pendingDeductionAmount": round2(netDeduction),
-						"complaintId":            complaint.ID,
-					},
-				)
-			}
-		} else if isNoPayout && acceptedService.IsSettled {
-			paymentTracking.PayoutStatus = domain.PaymentActionPending
-
-			commission := originalAmount * 20.0 / 100
-			gst := commission * 18.0 / 100
-			netPayable := originalAmount - commission - gst
-
+		if acceptedService.PayoutCreated && isNoPayout && !acceptedService.IsSettled {
+			log.Printf("Cancelling existing payout for complaint %s - no payout to provider", complaint.ID)
+			
 			err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
 				ProviderID:          providerID,
 				BookingID:           complaint.AcceptedServiceID,
 				Amount:              originalAmount,
 				PartialAmount:       0,
-				Reason:              fmt.Sprintf("Complaint CMP%d - Full Deduction (No Payout)", complaint.InternalID),
+				CancelPayout:        true,  
+				CreateDeduction:     false,
+				Reason:              fmt.Sprintf("Complaint CMP%d - Payout Cancelled (No Payout)", complaint.InternalID),
 				ComplaintID:         complaint.ID,
 				ComplaintInternalID: complaint.InternalID,
 			})
-
 			if err != nil {
-				log.Printf("ERROR: Failed to process deduction payout: %v", err)
+				log.Printf("ERROR: Failed to cancel payout: %v", err)
 			} else {
-				actions = append(actions, fmt.Sprintf("Full deduction of %.2f processed (No Payout)", originalAmount))
+				actions = append(actions, "Existing payout cancelled - no payment to provider")
+		
+				_ = s.acceptedServiceRepo.UpdateComplaintFlags(
+					ctx,
+					acceptedService.ID.Hex(),
+					map[string]any{
+						"payoutStatus":            domain.PayoutStatusCancelled,
+						"isPayoutCancelled": 	 true,
+						"PayoutCancelledAt":        time.Now(),
+					},
+				)
 			}
+			paymentTracking.PayoutStatus = domain.PaymentActionNA		
+		} else {
+			// Normal or partial payout / deduction
+			if !isNoPayout && req.PayoutAmount > 0 {
+				paymentTracking.PayoutStatus = domain.PaymentActionPending
+				err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
+					ProviderID:          providerID,
+					BookingID:           complaint.AcceptedServiceID,
+					Amount:              originalAmount,
+					PartialAmount:       req.PayoutAmount,
+					CancelPayout:        false,
+					CreateDeduction:     false,
+					Reason:              fmt.Sprintf("Complaint CMP%d", complaint.InternalID),
+					ComplaintID:         complaint.ID,
+					ComplaintInternalID: complaint.InternalID,
+				})
+				if err != nil {
+					log.Printf("Warning: Failed to process payout: %v", err)
+				} else {
+					actions = append(actions, fmt.Sprintf("Payout of %.2f processed", req.PayoutAmount))
+				}
 
-			updateErr := s.acceptedServiceRepo.UpdateComplaintFlags(
-				ctx,
-				acceptedService.ID.Hex(),
-				map[string]any{
-					"hasComplaintAdjustment": true,
-					"pendingDeductionAmount": round2(netPayable),
-					"complaintId":            complaint.ID,
-				},
-			)
-			if updateErr != nil {
-				log.Printf("ERROR: Failed to update complaint flags: %v", updateErr)
-			} else {
-				log.Printf("SUCCESS: Complaint flags updated with netPayable=%.2f", netPayable)
+				if acceptedService.IsSettled {
+					deductionAmount := originalAmount - req.PayoutAmount
+					commission := deductionAmount * 20.0 / 100
+					afterCommission := deductionAmount - commission
+					gst := afterCommission * 18.0 / 100
+					netDeduction := deductionAmount - commission - gst
+					_ = s.acceptedServiceRepo.UpdateComplaintFlags(
+						ctx,
+						acceptedService.ID.Hex(),
+						map[string]any{
+							"payoutStatus":         domain.PayoutStatusComplaintAfterSettlement,
+							"hasComplaintAdjustment": true,
+							"pendingDeductionAmount": round2(netDeduction),
+							"complaintId":            complaint.ID,
+						},
+					)
+				}
+			} else if isNoPayout && acceptedService.IsSettled {
+				paymentTracking.PayoutStatus = domain.PaymentActionPending
+				commission := originalAmount * 20.0 / 100
+				gst := (originalAmount - commission) * 18.0 / 100
+				netPayable := originalAmount - commission - gst
+
+				err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
+					ProviderID:          providerID,
+					BookingID:           complaint.AcceptedServiceID,
+					Amount:              originalAmount,
+					PartialAmount:       0,
+					CancelPayout:        false,
+					CreateDeduction:     true,
+					Reason:              fmt.Sprintf("Complaint CMP%d - Deduction Entry (No Payout)", complaint.InternalID),
+					ComplaintID:         complaint.ID,
+					ComplaintInternalID: complaint.InternalID,
+				})
+				if err != nil {
+					log.Printf("ERROR: Failed to create deduction entry: %v", err)
+				} else {
+					actions = append(actions, fmt.Sprintf("Deduction entry of %.2f created for future recovery", netPayable))
+				}
+
+				_ = s.acceptedServiceRepo.UpdateComplaintFlags(
+					ctx,
+					acceptedService.ID.Hex(),
+					map[string]any{
+				        "payoutStatus":            domain.PayoutStatusComplaintAfterSettlement,
+						"hasComplaintAdjustment":     true,
+						"pendingDeductionAmount":     round2(netPayable),
+						"complaintId":                complaint.ID,
+					},
+				)
 			}
 		}
 	}
@@ -476,6 +515,8 @@ type PayoutRequest struct {
 	BookingID           string
 	PartialAmount       float64
 	ComplaintInternalID int64
+	CancelPayout        bool
+	CreateDeduction     bool
 }
 
 func (s *ComplaintService) UpdatePaymentStatus(ctx context.Context, complaintID string, isRefund bool, status domain.PaymentActionStatus, paymentID string) error {

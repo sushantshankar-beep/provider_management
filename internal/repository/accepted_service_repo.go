@@ -3,15 +3,15 @@ package repository
 import (
 	"context"
 	"fmt"
-	"log"
-	"strings"
-	"time"
-    "math"
-	"provider_management/internal/domain"
-    "provider_management/internal/dto"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"log"
+	"math"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"strings"
+	"time"
 )
 
 type AcceptedServiceRepo struct {
@@ -309,7 +309,7 @@ func (r *AcceptedServiceRepo) MarkAsSettled(
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
 		"$or": []bson.M{
-			
+
 			{"isSettled": false},
 			{"isSettled": bson.M{"$exists": false}},
 			{
@@ -416,7 +416,6 @@ func (r *AcceptedServiceRepo) CountSettledByIDs(
 	return r.col.CountDocuments(ctx, filter)
 }
 
-
 func (r *AcceptedServiceRepo) MarkPayoutCreated(
 	ctx context.Context,
 	serviceIDs []primitive.ObjectID,
@@ -424,14 +423,15 @@ func (r *AcceptedServiceRepo) MarkPayoutCreated(
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
 	}
-	
+
 	update := bson.M{
 		"$set": bson.M{
-			"payoutCreated": true,
+			"payoutCreated":   true,
 			"payoutCreatedAt": time.Now(),
+			"payoutStatus":    domain.PayoutStatusRegular,
 		},
 	}
-	
+
 	_, err := r.col.UpdateMany(ctx, filter, update)
 	return err
 }
@@ -453,22 +453,21 @@ func (r *AcceptedServiceRepo) FindByInternalID(
 	return &svc, nil
 }
 
-
 func (r *AcceptedServiceRepo) FindByIDs(ctx context.Context, ids []primitive.ObjectID) ([]domain.AcceptedService, error) {
 	var services []domain.AcceptedService
-	
+
 	filter := bson.M{"_id": bson.M{"$in": ids}}
-	
+
 	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
-	
+
 	if err := cursor.All(ctx, &services); err != nil {
 		return nil, err
 	}
-	
+
 	return services, nil
 }
 
@@ -484,7 +483,7 @@ func (r *AcceptedServiceRepo) GetBookingStats(ctx context.Context) (dto.Bookings
 					{"$count": "count"},
 				},
 				"ongoing": []bson.M{
-					{"$match": bson.M{"status": bson.M{"$in": []string{"started","reached_location", "otp_verified", "in_progress"}}}},
+					{"$match": bson.M{"status": bson.M{"$in": []string{"started", "reached_location", "otp_verified", "in_progress"}}}},
 					{"$count": "count"},
 				},
 			},
@@ -524,95 +523,106 @@ func (r *AcceptedServiceRepo) GetBookingStats(ctx context.Context) (dto.Bookings
 }
 
 func (r *AcceptedServiceRepo) GetTopServices(ctx context.Context) ([]dto.TopService, error) {
-    pipeline := []bson.M{
-        {
-            "$match": bson.M{
-                "status": "completed",
-            },
-        },
-        {
-            "$lookup": bson.M{
-                "from":         "servicerequests",
-                "localField":   "serviceRequest",
-                "foreignField": "_id",
-                "as":           "serviceRequestData",
-            },
-        },
-        {
-            "$unwind": bson.M{
-                "path":                       "$serviceRequestData",
-                "preserveNullAndEmptyArrays": false,
-            },
-        },
-        {
-            "$unwind": bson.M{
-                "path":                       "$serviceRequestData.problems",
-                "preserveNullAndEmptyArrays": false,
-            },
-        },
-        {
-            "$group": bson.M{
-                "_id":   "$serviceRequestData.problems",
-                "count": bson.M{"$sum": 1},
-            },
-        },
-        {
-            "$sort": bson.M{"count": -1},
-        },
-        {
-            "$limit": 5,
-        },
-    }
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"status": "completed",
+			},
+		},
+		{
+			"$lookup": bson.M{
+				"from":         "servicerequests",
+				"localField":   "serviceRequest",
+				"foreignField": "_id",
+				"as":           "serviceRequestData",
+			},
+		},
+		{
+			"$unwind": bson.M{
+				"path":                       "$serviceRequestData",
+				"preserveNullAndEmptyArrays": false,
+			},
+		},
+		{
+			"$unwind": bson.M{
+				"path":                       "$serviceRequestData.problems",
+				"preserveNullAndEmptyArrays": false,
+			},
+		},
+		{
+			"$group": bson.M{
+				"_id":   "$serviceRequestData.problems",
+				"count": bson.M{"$sum": 1},
+			},
+		},
+		{
+			"$sort": bson.M{"count": -1},
+		},
+		{
+			"$limit": 5,
+		},
+	}
 
-    cursor, err := r.col.Aggregate(ctx, pipeline)
-    if err != nil {
-        return nil, err
-    }
-    defer cursor.Close(ctx)
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
 
-    var results []struct {
-        Problem string `bson:"_id"`
-        Count   int64  `bson:"count"`
-    }
+	var results []struct {
+		Problem string `bson:"_id"`
+		Count   int64  `bson:"count"`
+	}
 
-    if err := cursor.All(ctx, &results); err != nil {
-        return nil, err
-    }
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
 
-    var totalCount int64
-    for _, r := range results {
-        totalCount += r.Count
-    }
+	var totalCount int64
+	for _, r := range results {
+		totalCount += r.Count
+	}
 
-    services := make([]dto.TopService, len(results))
-    for i, r := range results {
-        percentage := 0.0
-        if totalCount > 0 {
-            percentage = (float64(r.Count) / float64(totalCount)) * 100
-            percentage = math.Round(percentage)
-        }
-        services[i] = dto.TopService{
-            Name:       r.Problem,
-            Percentage: percentage,
-            Count:      r.Count,
-        }
-    }
+	services := make([]dto.TopService, len(results))
+	for i, r := range results {
+		percentage := 0.0
+		if totalCount > 0 {
+			percentage = (float64(r.Count) / float64(totalCount)) * 100
+			percentage = math.Round(percentage)
+		}
+		services[i] = dto.TopService{
+			Name:       r.Problem,
+			Percentage: percentage,
+			Count:      r.Count,
+		}
+	}
 
-    return services, nil
+	return services, nil
 }
 
 func (r *AcceptedServiceRepo) UpdateComplaintFlags(ctx context.Context, serviceID string, flags map[string]any) error {
-    objID, err := primitive.ObjectIDFromHex(serviceID)
-    if err != nil {
-        return fmt.Errorf("invalid service ID: %w", err)
-    }
+	objID, err := primitive.ObjectIDFromHex(serviceID)
+	if err != nil {
+		return fmt.Errorf("invalid service ID: %w", err)
+	}
 
-    update := bson.M{"$set": flags}
+	update := bson.M{"$set": flags}
 
-    _, err = r.col.UpdateByID(ctx, objID, update)
-    if err != nil {
-        return fmt.Errorf("failed to update accepted service: %w", err)
-    }
+	_, err = r.col.UpdateByID(ctx, objID, update)
+	if err != nil {
+		return fmt.Errorf("failed to update accepted service: %w", err)
+	}
 
-    return nil
+	return nil
+}
+
+func (r *AcceptedServiceRepo) UpdatePayoutStatus(ctx context.Context, serviceID string, fields map[string]any) error {
+	objID, err := primitive.ObjectIDFromHex(serviceID)
+	if err != nil {
+		return err
+	}
+
+	update := bson.M{"$set": fields}
+	_, err = r.col.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	return err
 }

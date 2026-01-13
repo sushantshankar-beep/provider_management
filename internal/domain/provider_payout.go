@@ -8,9 +8,8 @@ import (
 type PaymentPayoutType string
 
 const (
-	PayoutTypeRegular    PaymentPayoutType = "regular"
-	PayoutTypeComplaint  PaymentPayoutType = "complaint"
-	PayoutTypeAdjustment PaymentPayoutType = "adjustment"
+	PayoutTypeRegular   PaymentPayoutType = "regular"
+	PayoutTypeComplaint PaymentPayoutType = "complaint"
 )
 
 type PaymentPayoutStatus string
@@ -44,6 +43,7 @@ type PaymentPayout struct {
 	PeriodTo              time.Time             `bson:"periodTo" json:"period_to"`
 	PayoutType            PaymentPayoutType     `bson:"payoutType" json:"payout_type"`
 	IsDeduction           bool                  `bson:"isDeduction" json:"is_deduction"`
+	IsPayoutCancelled     bool                  `bson:"isPayoutCancelled"`
 	CreatedAt             time.Time             `bson:"createdAt" json:"created_at"`
 	UpdatedAt             time.Time             `bson:"updatedAt" json:"updated_at"`
 	Remarks               string                `bson:"remarks,omitempty" json:"remarks,omitempty"`
