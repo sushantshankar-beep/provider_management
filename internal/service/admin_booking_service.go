@@ -859,7 +859,7 @@ func (s *AdminBookingService) GetBookingByID(
 		if complaint, err := s.repo.FindComplaintByID(ctx, svc.ComplaintUserID); err == nil {
 			booking.UserComplaint = &ComplaintInfo{
 				ID:          complaint.ID,
-				ComplaintID: fmt.Sprintf("CMPL%06d", complaint.InternalID),
+				ComplaintID: fmt.Sprintf("CMP%06d", complaint.InternalID),
 				RaisedBy:    complaint.RaisedBy,
 				Problem:     complaint.Problem,
 				Photos:      complaint.Photos,
@@ -873,7 +873,7 @@ func (s *AdminBookingService) GetBookingByID(
 		if complaint, err := s.repo.FindComplaintByID(ctx, svc.ComplaintProviderID); err == nil {
 			booking.ProviderComplaint = &ComplaintInfo{
 				ID:          complaint.ID,
-				ComplaintID: fmt.Sprintf("CMPL%06d", complaint.InternalID),
+				ComplaintID: fmt.Sprintf("CMP%06d", complaint.InternalID),
 				RaisedBy:    complaint.RaisedBy,
 				Problem:     complaint.Problem,
 				Photos:      complaint.Photos,
