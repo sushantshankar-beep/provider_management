@@ -196,21 +196,12 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	if originalAmount <= 0 {
 		return fmt.Errorf("invalid original booking amount: %.2f", originalAmount)
 	}
-	
-	commission := originalAmount * 20.0 / 100
-	afterCommission := originalAmount - commission
-	gst := afterCommission * 18.0 / 100
-	netAmount := originalAmount - commission - gst
-	
-	if netAmount <= 0 {
-		return fmt.Errorf("invalid original booking amount: %.2f", netAmount)
-	}
 
 	if req.RefundToUser == domain.RefundTypeFull {
-		req.RefundAmount = netAmount
+		req.RefundAmount = originalAmount
 	}
 	if req.PayoutToProvider == domain.PayoutTypeFull {
-		req.PayoutAmount = netAmount
+		req.PayoutAmount = originalAmount
 	}
 
 	if req.RefundToUser == domain.RefundTypePartial {
@@ -223,6 +214,15 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 			return fmt.Errorf("invalid payout amount: %.2f", req.PayoutAmount)
 		}
 	}
+
+	if req.RefundAmount+req.PayoutAmount > originalAmount{
+		return fmt.Errorf(
+			"refund (%.2f) + payout (%.2f) exceeds payable booking amount %.2f",
+			req.RefundAmount,
+			req.PayoutAmount,
+			originalAmount,
+		)
+	}	
 
 	assessment := domain.ComplaintAssessment{
 		FaultParty:       req.FaultParty,
