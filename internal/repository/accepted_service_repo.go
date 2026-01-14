@@ -389,21 +389,36 @@ func (r *AcceptedServiceRepo) FindUnsettledByProvider(ctx context.Context, provi
 }
 
 func (r *AcceptedServiceRepo) CountUnsettledByIDs(
-	ctx context.Context,
-	serviceIDs []primitive.ObjectID,
+    ctx context.Context,
+    serviceIDs []primitive.ObjectID,
 ) (int64, error) {
-	log.Println("service idsss", serviceIDs)
-	filter := bson.M{
-		"_id": bson.M{"$in": serviceIDs},
-		"$or": []bson.M{
-			{"isSettled": false},
-			{"isSettled": bson.M{"$exists": false}},
-		},
-	}
 
-	return r.col.CountDocuments(ctx, filter)
+    filter := bson.M{
+        "_id": bson.M{"$in": serviceIDs},
+        "$or": []bson.M{
+            {
+                "isSettled": false,
+            },
+            {
+                "isSettled": bson.M{"$exists": false},
+            },
+            {
+                "$and": []bson.M{
+                    {"isSettled": true},
+                    {"payoutStatus": "complaint_after_settlement"},
+                    {
+                        "$or": []bson.M{
+                            {"isSettledAfterComplaint": false},
+                            {"isSettledAfterComplaint": bson.M{"$exists": false}},
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    return r.col.CountDocuments(ctx, filter)
 }
-
 func (r *AcceptedServiceRepo) CountSettledByIDs(
 	ctx context.Context,
 	serviceIDs []primitive.ObjectID,
@@ -624,5 +639,23 @@ func (r *AcceptedServiceRepo) UpdatePayoutStatus(ctx context.Context, serviceID 
 
 	update := bson.M{"$set": fields}
 	_, err = r.col.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	return err
+}
+
+func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(
+	ctx context.Context,
+	serviceID primitive.ObjectID,
+	settledAt *time.Time,
+) error {
+	filter := bson.M{"_id": serviceID}
+	update := bson.M{
+		"$set": bson.M{
+			"isSettledAfterComplaint":   true,
+			"settledAfterComplaintAt":   settledAt,
+			"updatedAt":                 time.Now(),
+		},
+	}
+
+	_, err := r.col.UpdateOne(ctx, filter, update)
 	return err
 }

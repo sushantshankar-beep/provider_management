@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
 	"provider_management/internal/utils"
@@ -163,12 +164,17 @@ func (s *SettlementService) CreateSettlement(
 				service.ID.Hex(),
 			)
 		}
+		if service.IsSettled && service.HasComplaintAdjustment && service.IsSettledAfterComplaint {
+			return nil, fmt.Errorf(
+				"service %s already settled after complaint resolution",
+				service.ID.Hex(),
+			)
+		}
 	}
 
 	var settlementAmount float64
 
 	for _, service := range services {
-
 		baseAmount := service.FinalPrice
 
 		if payout.ServicePartialAmounts != nil {
@@ -214,6 +220,14 @@ func (s *SettlementService) CreateSettlement(
 
 	if err := s.serviceRepo.MarkAsSettled(ctx, serviceObjIDs, settlement.ID); err != nil {
 		return nil, err
+	}
+
+	for _, service := range services {
+		if service.HasComplaintAdjustment && service.IsSettled {
+			if err := s.serviceRepo.MarkAsSettledAfterComplaint(ctx, service.ID, &now); err != nil {
+				log.Printf("Failed to mark service %s as settled after complaint: %v", service.ID.Hex(), err)
+			}
+		}
 	}
 
 	unsettledCount, err := s.serviceRepo.CountUnsettledByIDs(ctx, payout.ServiceIDs)
