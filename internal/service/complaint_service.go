@@ -292,8 +292,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		providerID := acceptedService.ProviderID.Hex()
 		isNoPayout := req.PayoutToProvider == domain.PayoutTypeNone || req.PayoutToProvider == "No Payout"
 
-		if acceptedService.PayoutCreated && isNoPayout && !acceptedService.IsSettled {
-			log.Printf("Cancelling existing payout for complaint %s - no payout to provider", complaint.ID)
+		if  isNoPayout && !acceptedService.IsSettled {
 			
 			err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
 				ProviderID:          providerID,
