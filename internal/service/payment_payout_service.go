@@ -342,7 +342,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 		if service.IsSettled && !service.HasComplaintAdjustment {
 			continue
 		}
-
+	
 		partialAmount := 0.0
 		hasPartialAmount := false
 		isDeduction := false
@@ -376,7 +376,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 		serviceNet := afterCommission - serviceGST
 
 		showComplaintAdjustment := false
-		if service.HasComplaintAdjustment && service.IsSettled {
+		if service.HasComplaintAdjustment && service.IsSettled && !service.IsSettledAfterComplaint {
 			showComplaintAdjustment = true
 		}
 
@@ -401,6 +401,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			"show_complaint_adjustment": showComplaintAdjustment,
 			"payout_status":       service.PayoutStatus,
 			"isPayoutCancelled":   service.IsPayoutCancelled,
+			"is_settled_after_complaint": service.IsSettledAfterComplaint,
 		}
 
 		services = append(services, serviceData)
