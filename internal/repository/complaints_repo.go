@@ -111,16 +111,13 @@ func (r *ComplaintRepository) List(ctx context.Context, filter domain.ComplaintF
 		}
 	}
 
-	if filter.DateFrom != nil || filter.DateTo != nil {
-		dateQuery := bson.M{}
-		if filter.DateFrom != nil {
-			dateQuery["$gte"] = *filter.DateFrom
+	if filter.CreatedAtFrom != nil && filter.CreatedAtTo != nil {
+		query["createdAt"] = bson.M{
+			"$gte": *filter.CreatedAtFrom,
+			"$lte": *filter.CreatedAtTo,
 		}
-		if filter.DateTo != nil {
-			dateQuery["$lte"] = *filter.DateTo
-		}
-		query["createdAt"] = dateQuery
 	}
+	
 
 	if filter.SearchQuery != nil && *filter.SearchQuery != "" {
 		search := strings.TrimSpace(*filter.SearchQuery)

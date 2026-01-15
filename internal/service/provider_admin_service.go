@@ -8,13 +8,14 @@ import (
 	"strconv"
 	"strings"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"provider_management/internal/constants"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ProviderAdminService struct {
@@ -23,6 +24,7 @@ type ProviderAdminService struct {
 	admin     *repository.AdminRepository
 	zone      *repository.ZoneRepo
 	role      *repository.RoleRepository
+	settlementRepo *repository.ProviderSettlementRepo
 }
 
 func NewProviderAdminService(
@@ -31,6 +33,7 @@ func NewProviderAdminService(
 	a *repository.AdminRepository,
 	z *repository.ZoneRepo,
 	r *repository.RoleRepository,
+	t *repository.ProviderSettlementRepo,
 ) *ProviderAdminService {
 	return &ProviderAdminService{
 		providers: p,
@@ -38,6 +41,7 @@ func NewProviderAdminService(
 		admin:     a,
 		zone:      z,
 		role:      r,
+		settlementRepo: t,
 	}
 }
 
@@ -136,6 +140,16 @@ type ActivationTeamResponse struct {
 	TotalProviders  int64                         `json:"totalProviders"`
 	TotalActivators int64                         `json:"totalActivators"`
 	Team            []domain.ActivationTeamMember `json:"team"`
+}
+
+type JobHistoryItem struct {
+	BookingID      string  `json:"booking_id"`
+	ServiceType    string  `json:"service_type"`
+	BookingDate    string  `json:"booking_date"`
+	AmountEarned   float64 `json:"amount_earned"`
+	IsAMC          string  `json:"is_amc"`
+	PaymentStatus  string  `json:"payment_status"`
+	SettlementDate string  `json:"settlement_date"`
 }
 
 func (s *ProviderAdminService) GetAllProviders(
@@ -1281,4 +1295,174 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 			HasPrev:     page > 1,
 		},
 	}, nil
+}
+
+
+type ProviderEarningsResponse struct {
+	Stats    EarningsStats      `json:"stats"`
+	Bookings []ProviderEarning  `json:"bookings"`
+}
+
+type EarningsStats struct {
+	TotalEarnings       float64 `json:"total_earnings"`
+	TotalAmountSettled  float64 `json:"total_amount_settled"`
+	PendingAmount       float64 `json:"pending_amount"`
+	CompletedJobs       int     `json:"completed_jobs"`
+}
+
+type ProviderEarning struct {
+	BookingID       string  `json:"booking_id"`
+	ServiceType     string  `json:"service_type"`
+	BookingDate     string  `json:"booking_date"`
+	AmountEarned    float64 `json:"amount_earned"`
+	AMCVsRegular    string  `json:"amc_vs_regular"`
+	PaymentStatus   string  `json:"payment_status"`
+	SettlementDate  string  `json:"settlement_date"`
+}
+
+func (s *ProviderAdminService) GetProviderEarnings(ctx context.Context, providerID string) (*ProviderEarningsResponse, error) {
+	// Convert provider ID to ObjectID
+	providerObjID, err := primitive.ObjectIDFromHex(providerID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider ID: %v", err)
+	}
+
+	// Find all accepted services for this provider
+	filter := bson.M{"provider": providerObjID}
+	services, err := s.services.FindAll(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch services: %v", err)
+	}
+
+	var earnings []ProviderEarning
+	var totalEarnings float64
+	var totalSettled float64
+	var pendingAmount float64
+	completedJobs := 0
+
+	for _, service := range services {
+		// Get the base amount - use BasePrice from AcceptedService
+		baseAmount := service.BasePrice
+		
+		// Calculate net payable using your business logic (20% commission, 18% GST)
+		commission := baseAmount * 20.0 / 100
+		afterCommission := baseAmount - commission
+		gst := afterCommission * 18.0 / 100
+		netPayable := afterCommission - gst
+
+		// Handle payout status scenarios
+		var effectiveAmount float64
+		switch service.PayoutStatus {
+		case "payout_cancelled":
+			// Cancelled payout - no earnings for this booking
+			effectiveAmount = 0
+		case "complaint_after_settlement":
+			// Has complaint adjustment - check pending deduction
+			if service.HasComplaintAdjustment {
+				// Earnings reduced by pending deduction
+				effectiveAmount = netPayable - service.PendingDeductionAmount
+			} else {
+				effectiveAmount = netPayable
+			}
+		case "regular_complaint":
+			// Regular complaint - might have partial amount
+			effectiveAmount = netPayable
+		default:
+			// Regular payout or regular complaint
+			effectiveAmount = netPayable
+		}
+
+		// Accumulate totals
+		totalEarnings += effectiveAmount
+
+		// Check settlement status
+		if service.IsSettled {
+			if service.HasComplaintAdjustment && !service.IsSettledAfterComplaint {
+				// Settled but has pending deduction
+				totalSettled += effectiveAmount
+				pendingAmount += service.PendingDeductionAmount
+			} else {
+				totalSettled += effectiveAmount
+			}
+		} else {
+			// Not yet settled
+			if !service.IsPayoutCancelled {
+				pendingAmount += effectiveAmount
+			}
+		}
+
+		// Count completed jobs
+		if service.Status == "completed" {
+			completedJobs++
+		}
+
+		// Determine AMC vs Regular
+		amcVsRegular := "Regular booking"
+		if service.ServiceType == "AMC" || service.ServiceType == "amc" {
+			amcVsRegular = "AMC"
+		}
+
+		// Get settlement information
+		var settlementDate string
+		var paymentStatus string
+
+		if service.SettlementID != nil {
+			// Fetch settlement details
+			settlement, err := s.settlementRepo.FindByID(ctx, *service.SettlementID)
+			if err == nil && settlement != nil {
+				if settlement.SettledAt != nil {
+					settlementDate = settlement.SettledAt.Format("Jan 02, 2006 - 03:04:05 PM")
+				}
+				paymentStatus = string(settlement.Status)
+			} else {
+				log.Printf("Error fetching settlement for service %s: %v", service.ID.Hex(), err)
+			}
+		}
+
+		// Default payment status based on service state
+		if paymentStatus == "" {
+			if service.IsPayoutCancelled {
+				paymentStatus = "Cancelled"
+			} else if service.IsSettled {
+				paymentStatus = "Completed"
+			} else {
+				paymentStatus = service.PaymentStatus
+			}
+		}
+
+		// Format booking date
+		bookingDate := service.CreatedAt.Format("Jan 02, 2006 - 03:04:05 PM")
+
+		earning := ProviderEarning{
+			BookingID:      fmt.Sprintf("#V2A-%d", service.InternalID),
+			ServiceType:    service.ServiceType,
+			BookingDate:    bookingDate,
+			AmountEarned:   roundTo2(effectiveAmount),
+			AMCVsRegular:   amcVsRegular,
+			PaymentStatus:  paymentStatus,
+			SettlementDate: settlementDate,
+		}
+
+		earnings = append(earnings, earning)
+	}
+
+	// Prepare stats
+	stats := EarningsStats{
+		TotalEarnings:      roundTo2(totalEarnings),
+		TotalAmountSettled: roundTo2(totalSettled),
+		PendingAmount:      roundTo2(pendingAmount),
+		CompletedJobs:      completedJobs,
+	}
+
+	response := &ProviderEarningsResponse{
+		Stats:    stats,
+		Bookings: earnings,
+	}
+
+	return response, nil
+}
+
+// Helper function to round to 2 decimal places
+func roundTo2(val float64) float64 {
+	return float64(int(val*100+0.5)) / 100
 }

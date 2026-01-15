@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"time"
-
+    "fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -161,7 +161,7 @@ func (s *AdminService) CreateAdmin(ctx context.Context, req CreateAdminRequest, 
 	return admin, nil
 }
 
-func (s *AdminService) GetAllAdmins(ctx context.Context, limit, offset int64, search, status, role string) ([]domain.Admin, int64, error) {
+func (s *AdminService) GetAllAdmins(ctx context.Context, limit, offset int64, search, status, role, updatedAt string) ([]domain.Admin, int64, error) {
 	query := bson.M{}
 
 	if search != "" {
@@ -183,6 +183,22 @@ func (s *AdminService) GetAllAdmins(ctx context.Context, limit, offset int64, se
 	if role != "" {
 		query["role"] = role
 	}
+
+	if updatedAt != "" {
+		date, err := time.Parse("2006-01-02", updatedAt)
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid updatedAt format, expected YYYY-MM-DD")
+		}
+
+		startOfDay := date
+		endOfDay := date.Add(24 * time.Hour)
+
+		query["updatedAt"] = bson.M{
+			"$gte": startOfDay,
+			"$lt":  endOfDay,
+		}
+	}
+
 
 	return s.repo.FindAll(ctx, query, limit, offset)
 }

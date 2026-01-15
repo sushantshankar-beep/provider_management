@@ -102,9 +102,9 @@ func (s *AMCPlanService) GetAllAMC(
 		var parsedDate time.Time
 		var err error
 		
-		parsedDate, err = time.Parse("2006/01/02", createdDate)
+		parsedDate, err = time.Parse("2006-01-02", createdDate)
 		if err != nil {
-			parsedDate, err = time.Parse("02/01/2006", createdDate)
+			parsedDate, err = time.Parse("02-01-2006", createdDate)
 		}
 		
 		if err == nil {

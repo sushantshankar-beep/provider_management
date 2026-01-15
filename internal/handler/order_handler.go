@@ -24,12 +24,11 @@ func (h *OrderHandler) GetAll(c *gin.Context) {
 	search := c.Query("search")
 	planStatus := c.Query("planStatus")
 	paymentStatus := c.Query("paymentStatus")
-	startDate := c.Query("startDate")
-	endDate := c.Query("endDate")
+	createdAt := c.Query("createdAt")
 	sortBy := c.DefaultQuery("sortBy", "updatedAt")
 	sortOrder := c.DefaultQuery("sortOrder", "desc")
 
-	res, total, err := h.svc.ListOrders(c, page, limit, search, planStatus, paymentStatus, startDate, endDate, sortBy, sortOrder)
+	res, total, err := h.svc.ListOrders(c, page, limit, search, planStatus, paymentStatus, createdAt, sortBy, sortOrder)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch orders"})
 		return
@@ -76,28 +75,6 @@ func (h *OrderHandler) GetByID(c *gin.Context) {
 		"success": true,
 		"data":    res,
 	})
-}
-
-func (h *OrderHandler) ExportToCSV(c *gin.Context) {
-	search := c.Query("search")
-	status := c.Query("status")
-	paymentStatus := c.Query("paymentStatus")
-	startDate := c.Query("startDate")
-	endDate := c.Query("endDate")
-
-	csv, err := h.svc.ExportOrdersToCSV(c, search, status, paymentStatus, startDate, endDate)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "failed to export orders",
-		})
-		return
-	}
-
-	filename := "orders-" + strconv.FormatInt(c.Request.Context().Value("timestamp").(int64), 10) + ".csv"
-	c.Header("Content-Type", "text/csv")
-	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.String(http.StatusOK, csv)
 }
 
 func (h *OrderHandler) UpdateStatus(c *gin.Context) {

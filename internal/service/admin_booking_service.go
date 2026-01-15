@@ -428,24 +428,17 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 	}
 
 	if startDate := params["startDate"]; startDate != "" {
-		if sd, err := time.Parse(time.RFC3339, startDate); err == nil {
-			sd = time.Date(sd.Year(), sd.Month(), sd.Day(), 0, 0, 0, 0, sd.Location())
-			if filter["createdAt"] == nil {
-				filter["createdAt"] = bson.M{}
-			}
-			filter["createdAt"].(bson.M)["$gte"] = sd
+		if sd, err := time.Parse("2006-01-02", startDate); err == nil {
+			sd = time.Date(sd.Year(), sd.Month(), sd.Day(), 0, 0, 0, 0, time.UTC)
+			filter["startedAt"] = bson.M{"$gte": sd}
 		}
 	}
 	if endDate := params["endDate"]; endDate != "" {
-		if ed, err := time.Parse(time.RFC3339, endDate); err == nil {
-			ed = time.Date(ed.Year(), ed.Month(), ed.Day(), 23, 59, 59, 999, ed.Location())
-			if filter["createdAt"] == nil {
-				filter["createdAt"] = bson.M{}
-			}
-			filter["createdAt"].(bson.M)["$lte"] = ed
+		if ed, err := time.Parse("2006-01-02", endDate); err == nil {
+			ed = time.Date(ed.Year(), ed.Month(), ed.Day(), 23, 59, 59, 999999999, time.UTC)
+			filter["completedAt"] = bson.M{"$lte": ed}
 		}
 	}
-
 	allowedZones := s.extractAllowedZones(zoneFilter)
 
 	if len(allowedZones) > 0 {
@@ -609,6 +602,7 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		Stats:       *stats,
 	}, nil
 }
+
 func (s *AdminBookingService) GetBookingStats(ctx context.Context, params map[string]string) (*BookingStats, error) {
 	baseFilter := bson.M{}
 

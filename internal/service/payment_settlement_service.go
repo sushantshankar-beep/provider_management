@@ -175,16 +175,34 @@ func (s *SettlementService) CreateSettlement(
 	var settlementAmount float64
 
 	for _, service := range services {
+		serviceKey := service.ID.Hex()
+
+		if payout.ServicePartialAmounts != nil {
+			if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt == 0 {
+				log.Printf("Service %s has cancelled payout (amount=0), skipping from settlement", serviceKey)
+				continue
+			}
+		}
+
+		if service.IsPayoutCancelled {
+			log.Printf("Service %s marked as cancelled, skipping from settlement", serviceKey)
+			continue
+		}
+
 		baseAmount := service.FinalPrice
 
 		if payout.ServicePartialAmounts != nil {
-			if partialAmt, exists := payout.ServicePartialAmounts[service.ID.Hex()]; exists && partialAmt > 0 {
+			if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt > 0 {
 				baseAmount = partialAmt
+				log.Printf("Service %s using partial amount: %.2f (original: %.2f)",
+					serviceKey, partialAmt, service.FinalPrice)
 			}
 		}
 
 		if service.HasComplaintAdjustment {
 			settlementAmount -= service.PendingDeductionAmount
+			log.Printf("Service %s complaint adjustment: deducting %.2f",
+				serviceKey, service.PendingDeductionAmount)
 			continue
 		}
 
@@ -193,7 +211,14 @@ func (s *SettlementService) CreateSettlement(
 		gst := afterCommission * (payout.GSTPercent / 100)
 		net := afterCommission - gst
 
+		log.Printf("Service %s: Base=%.2f Commission=%.2f GST=%.2f Net=%.2f",
+			serviceKey, baseAmount, commission, gst, net)
+
 		settlementAmount += net
+	}
+
+	if settlementAmount <= 0 {
+		return nil, fmt.Errorf("settlement amount is %.2f, cannot process settlement", settlementAmount)
 	}
 
 	now := time.Now()
@@ -218,8 +243,23 @@ func (s *SettlementService) CreateSettlement(
 		return nil, fmt.Errorf("failed to create settlement")
 	}
 
-	if err := s.serviceRepo.MarkAsSettled(ctx, serviceObjIDs, settlement.ID); err != nil {
-		return nil, err
+	servicesToSettle := []primitive.ObjectID{}
+	for _, service := range services {
+		if service.IsPayoutCancelled {
+			continue
+		}
+		if payout.ServicePartialAmounts != nil {
+			if partialAmt, exists := payout.ServicePartialAmounts[service.ID.Hex()]; exists && partialAmt == 0 {
+				continue
+			}
+		}
+		servicesToSettle = append(servicesToSettle, service.ID)
+	}
+
+	if len(servicesToSettle) > 0 {
+		if err := s.serviceRepo.MarkAsSettled(ctx, servicesToSettle, settlement.ID); err != nil {
+			return nil, err
+		}
 	}
 
 	for _, service := range services {
@@ -234,6 +274,7 @@ func (s *SettlementService) CreateSettlement(
 	if err != nil {
 		return nil, err
 	}
+	log.Println("Unsettled service count:", unsettledCount)
 
 	if unsettledCount == 0 {
 		err = s.payoutRepo.UpdateStatus(

@@ -41,9 +41,9 @@ func (r *AMCTransactionRepo) FindAMCTransactions(
 		var parsedDate time.Time
 		var err error
 		
-		parsedDate, err = time.Parse("2006/01/02", createdAt)
+		parsedDate, err = time.Parse("2006-01-02", createdAt)
 		if err != nil {
-			parsedDate, err = time.Parse("02/01/2006", createdAt)
+			parsedDate, err = time.Parse("02-01-2006", createdAt)
 		}
 		
 		if err == nil {

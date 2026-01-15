@@ -187,8 +187,9 @@ func (h *AdminHandler) GetAllAdmins(c *gin.Context) {
 	search := c.Query("search")
 	status := c.Query("status")
 	role := c.Query("role")
+	updatedAt := c.Query("updatedAt")
 
-	admins, total, err := h.service.GetAllAdmins(c.Request.Context(), limit, offset, search, status, role)
+	admins, total, err := h.service.GetAllAdmins(c.Request.Context(), limit, offset, search, status, role, updatedAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
