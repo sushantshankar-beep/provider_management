@@ -140,6 +140,8 @@ type ComplaintFilter struct {
 	ProviderID  *string
 	Page        int
 	Limit       int
+	CreatedAtFrom   *time.Time
+	CreatedAtTo     *time.Time
 }
 
 type ComplaintStats struct {

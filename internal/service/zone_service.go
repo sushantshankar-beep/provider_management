@@ -74,13 +74,13 @@ func (s *ZoneService) ListZones(ctx context.Context, pageStr, limitStr, search, 
 	var createdAtPtr, updatedAtPtr *time.Time
 
 	if createdAtStr != "" {
-		if t, err := time.Parse("02/01/2006", createdAtStr); err == nil {
+		if t, err := time.Parse("02-01-2006", createdAtStr); err == nil {
 			createdAtPtr = &t
 		}
 	}
 
 	if updatedAtStr != "" {
-		if t, err := time.Parse("02/01/2006", updatedAtStr); err == nil {
+		if t, err := time.Parse("02-01-2006", updatedAtStr); err == nil {
 			updatedAtPtr = &t
 		}
 	}

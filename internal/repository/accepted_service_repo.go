@@ -658,3 +658,35 @@ func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(
 	_, err := r.col.UpdateOne(ctx, filter, update)
 	return err
 }
+
+func (r *AcceptedServiceRepo) UpdatePayoutCancellation(ctx context.Context, serviceID string, cancelled bool) error {
+    objID, _ := primitive.ObjectIDFromHex(serviceID)
+    _, err := r.col.UpdateOne(
+        ctx,
+        bson.M{"_id": objID},
+        bson.M{"$set": bson.M{
+            "isPayoutCancelled": cancelled,
+            "payoutCancelledAt": time.Now(),
+        }},
+    )
+    return err
+}
+
+
+func (r *AcceptedServiceRepo) FindAll(
+	ctx context.Context,
+	filter bson.M,
+) ([]domain.AcceptedService, error) {
+	cursor, err := r.col.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var services []domain.AcceptedService
+	if err := cursor.All(ctx, &services); err != nil {
+		return nil, err
+	}
+
+	return services, nil
+}

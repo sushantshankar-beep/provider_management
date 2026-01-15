@@ -1,10 +1,7 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/csv"
-	"fmt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
@@ -83,7 +80,7 @@ type OrderDetailResponse struct {
 
 func (s *OrderService) ListOrders(
 	ctx context.Context,
-	pageStr, limitStr, search, planStatus, paymentStatus, startDate, endDate, sortBy, sortOrder string,
+	pageStr, limitStr, search, planStatus, paymentStatus, createdAt, sortBy, sortOrder string,
 ) ([]OrderListResponse, int64, error) {
 
 	page, _ := strconv.ParseInt(pageStr, 10, 64)
@@ -100,7 +97,7 @@ func (s *OrderService) ListOrders(
 
 	orders, total, err := s.orders.FindWithFilter(
 		ctx, skip, limit, search, planStatus, paymentStatus,
-		startDate, endDate, sortBy, sortOrder,
+		createdAt, sortBy, sortOrder,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -201,87 +198,6 @@ func (s *OrderService) GetOrder(ctx context.Context, id string) (*OrderDetailRes
 	resp.PaymentDetails.PaymentSource = order.PaymentSource
 
 	return resp, nil
-}
-
-func (s *OrderService) ExportOrdersToCSV(
-	ctx context.Context,
-	search, status, paymentStatus, startDate, endDate string,
-) (string, error) {
-
-	orders, _, err := s.orders.FindWithFilter(
-		ctx, 0, 0, search, status, paymentStatus,
-		startDate, endDate, "createdAt", "desc",
-	)
-	if err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	writer := csv.NewWriter(&buf)
-
-	header := []string{
-		"Date", "Full Name", "Contact", "Email", "Order ID",
-		"Amount", "Payment Status", "Plan Status", "Plan Name",
-		"Vehicle Number", "Vehicle Type",
-	}
-	if err := writer.Write(header); err != nil {
-		return "", err
-	}
-
-	for _, order := range orders {
-		var userName, userContact, userEmail string = "N/A", "N/A", "N/A"
-		var planName string = "N/A"
-		var vehicleNumber, vehicleType string = "N/A", "N/A"
-
-		if order.UserID != primitive.NilObjectID {
-			if user, err := s.users.FindByID(ctx, order.UserID.Hex()); err == nil {
-				userName = user.Name
-				userContact = user.Phone
-				userEmail = user.Email
-			}
-		}
-
-	
-		planName = order.PlanName
-		if planName == "" && order.PlanID != primitive.NilObjectID {
-			if plan, err := s.plans.FindByID(ctx, order.PlanID.Hex()); err == nil {
-				planName = plan.PlanName
-			}
-		}
-
-		vehicleNumber = order.Vehicle.VehicleNumber
-		vehicleType = order.Vehicle.VehicleType
-
-		orderIDStr := order.PayuTransactionID
-		if orderIDStr == "" {
-			orderIDStr = order.ID.Hex()
-		}
-
-		row := []string{
-			order.CreatedAt.Format("01/02/2006"),
-			userName,
-			userContact,
-			userEmail,
-			orderIDStr,
-			fmt.Sprintf("%.2f", order.PlanPrice),
-			order.PaymentStatus,
-			order.PlanStatus,
-			planName,
-			vehicleNumber,
-			vehicleType,
-		}
-
-		if err := writer.Write(row); err != nil {
-			return "", err
-		}
-	}
-
-	writer.Flush()
-	if err := writer.Error(); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
 }
 
 func (s *OrderService) UpdateOrderStatus(

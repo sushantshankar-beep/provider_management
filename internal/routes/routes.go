@@ -203,6 +203,7 @@ func SetupRoutes(
 		providers.GET("/zones/:zone/activation-team", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneActivationTeam)
 		providers.GET("/zones/:zone/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
 		providers.GET("/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
+		providers.GET("/earnings/:id", providerAdminHandler.GetProviderEarnings)
 
 	}
 
@@ -290,7 +291,6 @@ func SetupRoutes(
 	amcOrder := admin.Group("/amc-order")
 	{
 		amcOrder.GET("", rbac.Check("amc", "view_amc_orders"), amcOrderHandler.GetAll)
-		amcOrder.GET("/export", rbac.Check("amc", "export"), amcOrderHandler.ExportToCSV)
 		amcOrder.GET("/:id", rbac.Check("amc", "view_amc_order_details"), amcOrderHandler.GetByID)
 		amcOrder.PATCH("/:id/status", rbac.Check("amc", "status"), amcOrderHandler.UpdateStatus)
 	}

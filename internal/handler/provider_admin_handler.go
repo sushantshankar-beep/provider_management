@@ -9,7 +9,6 @@ import (
 	"provider_management/internal/dto"
 	"provider_management/internal/middleware"
 	"provider_management/internal/service"
-
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -621,5 +620,31 @@ func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
 		"error":   false,
 		"message": "Providers fetched successfully",
 		"data":    res,
+	})
+}
+
+func (h *ProviderAdminHandler) GetProviderEarnings(c *gin.Context) {
+	providerID := c.Param("id")
+	if providerID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Provider ID is required",
+		})
+		return
+	}
+
+	earnings, err := h.svc.GetProviderEarnings(c.Request.Context(), providerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to fetch provider earnings: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Provider earnings fetched successfully",
+		"data":    earnings,
 	})
 }

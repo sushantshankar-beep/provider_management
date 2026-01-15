@@ -42,104 +42,71 @@ func (r *OrderRepo) FindByID(ctx context.Context, id string) (*domain.AMCPurchas
 func (r *OrderRepo) FindWithFilter(
 	ctx context.Context,
 	skip, limit int64,
-	search, planStatus, paymentStatus, startDate, endDate, sortBy, sortOrder string,
+	search, planStatus, paymentStatus, createdAt, sortBy, sortOrder string,
 ) ([]domain.AMCPurchase, int64, error) {
 
-	filter := bson.M{
-		"paymentStatus": bson.M{"$in": bson.A{"success", "failed"}},
-		"planStatus":    bson.M{"$in": bson.A{"pending", "cancelled"}},
+	andConditions := bson.A{
+		bson.M{"paymentStatus": bson.M{"$in": bson.A{"success", "failed"}}},
+		bson.M{"planStatus": bson.M{"$in": bson.A{"pending", "cancelled"}}},
 	}
 
 	if search != "" {
-		userFilter := bson.M{
-			"$or": bson.A{
-				bson.M{"name": bson.M{"$regex": search, "$options": "i"}},
-				bson.M{"email": bson.M{"$regex": search, "$options": "i"}},
-				bson.M{"phone": bson.M{"$regex": search, "$options": "i"}},
-			},
+		searchConditions := bson.A{
+			bson.M{"payuTransactionId": bson.M{"$regex": search, "$options": "i"}},
+			bson.M{"paymentId": bson.M{"$regex": search, "$options": "i"}},
 		}
 
-		userRepo := NewUserRepo(r.col.Database())
-		users, err := userRepo.FindByFilter(ctx, userFilter)
-		if err == nil && len(users) > 0 {
-			userIDs := make([]primitive.ObjectID, len(users))
-			for i, u := range users {
-				if objID, err := primitive.ObjectIDFromHex(u.ID); err == nil {
-					userIDs[i] = objID
-				}
-			}
-
-			searchConditions := bson.A{
-				bson.M{"user": bson.M{"$in": userIDs}},
-				bson.M{"payuTransactionId": bson.M{"$regex": search, "$options": "i"}},
-				bson.M{"paymentId": bson.M{"$regex": search, "$options": "i"}},
-			}
-
-			if objID, err := primitive.ObjectIDFromHex(search); err == nil {
-				searchConditions = append(searchConditions, bson.M{"_id": objID})
-			}
-
-			filter = bson.M{
-				"$and": bson.A{
-					bson.M{"paymentStatus": bson.M{"$in": bson.A{"success", "failed"}}},
-					bson.M{"$or": searchConditions},
-				},
-			}
-		} else {
-			searchConditions := bson.A{
-				bson.M{"payuTransactionId": bson.M{"$regex": search, "$options": "i"}},
-				bson.M{"paymentId": bson.M{"$regex": search, "$options": "i"}},
-			}
-
-			if objID, err := primitive.ObjectIDFromHex(search); err == nil {
-				searchConditions = append(searchConditions, bson.M{"_id": objID})
-			}
-
-			filter = bson.M{
-				"$and": bson.A{
-					bson.M{"paymentStatus": bson.M{"$in": bson.A{"success", "failed"}}},
-					bson.M{"$or": searchConditions},
-				},
-			}
+		if objID, err := primitive.ObjectIDFromHex(search); err == nil {
+			searchConditions = append(searchConditions, bson.M{"_id": objID})
 		}
+
+		andConditions = append(andConditions, bson.M{
+			"$or": searchConditions,
+		})
 	}
 
 	if planStatus != "" {
-		filter["planStatus"] = planStatus
+		andConditions = append(andConditions, bson.M{
+			"planStatus": planStatus,
+		})
 	}
 
-	if paymentStatus != "" && (paymentStatus == "success" || paymentStatus == "failed") {
-		filter["paymentStatus"] = paymentStatus
+	if paymentStatus != "" {
+		andConditions = append(andConditions, bson.M{
+			"paymentStatus": paymentStatus,
+		})
 	}
 
-	if startDate != "" || endDate != "" {
-		dateFilter := bson.M{}
-		if startDate != "" {
-			if t, err := time.Parse("2006-01-02", startDate); err == nil {
-				dateFilter["$gte"] = primitive.NewDateTimeFromTime(t)
-			}
+	if createdAt != "" {
+		day, err := time.Parse("2006-01-02", createdAt)
+		if err == nil {
+			start := day
+			end := day.Add(24*time.Hour - time.Nanosecond)
+
+			andConditions = append(andConditions, bson.M{
+				"createdAt": bson.M{
+					"$gte": start,
+					"$lte": end,
+				},
+			})
 		}
-		if endDate != "" {
-			if t, err := time.Parse("2006-01-02", endDate); err == nil {
-				dateFilter["$lte"] = primitive.NewDateTimeFromTime(t.Add(24*time.Hour - time.Second))
-			}
-		}
-		if len(dateFilter) > 0 {
-			filter["updatedAt"] = dateFilter
-		}
+	}
+
+	filter := bson.M{
+		"$and": andConditions,
 	}
 
 	sortDirection := -1
 	if strings.ToLower(sortOrder) == "asc" {
 		sortDirection = 1
 	}
-	sortField := sortBy
-	if sortField == "" {
-		sortField = "updatedAt"
+
+	if sortBy == "" {
+		sortBy = "createdAt"
 	}
 
-	opts := options.Find().
-		SetSort(bson.M{sortField: sortDirection})
+	opts := options.Find().SetSort(bson.M{sortBy: sortDirection})
+
 	if limit > 0 {
 		opts.SetSkip(skip).SetLimit(limit)
 	}
@@ -162,6 +129,7 @@ func (r *OrderRepo) FindWithFilter(
 
 	return orders, total, nil
 }
+
 
 func (r *OrderRepo) UpdateStatus(
 	ctx context.Context,

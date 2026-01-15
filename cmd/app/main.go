@@ -73,7 +73,7 @@ func main() {
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
-	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo,adminRepo,zoneRepo,roleRepo)
+	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo,adminRepo,zoneRepo,roleRepo, settlementRepo)
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo)

@@ -65,18 +65,16 @@ func (h *ComplaintHandler) GetAll(c *gin.Context) {
 		filter.ProviderID = &providerId
 	}
 
-	if dateFrom := c.Query("date_from"); dateFrom != "" {
-		if parsedDate, err := time.Parse("2006-01-02", dateFrom); err == nil {
-			filter.DateFrom = &parsedDate
+	if createdAt := c.Query("createdAt"); createdAt != "" {
+		if parsedDate, err := time.Parse("2006-01-02", createdAt); err == nil {
+			start := parsedDate
+			end := parsedDate.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+	
+			filter.CreatedAtFrom = &start
+			filter.CreatedAtTo = &end
 		}
 	}
-
-	if dateTo := c.Query("date_to"); dateTo != "" {
-		if parsedDate, err := time.Parse("2006-01-02", dateTo); err == nil {
-			parsedDate = parsedDate.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-			filter.DateTo = &parsedDate
-		}
-	}
+	
 
 	if page := c.Query("page"); page != "" {
 		if p, err := strconv.Atoi(page); err == nil && p > 0 {
