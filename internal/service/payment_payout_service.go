@@ -665,8 +665,12 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 			key := serviceIDs[0].Hex()
 
 			if req.CancelPayout {
+				service, err := s.serviceRepo.FindByID(ctx, serviceIDs[0].Hex())
+				if err == nil && service.IsSettled {
+					return nil
+				}
+				
 				existing.ServicePartialAmounts[key] = 0
-				existing.IsPayoutCancelled = true
 
 				if err := s.serviceRepo.UpdatePayoutCancellation(ctx, serviceIDs[0].Hex(), true); err != nil {
 					log.Printf("ERROR: Failed to mark service as cancelled: %v", err)
@@ -707,6 +711,11 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 
 		complaintObjID, _ := primitive.ObjectIDFromHex(req.ComplaintID)
 
+		servicePartialAmounts := make(map[string]float64)
+		if len(serviceIDs) > 0 {
+			servicePartialAmounts[serviceIDs[0].Hex()] = req.Amount
+		}
+
 		payout := &domain.PaymentPayout{
 			PayoutID:              time.Now().UnixMilli(),
 			ProviderID:            providerObjID,
@@ -714,7 +723,7 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 			ComplaintID:           &complaintObjID,
 			ComplaintInternalID:   &req.ComplaintInternalID,
 			BaseAmount:            -req.Amount,
-			ServicePartialAmounts: make(map[string]float64),
+			ServicePartialAmounts: servicePartialAmounts,
 			CommissionPercent:     commissionPercent,
 			CommissionAmount:      -utils.RoundTo2(commission),
 			GSTPercent:            gstPercent,
@@ -739,6 +748,11 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 	var effectiveAmount float64
 
 	if req.CancelPayout {
+		service, err := s.serviceRepo.FindByID(ctx, serviceIDs[0].Hex())
+		if err == nil && service.IsSettled {
+			return nil
+		}
+		
 		if len(serviceIDs) > 0 {
 			servicePartialAmounts[serviceIDs[0].Hex()] = 0
 			if err := s.serviceRepo.UpdatePayoutCancellation(ctx, serviceIDs[0].Hex(), true); err != nil {
@@ -783,7 +797,7 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 		GSTPercent:            gstPercent,
 		GSTAmount:             utils.RoundTo2(gst),
 		NetPayable:            utils.RoundTo2(netPayable),
-		IsPayoutCancelled:     req.CancelPayout,
+		IsPayoutCancelled:     false,
 		Status:                domain.PayoutStatusPending,
 		PayoutType:            domain.PayoutTypeComplaint,
 		PeriodFrom:            time.Now().Add(-24 * time.Hour),
