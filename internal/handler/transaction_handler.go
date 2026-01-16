@@ -25,8 +25,12 @@ func (h *TransactionHandler) GetAll(c *gin.Context) {
 	page := c.DefaultQuery("page", "1")
 	limit := c.DefaultQuery("limit", "10")
 	search := c.Query("search")
+	status := c.Query("status")
+	method := c.Query("method")
+	createdAt := c.Query("createdAt")
+ 
 
-	res, total, err := h.svc.ListTransactions(c, page, limit, search)
+	res, total, err := h.svc.ListTransactions(c, page, limit, search, status, method, createdAt)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
 		return

@@ -1321,13 +1321,12 @@ type ProviderEarning struct {
 }
 
 func (s *ProviderAdminService) GetProviderEarnings(ctx context.Context, providerID string) (*ProviderEarningsResponse, error) {
-	// Convert provider ID to ObjectID
+
 	providerObjID, err := primitive.ObjectIDFromHex(providerID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid provider ID: %v", err)
 	}
 
-	// Find all accepted services for this provider
 	filter := bson.M{"provider": providerObjID}
 	services, err := s.services.FindAll(ctx, filter)
 	if err != nil {
@@ -1341,73 +1340,57 @@ func (s *ProviderAdminService) GetProviderEarnings(ctx context.Context, provider
 	completedJobs := 0
 
 	for _, service := range services {
-		// Get the base amount - use BasePrice from AcceptedService
 		baseAmount := service.BasePrice
 		
-		// Calculate net payable using your business logic (20% commission, 18% GST)
 		commission := baseAmount * 20.0 / 100
 		afterCommission := baseAmount - commission
 		gst := afterCommission * 18.0 / 100
 		netPayable := afterCommission - gst
 
-		// Handle payout status scenarios
 		var effectiveAmount float64
 		switch service.PayoutStatus {
 		case "payout_cancelled":
-			// Cancelled payout - no earnings for this booking
 			effectiveAmount = 0
 		case "complaint_after_settlement":
-			// Has complaint adjustment - check pending deduction
 			if service.HasComplaintAdjustment {
-				// Earnings reduced by pending deduction
 				effectiveAmount = netPayable - service.PendingDeductionAmount
 			} else {
 				effectiveAmount = netPayable
 			}
 		case "regular_complaint":
-			// Regular complaint - might have partial amount
 			effectiveAmount = netPayable
 		default:
-			// Regular payout or regular complaint
 			effectiveAmount = netPayable
 		}
 
-		// Accumulate totals
 		totalEarnings += effectiveAmount
 
-		// Check settlement status
 		if service.IsSettled {
 			if service.HasComplaintAdjustment && !service.IsSettledAfterComplaint {
-				// Settled but has pending deduction
 				totalSettled += effectiveAmount
 				pendingAmount += service.PendingDeductionAmount
 			} else {
 				totalSettled += effectiveAmount
 			}
 		} else {
-			// Not yet settled
 			if !service.IsPayoutCancelled {
 				pendingAmount += effectiveAmount
 			}
 		}
 
-		// Count completed jobs
 		if service.Status == "completed" {
 			completedJobs++
 		}
 
-		// Determine AMC vs Regular
 		amcVsRegular := "Regular booking"
 		if service.ServiceType == "AMC" || service.ServiceType == "amc" {
 			amcVsRegular = "AMC"
 		}
 
-		// Get settlement information
 		var settlementDate string
 		var paymentStatus string
 
 		if service.SettlementID != nil {
-			// Fetch settlement details
 			settlement, err := s.settlementRepo.FindByID(ctx, *service.SettlementID)
 			if err == nil && settlement != nil {
 				if settlement.SettledAt != nil {
@@ -1419,7 +1402,6 @@ func (s *ProviderAdminService) GetProviderEarnings(ctx context.Context, provider
 			}
 		}
 
-		// Default payment status based on service state
 		if paymentStatus == "" {
 			if service.IsPayoutCancelled {
 				paymentStatus = "Cancelled"
@@ -1430,7 +1412,6 @@ func (s *ProviderAdminService) GetProviderEarnings(ctx context.Context, provider
 			}
 		}
 
-		// Format booking date
 		bookingDate := service.CreatedAt.Format("Jan 02, 2006 - 03:04:05 PM")
 
 		earning := ProviderEarning{
@@ -1446,7 +1427,6 @@ func (s *ProviderAdminService) GetProviderEarnings(ctx context.Context, provider
 		earnings = append(earnings, earning)
 	}
 
-	// Prepare stats
 	stats := EarningsStats{
 		TotalEarnings:      roundTo2(totalEarnings),
 		TotalAmountSettled: roundTo2(totalSettled),
@@ -1462,7 +1442,6 @@ func (s *ProviderAdminService) GetProviderEarnings(ctx context.Context, provider
 	return response, nil
 }
 
-// Helper function to round to 2 decimal places
 func roundTo2(val float64) float64 {
 	return float64(int(val*100+0.5)) / 100
 }

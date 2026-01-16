@@ -42,7 +42,7 @@ type TransactionResponse struct {
 
 func (s *TransactionService) ListTransactions(
 	ctx context.Context,
-	pageStr, limitStr, search string,
+	pageStr, limitStr, search, status, method, createdAt string,
 ) ([]TransactionResponse, int64, error) {
 
 	page, _ := strconv.ParseInt(pageStr, 10, 64)
@@ -57,7 +57,7 @@ func (s *TransactionService) ListTransactions(
 
 	skip := (page - 1) * limit
 
-	txns, total, err := s.transactions.FindWithFilter(ctx, skip, limit, search)
+	txns, total, err := s.transactions.FindWithFilter(ctx, skip, limit, search, status, method, createdAt)
 	if err != nil {
 		return nil, 0, err
 	}
