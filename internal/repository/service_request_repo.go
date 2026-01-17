@@ -31,3 +31,13 @@ func (r *ServiceRequestRepo) FindByID(ctx context.Context, id string) (*domain.S
 	}
 	return &serviceRequest, nil
 }
+
+func (r *ServiceRequestRepo) FindByObjectID(ctx context.Context, id primitive.ObjectID) (*domain.ServiceRequest, error) {
+	var serviceRequest domain.ServiceRequest
+
+	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&serviceRequest)
+	if err != nil {
+		return nil, err
+	}
+	return &serviceRequest, nil
+}

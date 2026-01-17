@@ -354,7 +354,8 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			continue
 		}
 
-		if service.IsSettled && !service.HasComplaintAdjustment {
+		isInSettlement := service.SettlementStatus == domain.SettleStatusPending || service.SettlementStatus == domain.SettleStatusSettled
+		if isInSettlement && !service.HasComplaintAdjustment {
 			continue
 		}
 
@@ -391,9 +392,10 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 		serviceNet := afterCommission - serviceGST
 
 		showComplaintAdjustment := false
-		if service.HasComplaintAdjustment && service.IsSettled && !service.IsSettledAfterComplaint {
+		if service.HasComplaintAdjustment && isInSettlement && !service.IsSettledAfterComplaint {
 			showComplaintAdjustment = true
 		}
+
 
 		serviceData := map[string]any{
 			"id":                         service.ID,
@@ -408,7 +410,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			"net_amount":                 utils.RoundTo2(serviceNet),
 			"partial_amount":             utils.RoundTo2(partialAmount),
 			"payout_id":                  fmt.Sprintf("SET%d", payout.PayoutID),
-			"is_settled":                 service.IsSettled,
+			"settlement_status":          service.SettlementStatus,
 			"settlement_id":              service.SettlementID,
 			"settled_at":                 service.SettledAt,
 			"has_complaint_adjustment":   service.HasComplaintAdjustment,
@@ -666,9 +668,10 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 
 			if req.CancelPayout {
 				service, err := s.serviceRepo.FindByID(ctx, serviceIDs[0].Hex())
-				if err == nil && service.IsSettled {
-					return nil
-				}
+				if err == nil && (service.SettlementStatus == domain.SettleStatusPending || 
+					service.SettlementStatus == domain.SettleStatusSettled) {
+	  return nil
+  }
 				
 				existing.ServicePartialAmounts[key] = 0
 
@@ -749,9 +752,10 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req PayoutRequest) er
 
 	if req.CancelPayout {
 		service, err := s.serviceRepo.FindByID(ctx, serviceIDs[0].Hex())
-		if err == nil && service.IsSettled {
-			return nil
-		}
+		if err == nil && (service.SettlementStatus == domain.SettleStatusPending || 
+			service.SettlementStatus == domain.SettleStatusSettled) {
+return nil
+}
 		
 		if len(serviceIDs) > 0 {
 			servicePartialAmounts[serviceIDs[0].Hex()] = 0

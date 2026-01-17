@@ -129,16 +129,16 @@ func (r *ProviderSettlementRepo) FindBySettlementIDs(
 		}
 		objectIDs = append(objectIDs, objID)
 	}
-	
+
 	filter := bson.M{"_id": bson.M{"$in": objectIDs}}
-	
+
 	cursor, err := r.coll.Find(ctx, filter)
 	if err != nil {
 		log.Printf("Find error: %v", err)
 		return nil, err
 	}
 	defer cursor.Close(ctx)
-	
+
 	var settlements []domain.ProviderSettlement
 	for cursor.Next(ctx) {
 		var settlement domain.ProviderSettlement
@@ -148,52 +148,73 @@ func (r *ProviderSettlementRepo) FindBySettlementIDs(
 		}
 		settlements = append(settlements, settlement)
 	}
-	
+
 	if err := cursor.Err(); err != nil {
 		log.Printf("Cursor error: %v", err)
 		return nil, err
 	}
-	
+
 	log.Printf("Found %d settlements", len(settlements))
 	return settlements, nil
 }
 
 func (r *ProviderSettlementRepo) GetStats(ctx context.Context, days string) (dto.SettlementStats, error) {
 	startDay := utils.GetStartDateFromDays(days)
-    pipeline := []bson.M{
-        {
-            "$match": bson.M{
-                "createdAt": bson.M{"$gte": startDay},
-            },
-        },
-        {
-            "$group": bson.M{
-                "_id": nil,
-                "settledAmount": bson.M{"$sum": bson.M{"$cond": []interface{}{
-                    bson.M{"$eq": []interface{}{"$status", "settled"}}, "$totalAmount", 0,
-                }}},
-            },
-        },
-    }
-    
-    cursor, err := r.coll.Aggregate(ctx, pipeline)
-    if err != nil {
-        return dto.SettlementStats{}, err
-    }
-    defer cursor.Close(ctx)
-    
-    var result []struct {
-        SettledAmount float64 `bson:"settledAmount"`
-    }
-    
-    if err := cursor.All(ctx, &result); err != nil {
-        return dto.SettlementStats{}, err
-    }
-    
-    stats := dto.SettlementStats{}
-    if len(result) > 0 {
-        stats.SettledAmount = utils.RoundTo2(result[0].SettledAmount)
-    }
-    
-    return stats, nil
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"createdAt": bson.M{"$gte": startDay},
+			},
+		},
+		{
+			"$group": bson.M{
+				"_id": nil,
+				"settledAmount": bson.M{"$sum": bson.M{"$cond": []interface{}{
+					bson.M{"$eq": []interface{}{"$status", "settled"}}, "$totalAmount", 0,
+				}}},
+			},
+		},
+	}
+
+	cursor, err := r.coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		return dto.SettlementStats{}, err
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		SettledAmount float64 `bson:"settledAmount"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return dto.SettlementStats{}, err
+	}
+
+	stats := dto.SettlementStats{}
+	if len(result) > 0 {
+		stats.SettledAmount = utils.RoundTo2(result[0].SettledAmount)
+	}
+
+	return stats, nil
+}
+
+func (r *ProviderSettlementRepo) Update(
+	ctx context.Context,
+	id primitive.ObjectID,
+	updateData map[string]interface{},
+) error {
+
+	updateData["updatedAt"] = time.Now()
+
+	update := bson.M{
+		"$set": updateData,
+	}
+
+	_, err := r.coll.UpdateOne(
+		ctx,
+		bson.M{"_id": id},
+		update,
+	)
+
+	return err
 }

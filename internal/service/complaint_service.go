@@ -292,7 +292,9 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		providerID := acceptedService.ProviderID.Hex()
 		isNoPayout := req.PayoutToProvider == domain.PayoutTypeNone || req.PayoutToProvider == "No Payout"
 
-		if  isNoPayout && !acceptedService.IsSettled {
+		isNotSettled := acceptedService.SettlementStatus == "" || acceptedService.SettlementStatus != domain.SettleStatusPending || acceptedService.SettlementStatus != domain.SettleStatusSettled
+
+		if  isNoPayout && isNotSettled {
 			
 			err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
 				ProviderID:          providerID,
@@ -342,7 +344,8 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 					actions = append(actions, fmt.Sprintf("Payout of %.2f processed", req.PayoutAmount))
 				}
 
-				if acceptedService.IsSettled {
+				
+				if 	acceptedService.SettlementStatus == domain.SettleStatusPending || acceptedService.SettlementStatus == domain.SettleStatusSettled {
 					deductionAmount := originalAmount - req.PayoutAmount
 					commission := deductionAmount * 20.0 / 100
 					afterCommission := deductionAmount - commission
@@ -359,7 +362,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 						},
 					)
 				}
-			} else if isNoPayout && acceptedService.IsSettled {
+			} else if isNoPayout && (acceptedService.SettlementStatus == domain.SettleStatusSettled ||	acceptedService.SettlementStatus == domain.SettleStatusPending) {
 				paymentTracking.PayoutStatus = domain.PaymentActionPending
 				commission := originalAmount * 20.0 / 100
 				gst := (originalAmount - commission) * 18.0 / 100
