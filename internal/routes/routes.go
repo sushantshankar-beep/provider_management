@@ -203,7 +203,7 @@ func SetupRoutes(
 		providers.GET("/zones/:zone/activation-team", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneActivationTeam)
 		providers.GET("/zones/:zone/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
 		providers.GET("/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
-		providers.GET("/provider-earnings/", providerAdminHandler.GetProviderEarnings)
+		providers.GET("/provider-earnings", providerAdminHandler.GetProviderEarnings)
 }
 
 
