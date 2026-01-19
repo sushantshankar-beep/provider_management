@@ -12,6 +12,7 @@ import (
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
+	"provider_management/internal/utils"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -1371,7 +1372,7 @@ func (s *ProviderAdminService) GetProviderEarnings(
 
 		service, err := s.services.FindByObjectIDs(ctx, settlement.ServiceID)
 		if err == nil && service != nil {
-			bookingID = "BK" + strconv.FormatInt(service.ServiceRequestNo, 10)
+			bookingID = "BK" + strconv.FormatInt(service.InternalID, 10)
 			serviceTime := service.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 			bookingDate = serviceTime.Format("2006-01-02 15:04:05")
 			paymentStatus = service.PaymentStatus
@@ -1419,9 +1420,9 @@ func (s *ProviderAdminService) GetProviderEarnings(
 	}
 
 	summary := &ProviderEarningsSummary{
-		TotalEarnings:      totalEarnings,
-		TotalAmountSettled: totalSettled,
-		PendingAmount:      pendingAmount,
+		TotalEarnings:      utils.RoundTo2(totalEarnings),
+		TotalAmountSettled: utils.RoundTo2(totalSettled),
+		PendingAmount:      utils.RoundTo2(pendingAmount),
 		CompletedJobs:      completedCount,
 	}
 

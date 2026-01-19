@@ -291,11 +291,42 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 	if !acceptedService.ProviderID.IsZero() {
 		providerID := acceptedService.ProviderID.Hex()
 		isNoPayout := req.PayoutToProvider == domain.PayoutTypeNone || req.PayoutToProvider == "No Payout"
+		isSettled := acceptedService.SettlementStatus == domain.SettleStatusPending || acceptedService.SettlementStatus == domain.SettleStatusSettled
 
-		isNotSettled := acceptedService.SettlementStatus == "" || acceptedService.SettlementStatus != domain.SettleStatusPending || acceptedService.SettlementStatus != domain.SettleStatusSettled
+		if isNoPayout && isSettled {
+			paymentTracking.PayoutStatus = domain.PaymentActionPending
+			commission := originalAmount * 20.0 / 100
+			gst := (originalAmount - commission) * 18.0 / 100
+			netPayable := originalAmount - commission - gst
 
-		if  isNoPayout && isNotSettled {
-			
+			err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
+				ProviderID:          providerID,
+				BookingID:           complaint.AcceptedServiceID,
+				Amount:              originalAmount,
+				PartialAmount:       0,
+				CancelPayout:        false,
+				CreateDeduction:     true,
+				Reason:              fmt.Sprintf("Complaint CMP%d - Deduction Entry (No Payout)", complaint.InternalID),
+				ComplaintID:         complaint.ID,
+				ComplaintInternalID: complaint.InternalID,
+			})
+			if err != nil {
+				log.Printf("ERROR: Failed to create deduction entry: %v", err)
+			} else {
+				actions = append(actions, fmt.Sprintf("Deduction entry of %.2f created for future recovery", netPayable))
+			}
+
+			_ = s.acceptedServiceRepo.UpdateComplaintFlags(
+				ctx,
+				acceptedService.ID.Hex(),
+				map[string]any{
+					"payoutStatus":            domain.PayoutStatusComplaintAfterSettlement,
+					"hasComplaintAdjustment":  true,
+					"pendingDeductionAmount":  round2(netPayable),
+					"complaintId":             complaint.ID,
+				},
+			)
+		} else if isNoPayout && !isSettled {
 			err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
 				ProviderID:          providerID,
 				BookingID:           complaint.AcceptedServiceID,
@@ -316,86 +347,50 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 					ctx,
 					acceptedService.ID.Hex(),
 					map[string]any{
-						"payoutStatus":            domain.PayoutStatusCancelled,
-						"isPayoutCancelled": 	 true,
-						"PayoutCancelledAt":        time.Now(),
+						"payoutStatus":        domain.PayoutStatusCancelled,
+						"isPayoutCancelled":   true,
+						"PayoutCancelledAt":   time.Now(),
 					},
 				)
 			}
 			paymentTracking.PayoutStatus = domain.PaymentActionNA		
-		} else {
-			// Normal or partial payout / deduction
-			if !isNoPayout && req.PayoutAmount > 0 {
-				paymentTracking.PayoutStatus = domain.PaymentActionPending
-				err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
-					ProviderID:          providerID,
-					BookingID:           complaint.AcceptedServiceID,
-					Amount:              originalAmount,
-					PartialAmount:       req.PayoutAmount,
-					CancelPayout:        false,
-					CreateDeduction:     false,
-					Reason:              fmt.Sprintf("Complaint CMP%d", complaint.InternalID),
-					ComplaintID:         complaint.ID,
-					ComplaintInternalID: complaint.InternalID,
-				})
-				if err != nil {
-					log.Printf("Warning: Failed to process payout: %v", err)
-				} else {
-					actions = append(actions, fmt.Sprintf("Payout of %.2f processed", req.PayoutAmount))
-				}
+		} else if !isNoPayout && req.PayoutAmount > 0 {
+			paymentTracking.PayoutStatus = domain.PaymentActionPending
+			err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
+				ProviderID:          providerID,
+				BookingID:           complaint.AcceptedServiceID,
+				Amount:              originalAmount,
+				PartialAmount:       req.PayoutAmount,
+				CancelPayout:        false,
+				CreateDeduction:     false,
+				Reason:              fmt.Sprintf("Complaint CMP%d", complaint.InternalID),
+				ComplaintID:         complaint.ID,
+				ComplaintInternalID: complaint.InternalID,
+			})
+			if err != nil {
+				log.Printf("Warning: Failed to process payout: %v", err)
+			} else {
+				actions = append(actions, fmt.Sprintf("Payout of %.2f processed", req.PayoutAmount))
+			}
 
-				
-				if 	acceptedService.SettlementStatus == domain.SettleStatusPending || acceptedService.SettlementStatus == domain.SettleStatusSettled {
-					deductionAmount := originalAmount - req.PayoutAmount
-					commission := deductionAmount * 20.0 / 100
-					afterCommission := deductionAmount - commission
-					gst := afterCommission * 18.0 / 100
-					netDeduction := deductionAmount - commission - gst
-					_ = s.acceptedServiceRepo.UpdateComplaintFlags(
-						ctx,
-						acceptedService.ID.Hex(),
-						map[string]any{
-							"payoutStatus":         domain.PayoutStatusComplaintAfterSettlement,
-							"hasComplaintAdjustment": true,
-							"pendingDeductionAmount": round2(netDeduction),
-							"complaintId":            complaint.ID,
-						},
-					)
-				}
-			} else if isNoPayout && (acceptedService.SettlementStatus == domain.SettleStatusSettled ||	acceptedService.SettlementStatus == domain.SettleStatusPending) {
-				paymentTracking.PayoutStatus = domain.PaymentActionPending
-				commission := originalAmount * 20.0 / 100
-				gst := (originalAmount - commission) * 18.0 / 100
-				netPayable := originalAmount - commission - gst
-
-				err := s.payoutService.ProcessPayout(ctx, PayoutRequest{
-					ProviderID:          providerID,
-					BookingID:           complaint.AcceptedServiceID,
-					Amount:              originalAmount,
-					PartialAmount:       0,
-					CancelPayout:        false,
-					CreateDeduction:     true,
-					Reason:              fmt.Sprintf("Complaint CMP%d - Deduction Entry (No Payout)", complaint.InternalID),
-					ComplaintID:         complaint.ID,
-					ComplaintInternalID: complaint.InternalID,
-				})
-				if err != nil {
-					log.Printf("ERROR: Failed to create deduction entry: %v", err)
-				} else {
-					actions = append(actions, fmt.Sprintf("Deduction entry of %.2f created for future recovery", netPayable))
-				}
-
+			if isSettled {
+				deductionAmount := originalAmount - req.PayoutAmount
+				commission := deductionAmount * 20.0 / 100
+				afterCommission := deductionAmount - commission
+				gst := afterCommission * 18.0 / 100
+				netDeduction := deductionAmount - commission - gst
 				_ = s.acceptedServiceRepo.UpdateComplaintFlags(
 					ctx,
 					acceptedService.ID.Hex(),
 					map[string]any{
-				        "payoutStatus":            domain.PayoutStatusComplaintAfterSettlement,
-						"hasComplaintAdjustment":     true,
-						"pendingDeductionAmount":     round2(netPayable),
-						"complaintId":                complaint.ID,
+						"payoutStatus":            domain.PayoutStatusComplaintAfterSettlement,
+						"hasComplaintAdjustment":  true,
+						"pendingDeductionAmount":  round2(netDeduction),
+						"complaintId":             complaint.ID,
 					},
 				)
 			}
+			log.Println("Processed payout to provider for complaint", acceptedService.SettlementStatus)
 		}
 	}
 
