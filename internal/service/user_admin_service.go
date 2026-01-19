@@ -126,15 +126,26 @@ func (s *UserAdminService) GetAllUsers(
 	}
 
 	if status != "" {
-		if status == "active" {
-			query["isActive"] = domain.AccountStatusActive  
-		} else if status == "blacklisted" {
-			query["isActive"] =  domain.AccountStatusBlacklisted
-		}else if status == "deactivated" {
-			query["isActive"] =  domain.AccountStatusDeactivated
+		switch status {
+		case "active":
+			query["isActive"] = domain.AccountStatusActive
+	
+		case "inactive":
+			query["isActive"] = bson.M{
+				"$in": []string{
+					domain.AccountStatusBlacklisted,
+					domain.AccountStatusDeactivated,
+				},
+			}
+	
+		case "blacklisted":
+			query["isActive"] = domain.AccountStatusBlacklisted
+	
+		case "deactivated":
+			query["isActive"] = domain.AccountStatusDeactivated
 		}
 	}
-
+	
 	if zone != "" {
 		query["selectedCityName"] = zone
 	}

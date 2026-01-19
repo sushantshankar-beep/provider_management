@@ -106,7 +106,7 @@ type DetailedBookingResponse struct {
 	ProviderEarnings   *ProviderEarningsInfo   `json:"providerEarnings"`
 	Notes              []domain.BookingNote    `bson:"notes,omitempty" json:"notes,omitempty"`
 	AllBookings        []BookingSummary        `json:"allBookings"`
-	IsSettled          bool                    `json:"is_settled"`
+	SettlementStatus   SettlementStatus        `json:"settlement_status"`
 }
 
 type BookingNote struct {
@@ -253,6 +253,13 @@ type InvoicePricing struct {
 	GST           string `json:"gst"`
 	Total         string `json:"total"`
 }
+
+type SettlementStatus string
+
+const (
+	SettleStatusPending SettlementStatus = "pending"
+	SettleStatusSettled SettlementStatus = "settled"
+)
 
 const (
 	StatusNotStarted  = "not_started"
@@ -706,25 +713,25 @@ func (s *AdminBookingService) GetBookingByID(
 	status := s.mapStatus(svc.Status)
 
 	booking := &DetailedBookingResponse{
-		ID:            svc.ID.Hex(),
-		BookingID:     fmt.Sprintf("BK%d", svc.InternalID),
-		ProviderID:    svc.ProviderID.Hex(),
-		Status:        status,
-		Amount:        svc.FinalPrice,
-		PaymentStatus: svc.PaymentStatus,
-		ServiceType:   svc.ServiceType,
-		BookingDate:   svc.CreatedAt,
-		VehicleType:   sr.VehicleType,
-		VehicleNumber: sr.VehicleNumber,
-		Brand:         sr.Brand,
-		Model:         sr.Model,
-		Year:          sr.Year,
-		FuelType:      sr.FuelType,
-		Problems:      sr.Problems,
-		Description:   sr.Description,
-		Location:      sr.Address,
-		IsSettled:     svc.IsSettled,
-		Notes:         svc.Notes,
+		ID:               svc.ID.Hex(),
+		BookingID:        fmt.Sprintf("BK%d", svc.InternalID),
+		ProviderID:       svc.ProviderID.Hex(),
+		Status:           status,
+		Amount:           svc.FinalPrice,
+		PaymentStatus:    svc.PaymentStatus,
+		ServiceType:      svc.ServiceType,
+		BookingDate:      svc.CreatedAt,
+		VehicleType:      sr.VehicleType,
+		VehicleNumber:    sr.VehicleNumber,
+		Brand:            sr.Brand,
+		Model:            sr.Model,
+		Year:             sr.Year,
+		FuelType:         sr.FuelType,
+		Problems:         sr.Problems,
+		Description:      sr.Description,
+		Location:         sr.Address,
+		SettlementStatus: SettlementStatus(svc.SettlementStatus),
+		Notes:            svc.Notes,
 	}
 
 	booking.Zone = extractZone(sr.Address)
@@ -1267,6 +1274,6 @@ func (s *AdminBookingService) extractAllowedZones(zoneFilter bson.M) []string {
 			}
 		}
 	}
-	
+
 	return zones
 }

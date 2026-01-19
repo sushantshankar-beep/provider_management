@@ -2,15 +2,16 @@ package handler
 
 import (
 	"fmt"
-     "io"
-	 "log"
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"io"
+	"log"
 	"net/http"
+	"strconv"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/middleware"
 	"provider_management/internal/service"
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ProviderAdminHandler struct {
@@ -316,13 +317,13 @@ func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
 	}
 
 	filename := fmt.Sprintf("%s_%s%s", documentType, documentID, extension)
-	
+
 	c.Header("Content-Description", "File Transfer")
 	c.Header("Content-Transfer-Encoding", "binary")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "no-cache")
-	
+
 	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
 		c.Header("Content-Length", contentLength)
 	}
@@ -332,7 +333,7 @@ func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
 		log.Printf("Error copying file: %v", err)
 		return
 	}
-	
+
 	log.Printf("Successfully streamed %d bytes of %s", written, contentType)
 }
 func (h *ProviderAdminHandler) AddNote(c *gin.Context) {
@@ -624,27 +625,64 @@ func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
 }
 
 func (h *ProviderAdminHandler) GetProviderEarnings(c *gin.Context) {
-	providerID := c.Param("id")
+	providerID := c.Query("provider_id")
 	if providerID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
-			"message": "Provider ID is required",
+			"message": "provider_id is required",
 		})
 		return
 	}
 
-	earnings, err := h.svc.GetProviderEarnings(c.Request.Context(), providerID)
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	limit := 10
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+
+	sortField := c.Query("sort-field")
+	if sortField == "" {
+		sortField = "createdAt"
+	}
+
+	sortOrder := c.Query("sort-order")
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+
+	search := c.Query("search")
+
+	earnings, summary, total, err := h.svc.GetProviderEarnings(c.Request.Context(), providerID, page, limit, sortField, sortOrder, search)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
-			"message": "Failed to fetch provider earnings: " + err.Error(),
+			"message": err.Error(),
 		})
 		return
 	}
+
+	totalPages := (total + int64(limit) - 1) / int64(limit)
 
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Provider earnings fetched successfully",
+		"summary": summary,
 		"data":    earnings,
+		"pagination": gin.H{
+			"page":         page,
+			"limit":        limit,
+			"total_items":  total,
+			"total_pages":  totalPages,
+			"has_next":     int64(page) < totalPages,
+			"has_previous": page > 1,
+		},
 	})
 }

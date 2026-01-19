@@ -24,10 +24,11 @@ type SettlementRequest struct {
 }
 
 type SettlementService struct {
-	serviceRepo    *repository.AcceptedServiceRepo
-	settlementRepo *repository.ProviderSettlementRepo
-	payoutRepo     *repository.PaymentPayoutRepo
-	providerRepo   *repository.ProviderRepo
+	serviceRepo           *repository.AcceptedServiceRepo
+	settlementRepo        *repository.ProviderSettlementRepo
+	payoutRepo            *repository.PaymentPayoutRepo
+	providerRepo          *repository.ProviderRepo
+	settlementHistoryRepo *repository.SettlementHistoryRepository
 }
 
 type GetSettlementsRequest struct {
@@ -92,12 +93,14 @@ func NewSettlementService(
 	settlementRepo *repository.ProviderSettlementRepo,
 	payoutRepo *repository.PaymentPayoutRepo,
 	providerRepo *repository.ProviderRepo,
+	settlementHistoryRepo *repository.SettlementHistoryRepository,
 ) *SettlementService {
 	return &SettlementService{
-		serviceRepo:    serviceRepo,
-		settlementRepo: settlementRepo,
-		payoutRepo:     payoutRepo,
-		providerRepo:   providerRepo,
+		serviceRepo:           serviceRepo,
+		settlementRepo:        settlementRepo,
+		payoutRepo:            payoutRepo,
+		providerRepo:          providerRepo,
+		settlementHistoryRepo: settlementHistoryRepo,
 	}
 }
 
@@ -158,13 +161,17 @@ func (s *SettlementService) CreateSettlement(
 	}
 
 	for _, service := range services {
-		if service.IsSettled && !service.HasComplaintAdjustment {
+		isInSettlement := service.SettlementStatus == domain.SettleStatusPending ||
+			service.SettlementStatus == domain.SettleStatusSettled
+
+		if isInSettlement && !service.HasComplaintAdjustment {
 			return nil, fmt.Errorf(
 				"service %s already settled and has no complaint adjustment",
 				service.ID.Hex(),
 			)
 		}
-		if service.IsSettled && service.HasComplaintAdjustment && service.IsSettledAfterComplaint {
+
+		if isInSettlement && service.HasComplaintAdjustment && service.IsSettledAfterComplaint {
 			return nil, fmt.Errorf(
 				"service %s already settled after complaint resolution",
 				service.ID.Hex(),
@@ -200,6 +207,7 @@ func (s *SettlementService) CreateSettlement(
 		}
 
 		if service.HasComplaintAdjustment {
+
 			settlementAmount -= service.PendingDeductionAmount
 			log.Printf("Service %s complaint adjustment: deducting %.2f",
 				serviceKey, service.PendingDeductionAmount)
@@ -223,24 +231,172 @@ func (s *SettlementService) CreateSettlement(
 
 	now := time.Now()
 
+	settledBookings := make([]domain.SettledBooking, 0)
+	for _, service := range services {
+		if service.IsPayoutCancelled {
+			continue
+		}
+
+		serviceKey := service.ID.Hex()
+		if payout.ServicePartialAmounts != nil {
+			if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt == 0 {
+				continue
+			}
+		}
+
+		var netAmount float64
+
+		if service.HasComplaintAdjustment {
+			netAmount = -service.PendingDeductionAmount
+		} else {
+			baseAmount := service.FinalPrice
+			if payout.ServicePartialAmounts != nil {
+				if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt > 0 {
+					baseAmount = partialAmt
+				}
+			}
+
+			commission := baseAmount * (payout.CommissionPercent / 100)
+			afterCommission := baseAmount - commission
+			gst := afterCommission * (payout.GSTPercent / 100)
+			netAmount = afterCommission - gst
+		}
+
+		settlementType := "regular"
+		if service.HasComplaintAdjustment {
+			settlementType = "complaint_deduction"
+		} else if payout.PayoutType == domain.PayoutTypeComplaint {
+			settlementType = "complaint"
+		}
+
+		settledBooking := domain.SettledBooking{
+			ServiceID:        service.ID,
+			ServiceRequestNo: service.ServiceRequestNo,
+			OriginalAmount:   utils.RoundTo2(service.FinalPrice),
+			SettledAmount:    utils.RoundTo2(netAmount),
+			SettlementType:   settlementType,
+		}
+
+		settledBookings = append(settledBookings, settledBooking)
+	}
 	settlement := &domain.ProviderSettlement{
-		SettlementID:  time.Now().UnixMilli(),
-		PayoutID:      payout.ID,
-		ProviderID:    provider.ID,
-		ProviderName:  provider.Name,
-		AccountNo:     provider.BankDetails.AccountNumber,
-		IfscCode:      provider.BankDetails.IfscCode,
-		TotalAmount:   utils.RoundTo2(settlementAmount),
-		PaymentMode:   req.PaymentMode,
-		PaymentMethod: req.PaymentMethod,
-		Justification: req.Justification,
-		Status:        "pending",
-		SettledAt:     &now,
-		CreatedAt:     now,
+		SettlementID:    time.Now().UnixMilli(),
+		PayoutID:        payout.ID,
+		ProviderID:      provider.ID,
+		ProviderName:    provider.Name,
+		AccountNo:       provider.BankDetails.AccountNumber,
+		IfscCode:        provider.BankDetails.IfscCode,
+		TotalAmount:     utils.RoundTo2(settlementAmount),
+		PaymentMode:     req.PaymentMode,
+		PaymentMethod:   req.PaymentMethod,
+		Justification:   req.Justification,
+		Status:          domain.SettleStatusPending,
+		SettledBookings: settledBookings,
+		SettledAt:       &now,
+		CreatedAt:       now,
 	}
 
 	if err := s.settlementRepo.Create(ctx, settlement); err != nil {
 		return nil, fmt.Errorf("failed to create settlement")
+	}
+
+	for _, service := range services {
+		serviceKey := service.ID.Hex()
+
+		if payout.ServicePartialAmounts != nil {
+			if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt == 0 {
+				continue
+			}
+		}
+
+		if service.IsPayoutCancelled {
+			continue
+		}
+
+		existingRecord, _ := s.settlementHistoryRepo.FindByServiceID(ctx, service.ID)
+
+		if service.HasComplaintAdjustment && existingRecord != nil {
+			updateData := map[string]interface{}{
+				"deductionAmount":       utils.RoundTo2(service.PendingDeductionAmount),
+				"hasDeduction":          true,
+				"deductionSettlementId": settlement.ID,
+				"deductionPayoutId":     payout.ID,
+				"deductionComplaintId":  payout.ComplaintID,
+				"deductionRemarks":      req.Justification,
+				"deductionProcessedAt":  now,
+				"updatedAt":             now,
+			}
+
+			if err := s.settlementHistoryRepo.UpdateByID(ctx, existingRecord.ID, updateData); err != nil {
+				log.Printf("Failed to update settlement record with deduction for service %s: %v", serviceKey, err)
+				return nil, fmt.Errorf("failed to update settlement record with deduction: %v", err)
+			}
+
+			log.Printf("Updated settlement record for service %s with deduction: Amount=-%.2f",
+				serviceKey, service.PendingDeductionAmount)
+
+			continue
+		}
+
+		originalAmount := service.FinalPrice
+
+		var partialAmount float64
+		if payout.ServicePartialAmounts != nil {
+			if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt > 0 {
+				partialAmount = partialAmt
+			}
+		}
+
+		calculationAmount := originalAmount
+		if partialAmount > 0 {
+			calculationAmount = partialAmount
+		}
+
+		commission := calculationAmount * (payout.CommissionPercent / 100)
+		afterCommission := calculationAmount - commission
+		gst := afterCommission * (payout.GSTPercent / 100)
+		netAmount := afterCommission - gst
+
+		settlementType := "regular"
+		if payout.PayoutType == domain.PayoutTypeComplaint {
+			settlementType = "complaint"
+		}
+
+		settlementRecord := &domain.SettlementRecord{
+			ServiceID:             service.ID,
+			PayoutID:              payout.ID,
+			ProviderID:            payout.ProviderID,
+			SettlementID:          settlement.ID,
+			OriginalAmount:        utils.RoundTo2(originalAmount),
+			PartialAmount:         utils.RoundTo2(partialAmount),
+			SettlementAmount:      utils.RoundTo2(calculationAmount),
+			CommissionPercent:     payout.CommissionPercent,
+			CommissionAmount:      utils.RoundTo2(commission),
+			GSTPercent:            payout.GSTPercent,
+			GSTAmount:             utils.RoundTo2(gst),
+			NetAmount:             utils.RoundTo2(netAmount),
+			DeductionAmount:       0,
+			HasDeduction:          false,
+			DeductionSettlementID: nil,
+			DeductionPayoutID:     nil,
+			DeductionComplaintID:  nil,
+			DeductionRemarks:      "",
+			DeductionProcessedAt:  nil,
+			SettlementType:        settlementType,
+			ComplaintID:           payout.ComplaintID,
+			SettlementStatus:      domain.SettleStatusPending,
+			CreatedAt:             now,
+			UpdatedAt:             now,
+			Remarks:               req.Justification,
+		}
+
+		if _, err := s.settlementHistoryRepo.Create(ctx, settlementRecord); err != nil {
+			log.Printf("Failed to create settlement record for service %s: %v", serviceKey, err)
+			return nil, fmt.Errorf("failed to create settlement record: %v", err)
+		}
+
+		log.Printf("Created settlement record for service %s: Original=%.2f, Partial=%.2f, Settlement=%.2f, Net=%.2f",
+			serviceKey, originalAmount, partialAmount, calculationAmount, netAmount)
 	}
 
 	servicesToSettle := []primitive.ObjectID{}
@@ -248,11 +404,13 @@ func (s *SettlementService) CreateSettlement(
 		if service.IsPayoutCancelled {
 			continue
 		}
+
 		if payout.ServicePartialAmounts != nil {
 			if partialAmt, exists := payout.ServicePartialAmounts[service.ID.Hex()]; exists && partialAmt == 0 {
 				continue
 			}
 		}
+
 		servicesToSettle = append(servicesToSettle, service.ID)
 	}
 
@@ -263,7 +421,7 @@ func (s *SettlementService) CreateSettlement(
 	}
 
 	for _, service := range services {
-		if service.HasComplaintAdjustment && service.IsSettled {
+		if service.HasComplaintAdjustment && service.SettlementStatus == domain.SettleStatusSettled {
 			if err := s.serviceRepo.MarkAsSettledAfterComplaint(ctx, service.ID, &now); err != nil {
 				log.Printf("Failed to mark service %s as settled after complaint: %v", service.ID.Hex(), err)
 			}
@@ -423,45 +581,75 @@ func (s *SettlementService) GetSettlements(
 
 func (s *SettlementService) ChangeProviderSettlementStatus(
 	ctx context.Context,
-	settlementIDStr string,
+	settlementID string,
 	req *CreateSettlementRequest,
 ) (*domain.ProviderSettlement, error) {
 
-	settlementID, err := primitive.ObjectIDFromHex(settlementIDStr)
+	objID, err := primitive.ObjectIDFromHex(settlementID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid settlement id")
+		return nil, fmt.Errorf("invalid settlement id: %w", err)
 	}
 
-	settlement, err := s.settlementRepo.FindByID(ctx, settlementID)
+	settlement, err := s.settlementRepo.FindByID(ctx, objID)
 	if err != nil {
-		return nil, fmt.Errorf("payout not found")
+		return nil, fmt.Errorf("failed to find settlement: %w", err)
+	}
+	if settlement == nil {
+		return nil, fmt.Errorf("settlement not found")
 	}
 
 	if settlement.Status == domain.SettleStatusSettled {
-		return nil, fmt.Errorf("payout already settled")
+		return nil, fmt.Errorf("settlement already marked as settled")
 	}
 
-	now := time.Now()
-	settlement.SettledPostData = &domain.SettledPostData{
-		TransactionID: req.TransactionID,
-		Amount:        utils.RoundTo2(req.Amount),
-		Status:        string(domain.SettleStatusSettled),
-		Note:          req.Note,
+	serviceIDs := make([]primitive.ObjectID, len(settlement.SettledBookings))
+	for i, booking := range settlement.SettledBookings {
+		serviceIDs[i] = booking.ServiceID
 	}
 
-	settlement.Status = domain.SettleStatusSettled
+	if len(serviceIDs) > 0 {
+		now := time.Now()
 
-	if err := s.settlementRepo.UpdateSettlementPostData(
-		ctx,
-		settlement.ID,
-		settlement.SettledPostData,
-		domain.SettleStatusSettled,
-		now,
-	); err != nil {
+		if err := s.settlementHistoryRepo.UpdateStatusBySettlementID(
+			ctx,
+			settlement.ID,
+			domain.SettleStatusSettled,
+			&now,
+		); err != nil {
+			return nil, fmt.Errorf("failed to update settlement history: %w", err)
+		}
+
+		if err := s.serviceRepo.MarkServicesAsSettled(
+			ctx,
+			serviceIDs,
+			settlement.ID,
+			&now,
+		); err != nil {
+			return nil, fmt.Errorf("failed to mark services as settled: %w", err)
+		}
+	}
+
+	updateData := map[string]interface{}{
+		"status":    domain.SettleStatusSettled,
+		"settledAt": time.Now(),
+		"settledPostData": &domain.SettledPostData{
+			TransactionID: req.TransactionID,
+			Amount:        req.Amount,
+			Status:        req.Status,
+			Note:          req.Note,
+		},
+	}
+
+	if err := s.settlementRepo.Update(ctx, settlement.ID, updateData); err != nil {
 		return nil, fmt.Errorf("failed to update settlement: %w", err)
 	}
 
-	return settlement, nil
+	updatedSettlement, err := s.settlementRepo.FindByID(ctx, settlement.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch updated settlement: %w", err)
+	}
+
+	return updatedSettlement, nil
 }
 
 func (s *SettlementService) GetSettlementByID(

@@ -66,18 +66,45 @@ func (r *TransactionRepo) Create(ctx context.Context, transaction map[string]int
 func (r *TransactionRepo) FindWithFilter(
 	ctx context.Context,
 	skip, limit int64,
-	search string,
+	search, status, method, createdAt string,
 ) ([]domain.Transaction, int64, error) {
 
-	filter := bson.M{
-		"$or": bson.A{
-			bson.M{"AMCPurchaseId": bson.M{"$exists": false}},
-			bson.M{"AMCPurchaseId": primitive.NilObjectID},
+	andFilters := bson.A{
+		bson.M{
+			"$or": bson.A{
+				bson.M{"AMCPurchaseId": bson.M{"$exists": false}},
+				bson.M{"AMCPurchaseId": primitive.NilObjectID},
+			},
 		},
+	}
+
+	if status != "" {
+		andFilters = append(andFilters, bson.M{"status": status})
+	}
+
+	if method != "" {
+		andFilters = append(andFilters, bson.M{"method": method})
+	}
+
+	if createdAt != "" {
+		const layout = "2006-01-02"
+
+		if date, err := time.Parse(layout, createdAt); err == nil {
+			start := date
+			end := date.Add(24 * time.Hour)
+
+			andFilters = append(andFilters, bson.M{
+				"createdAt": bson.M{
+					"$gte": start,
+					"$lt":  end,
+				},
+			})
+		}
 	}
 
 	if search != "" {
 		searchUpper := strings.ToUpper(search)
+
 		or := bson.A{
 			bson.M{"txnid": bson.M{"$regex": search, "$options": "i"}},
 			bson.M{"status": bson.M{"$regex": search, "$options": "i"}},
@@ -85,34 +112,35 @@ func (r *TransactionRepo) FindWithFilter(
 		}
 
 		if strings.HasPrefix(searchUpper, "VW") {
-			if id, err := strconv.ParseInt(strings.TrimPrefix(searchUpper, "VW"), 10, 64); err == nil {
-				userFilter := bson.M{"internalId": id}
+			idStr := strings.TrimPrefix(searchUpper, "VW")
+		
+			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
 				var user domain.User
-				if err := r.col.FindOne(ctx, userFilter).Decode(&user); err == nil {
+				err := r.col.FindOne(ctx, bson.M{"id": id}).Decode(&user)
+				if err == nil {
 					or = append(or, bson.M{"userId": user.ID})
 				}
 			}
 		}
+		
 
 		if strings.HasPrefix(searchUpper, "BK") {
-			if id, err := strconv.ParseInt(strings.TrimPrefix(searchUpper, "BK"), 10, 64); err == nil {
-				serviceFilter := bson.M{"internalId": id}
+			idStr := strings.TrimPrefix(searchUpper, "BK")
+		
+			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
 				var service domain.AcceptedService
-				if err := r.col.FindOne(ctx, serviceFilter).Decode(&service); err == nil {
+				err := r.col.FindOne(ctx, bson.M{"id": id}).Decode(&service)
+				if err == nil {
 					or = append(or, bson.M{"serviceId": service.ID})
 				}
 			}
 		}
+		
 
-		filter["$and"] = bson.A{
-			bson.M{"$or": bson.A{
-				bson.M{"AMCPurchaseId": bson.M{"$exists": false}},
-				bson.M{"AMCPurchaseId": primitive.NilObjectID},
-			}},
-			bson.M{"$or": or},
-		}
-		delete(filter, "$or")
+		andFilters = append(andFilters, bson.M{"$or": or})
 	}
+
+	filter := bson.M{"$and": andFilters}
 
 	opts := options.Find().
 		SetSkip(skip).

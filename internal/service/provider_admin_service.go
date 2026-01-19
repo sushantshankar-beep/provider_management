@@ -12,6 +12,7 @@ import (
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
+	"provider_management/internal/utils"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -19,12 +20,14 @@ import (
 )
 
 type ProviderAdminService struct {
-	providers *repository.ProviderRepo
-	services  *repository.AcceptedServiceRepo
-	admin     *repository.AdminRepository
-	zone      *repository.ZoneRepo
-	role      *repository.RoleRepository
+	providers      *repository.ProviderRepo
+	services       *repository.AcceptedServiceRepo
+	admin          *repository.AdminRepository
+	zone           *repository.ZoneRepo
+	role           *repository.RoleRepository
 	settlementRepo *repository.ProviderSettlementRepo
+	settlementHistoryRepo *repository.SettlementHistoryRepository
+	serviceRequestRepo *repository.ServiceRequestRepo
 }
 
 func NewProviderAdminService(
@@ -34,14 +37,18 @@ func NewProviderAdminService(
 	z *repository.ZoneRepo,
 	r *repository.RoleRepository,
 	t *repository.ProviderSettlementRepo,
+	h *repository.SettlementHistoryRepository,
+	u *repository.ServiceRequestRepo,
 ) *ProviderAdminService {
 	return &ProviderAdminService{
-		providers: p,
-		services:  s,
-		admin:     a,
-		zone:      z,
-		role:      r,
+		providers:      p,
+		services:       s,
+		admin:          a,
+		zone:           z,
+		role:           r,
 		settlementRepo: t,
+		settlementHistoryRepo:  h,
+		serviceRequestRepo: u,
 	}
 }
 
@@ -128,11 +135,11 @@ type DocumentResponse struct {
 }
 
 type ZoneStatsResponse struct {
-	Zones []domain.ZoneStats `json:"zones"`
-	TotalZones               int                `json:"totalZones"`
-    TotalProviders           int                `json:"totalProviders"`
-    TotalActivationMembers   int                `json:"totalActivationMembers"`
-	NewlyActivatedProviders  int                `json:"newlyActivatedProviders"`
+	Zones                   []domain.ZoneStats `json:"zones"`
+	TotalZones              int                `json:"totalZones"`
+	TotalProviders          int                `json:"totalProviders"`
+	TotalActivationMembers  int                `json:"totalActivationMembers"`
+	NewlyActivatedProviders int                `json:"newlyActivatedProviders"`
 }
 
 type ActivationTeamResponse struct {
@@ -151,6 +158,7 @@ type JobHistoryItem struct {
 	PaymentStatus  string  `json:"payment_status"`
 	SettlementDate string  `json:"settlement_date"`
 }
+
 
 func (s *ProviderAdminService) GetAllProviders(
 	ctx context.Context,
@@ -870,11 +878,11 @@ func (s *ProviderAdminService) UpdateProvider(
 	if len(req.ProviderBrands) > 0 {
 		update["providerBrands"] = req.ProviderBrands
 	}
-	
+
 	if len(req.ProviderServices) > 0 {
 		update["providerServices"] = req.ProviderServices
 	}
-	
+
 	if req.AccountHolderName != "" || req.AccountNumber != "" {
 		update["bankDetails"] = &domain.BankDetails{
 			AccountHolderName: req.AccountHolderName,
@@ -901,71 +909,71 @@ func (s *ProviderAdminService) UpdateProvider(
 }
 
 func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[string][]string, adminID primitive.ObjectID) (*ZoneStatsResponse, error) {
-    zoneNames := adminZones["zoneName"]
+	zoneNames := adminZones["zoneName"]
 
-    if len(zoneNames) == 0 {
-        return &ZoneStatsResponse{
-            Zones: []domain.ZoneStats{},
-            TotalZones: 0,
-            TotalProviders: 0,
-            TotalActivationMembers: 0,
-        }, nil
-    }
+	if len(zoneNames) == 0 {
+		return &ZoneStatsResponse{
+			Zones:                  []domain.ZoneStats{},
+			TotalZones:             0,
+			TotalProviders:         0,
+			TotalActivationMembers: 0,
+		}, nil
+	}
 
-    results := make([]domain.ZoneStats, 0, len(zoneNames))
-    
-    totalProvidersAcrossZones := 0
-    totalActivationMembersAcrossZones := 0
+	results := make([]domain.ZoneStats, 0, len(zoneNames))
 
-    for _, zoneName := range zoneNames {
-        subAdminIDs, err := s.getSubAdminsByZone(ctx, zoneName)
-        if err != nil {
-            results = append(results, domain.ZoneStats{
-                ZoneName:               zoneName,
-                TotalProviders:         0,
-                TotalActivationMembers: 0,
-            })
-            continue
-        }
+	totalProvidersAcrossZones := 0
+	totalActivationMembersAcrossZones := 0
 
-        totalActivationMembers := len(subAdminIDs)
-        totalActivationMembersAcrossZones += totalActivationMembers
+	for _, zoneName := range zoneNames {
+		subAdminIDs, err := s.getSubAdminsByZone(ctx, zoneName)
+		if err != nil {
+			results = append(results, domain.ZoneStats{
+				ZoneName:               zoneName,
+				TotalProviders:         0,
+				TotalActivationMembers: 0,
+			})
+			continue
+		}
 
-        if totalActivationMembers == 0 {
-            results = append(results, domain.ZoneStats{
-                ZoneName:               zoneName,
-                TotalProviders:         0,
-                TotalActivationMembers: 0,
-            })
-            continue
-        }
+		totalActivationMembers := len(subAdminIDs)
+		totalActivationMembersAcrossZones += totalActivationMembers
 
-        totalProviders, err := s.countProvidersByCreators(ctx, subAdminIDs)
-        if err != nil {
-            results = append(results, domain.ZoneStats{
-                ZoneName:               zoneName,
-                TotalProviders:         0,
-                TotalActivationMembers: totalActivationMembers,
-            })
-            continue
-        }
+		if totalActivationMembers == 0 {
+			results = append(results, domain.ZoneStats{
+				ZoneName:               zoneName,
+				TotalProviders:         0,
+				TotalActivationMembers: 0,
+			})
+			continue
+		}
 
-        totalProvidersAcrossZones += totalProviders
+		totalProviders, err := s.countProvidersByCreators(ctx, subAdminIDs)
+		if err != nil {
+			results = append(results, domain.ZoneStats{
+				ZoneName:               zoneName,
+				TotalProviders:         0,
+				TotalActivationMembers: totalActivationMembers,
+			})
+			continue
+		}
 
-        results = append(results, domain.ZoneStats{
-            ZoneName:               zoneName,
-            TotalProviders:         totalProviders,
-            TotalActivationMembers: totalActivationMembers,
-        })
-    }
+		totalProvidersAcrossZones += totalProviders
 
-    return &ZoneStatsResponse{
-        Zones:                    results,
-        TotalZones:               len(results),
-        TotalProviders:           totalProvidersAcrossZones,
-		NewlyActivatedProviders:   totalProvidersAcrossZones,
-        TotalActivationMembers:   totalActivationMembersAcrossZones,
-    }, nil
+		results = append(results, domain.ZoneStats{
+			ZoneName:               zoneName,
+			TotalProviders:         totalProviders,
+			TotalActivationMembers: totalActivationMembers,
+		})
+	}
+
+	return &ZoneStatsResponse{
+		Zones:                   results,
+		TotalZones:              len(results),
+		TotalProviders:          totalProvidersAcrossZones,
+		NewlyActivatedProviders: totalProvidersAcrossZones,
+		TotalActivationMembers:  totalActivationMembersAcrossZones,
+	}, nil
 }
 
 func (s *ProviderAdminService) getSubAdminsByZone(ctx context.Context, zoneName string) ([]primitive.ObjectID, error) {
@@ -989,7 +997,7 @@ func (s *ProviderAdminService) getSubAdminsByZone(ctx context.Context, zoneName 
 
 		admin, err := s.admin.FindByID(ctx, adminID)
 		if err != nil {
-			continue 
+			continue
 		}
 
 		if admin.Role == domain.RoleTypeSubAdmin {
@@ -1131,13 +1139,11 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 	adminZones map[string][]string,
 ) (*ProviderListResponse, error) {
 
-	
 	adminObjectID, err := primitive.ObjectIDFromHex(personID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid activation person id")
 	}
 
-	
 	if zoneName != "" {
 		admin, err := s.admin.FindByID(ctx, adminObjectID)
 		if err != nil {
@@ -1162,7 +1168,6 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 		}
 	}
 
-	
 	page, _ := strconv.Atoi(pageStr)
 	if page < 1 {
 		page = 1
@@ -1259,7 +1264,7 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 			Name:          defaultStr(p.Name, "N/A"),
 			Mobile:        p.Phone,
 			Email:         defaultStr(p.Email, "N/A"),
-			Zone: p.City,
+			Zone:          p.City,
 			KYC:           kyc,
 			Account:       account,
 			Vehicle:       vehicle,
@@ -1297,172 +1302,129 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 	}, nil
 }
 
-
-type ProviderEarningsResponse struct {
-	Stats    EarningsStats      `json:"stats"`
-	Bookings []ProviderEarning  `json:"bookings"`
+type ProviderEarningResponse struct {
+	BookingID        string  `json:"booking_id"`
+	ServiceType      string  `json:"service_type"`
+	BookingDate      string  `json:"booking_date"`
+	AmountEarned     float64 `json:"amount_earned"`
+	AMCvsRegular     string  `json:"amc_vs_regular"`
+	PaymentStatus    string  `json:"payment_status"`
+	SettlementDate   string  `json:"settlement_date,omitempty"`
+	DeductionAmount  float64 `json:"deduction_amount,omitempty"`
+	SettlementAmount float64 `json:"settlement_amount"`
 }
 
-type EarningsStats struct {
-	TotalEarnings       float64 `json:"total_earnings"`
-	TotalAmountSettled  float64 `json:"total_amount_settled"`
-	PendingAmount       float64 `json:"pending_amount"`
-	CompletedJobs       int     `json:"completed_jobs"`
+type ProviderEarningsSummary struct {
+	TotalEarnings      float64 `json:"total_earnings"`
+	TotalAmountSettled float64 `json:"total_amount_settled"`
+	PendingAmount      float64 `json:"pending_amount"`
+	CompletedJobs      int64   `json:"completed_jobs"`
 }
 
-type ProviderEarning struct {
-	BookingID       string  `json:"booking_id"`
-	ServiceType     string  `json:"service_type"`
-	BookingDate     string  `json:"booking_date"`
-	AmountEarned    float64 `json:"amount_earned"`
-	AMCVsRegular    string  `json:"amc_vs_regular"`
-	PaymentStatus   string  `json:"payment_status"`
-	SettlementDate  string  `json:"settlement_date"`
-}
+func (s *ProviderAdminService) GetProviderEarnings(
+	ctx context.Context,
+	providerID string,
+	page int,
+	limit int,
+	sortField string,
+	sortOrder string,
+	search string,
+) ([]ProviderEarningResponse, *ProviderEarningsSummary, int64, error) {
 
-func (s *ProviderAdminService) GetProviderEarnings(ctx context.Context, providerID string) (*ProviderEarningsResponse, error) {
-	// Convert provider ID to ObjectID
 	providerObjID, err := primitive.ObjectIDFromHex(providerID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid provider ID: %v", err)
+		return nil, nil, 0, fmt.Errorf("invalid provider id")
 	}
 
-	// Find all accepted services for this provider
-	filter := bson.M{"provider": providerObjID}
-	services, err := s.services.FindAll(ctx, filter)
+	filter := bson.M{
+		"providerId": providerObjID,
+	}
+
+	skip := (page - 1) * limit
+	order := -1
+	if strings.ToLower(sortOrder) == "asc" {
+		order = 1
+	}
+
+	settlements, total, err := s.settlementHistoryRepo.GetSettlementRecords(
+		ctx,
+		filter,
+		skip,
+		limit,
+		sortField,
+		order,
+	)
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch services: %v", err)
+		return nil, nil, 0, fmt.Errorf("failed to get settlement records: %v", err)
 	}
 
-	var earnings []ProviderEarning
-	var totalEarnings float64
-	var totalSettled float64
-	var pendingAmount float64
-	completedJobs := 0
+	var responses []ProviderEarningResponse
+	var totalEarnings, totalSettled, pendingAmount float64
+	completedCount := int64(0)
 
-	for _, service := range services {
-		// Get the base amount - use BasePrice from AcceptedService
-		baseAmount := service.BasePrice
-		
-		// Calculate net payable using your business logic (20% commission, 18% GST)
-		commission := baseAmount * 20.0 / 100
-		afterCommission := baseAmount - commission
-		gst := afterCommission * 18.0 / 100
-		netPayable := afterCommission - gst
+	for _, settlement := range settlements {
+		serviceType := "Regular"
+		bookingID := ""
+		indianTime := settlement.CreatedAt.Add(5*time.Hour + 30*time.Minute)
+		bookingDate := indianTime.Format("2006-01-02 15:04:05")
+		paymentStatus := "Pending"
 
-		// Handle payout status scenarios
-		var effectiveAmount float64
-		switch service.PayoutStatus {
-		case "payout_cancelled":
-			// Cancelled payout - no earnings for this booking
-			effectiveAmount = 0
-		case "complaint_after_settlement":
-			// Has complaint adjustment - check pending deduction
-			if service.HasComplaintAdjustment {
-				// Earnings reduced by pending deduction
-				effectiveAmount = netPayable - service.PendingDeductionAmount
-			} else {
-				effectiveAmount = netPayable
+		service, err := s.services.FindByObjectIDs(ctx, settlement.ServiceID)
+		if err == nil && service != nil {
+			bookingID = "BK" + strconv.FormatInt(service.InternalID, 10)
+			serviceTime := service.CreatedAt.Add(5*time.Hour + 30*time.Minute)
+			bookingDate = serviceTime.Format("2006-01-02 15:04:05")
+			paymentStatus = service.PaymentStatus
+
+			serviceReq, err := s.serviceRequestRepo.FindByID(ctx, service.ServiceRequestID.Hex())
+			if err == nil && serviceReq != nil && len(serviceReq.Problems) > 0 {
+				serviceType = serviceReq.Problems[0] 
 			}
-		case "regular_complaint":
-			// Regular complaint - might have partial amount
-			effectiveAmount = netPayable
-		default:
-			// Regular payout or regular complaint
-			effectiveAmount = netPayable
 		}
 
-		// Accumulate totals
-		totalEarnings += effectiveAmount
+		deductionAmount := 0.0
+		if settlement.HasDeduction {
+			deductionAmount = settlement.DeductionAmount
+		}
 
-		// Check settlement status
-		if service.IsSettled {
-			if service.HasComplaintAdjustment && !service.IsSettledAfterComplaint {
-				// Settled but has pending deduction
-				totalSettled += effectiveAmount
-				pendingAmount += service.PendingDeductionAmount
-			} else {
-				totalSettled += effectiveAmount
+		settlementAmount := settlement.NetAmount - deductionAmount
+		settlementDateStr := ""
+
+		if settlement.SettlementStatus == "settled" {
+			totalSettled += settlementAmount
+			completedCount++
+			if settlement.SettledAt != nil {
+				settledTime := settlement.SettledAt.Add(5*time.Hour + 30*time.Minute)
+				settlementDateStr = settledTime.Format("2006-01-02 15:04:05")
 			}
 		} else {
-			// Not yet settled
-			if !service.IsPayoutCancelled {
-				pendingAmount += effectiveAmount
-			}
+			pendingAmount += settlementAmount
 		}
 
-		// Count completed jobs
-		if service.Status == "completed" {
-			completedJobs++
+		totalEarnings += settlement.NetAmount
+
+		resp := ProviderEarningResponse{
+			BookingID:        bookingID,
+			ServiceType:      serviceType,
+			BookingDate:      bookingDate,
+			AmountEarned:     settlement.NetAmount,
+			AMCvsRegular:     "Regular booking",
+			PaymentStatus:    paymentStatus,
+			SettlementDate:   settlementDateStr,
+			DeductionAmount:  deductionAmount,
+			SettlementAmount: settlementAmount,
 		}
 
-		// Determine AMC vs Regular
-		amcVsRegular := "Regular booking"
-		if service.ServiceType == "AMC" || service.ServiceType == "amc" {
-			amcVsRegular = "AMC"
-		}
-
-		// Get settlement information
-		var settlementDate string
-		var paymentStatus string
-
-		if service.SettlementID != nil {
-			// Fetch settlement details
-			settlement, err := s.settlementRepo.FindByID(ctx, *service.SettlementID)
-			if err == nil && settlement != nil {
-				if settlement.SettledAt != nil {
-					settlementDate = settlement.SettledAt.Format("Jan 02, 2006 - 03:04:05 PM")
-				}
-				paymentStatus = string(settlement.Status)
-			} else {
-				log.Printf("Error fetching settlement for service %s: %v", service.ID.Hex(), err)
-			}
-		}
-
-		// Default payment status based on service state
-		if paymentStatus == "" {
-			if service.IsPayoutCancelled {
-				paymentStatus = "Cancelled"
-			} else if service.IsSettled {
-				paymentStatus = "Completed"
-			} else {
-				paymentStatus = service.PaymentStatus
-			}
-		}
-
-		// Format booking date
-		bookingDate := service.CreatedAt.Format("Jan 02, 2006 - 03:04:05 PM")
-
-		earning := ProviderEarning{
-			BookingID:      fmt.Sprintf("#V2A-%d", service.InternalID),
-			ServiceType:    service.ServiceType,
-			BookingDate:    bookingDate,
-			AmountEarned:   roundTo2(effectiveAmount),
-			AMCVsRegular:   amcVsRegular,
-			PaymentStatus:  paymentStatus,
-			SettlementDate: settlementDate,
-		}
-
-		earnings = append(earnings, earning)
+		responses = append(responses, resp)
 	}
 
-	// Prepare stats
-	stats := EarningsStats{
-		TotalEarnings:      roundTo2(totalEarnings),
-		TotalAmountSettled: roundTo2(totalSettled),
-		PendingAmount:      roundTo2(pendingAmount),
-		CompletedJobs:      completedJobs,
+	summary := &ProviderEarningsSummary{
+		TotalEarnings:      utils.RoundTo2(totalEarnings),
+		TotalAmountSettled: utils.RoundTo2(totalSettled),
+		PendingAmount:      utils.RoundTo2(pendingAmount),
+		CompletedJobs:      completedCount,
 	}
 
-	response := &ProviderEarningsResponse{
-		Stats:    stats,
-		Bookings: earnings,
-	}
-
-	return response, nil
-}
-
-// Helper function to round to 2 decimal places
-func roundTo2(val float64) float64 {
-	return float64(int(val*100+0.5)) / 100
+	return responses, summary, total, nil
 }

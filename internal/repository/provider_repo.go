@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
-
+	"provider_management/internal/utils"
+    "time"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -148,15 +149,29 @@ func (r *ProviderRepo) UpdateDocumentVerification(
 	filter := bson.M{"_id": providerObjID}
 	update := bson.M{}
 
+	now := primitive.NewDateTimeFromTime(time.Now())
+
 	switch documentType {
 	case "identityProof":
 		filter["identityProof._id"] = docObjID
-		update = bson.M{"$set": bson.M{"identityProof.$.verified": status}}
+		updateFields := bson.M{"identityProof.$.verified": status}
+		if status == "approved" {
+			updateFields["approvedAt"] = now
+		}
+		update = bson.M{"$set": updateFields}
 	case "addressProof":
 		filter["addressProof._id"] = docObjID
-		update = bson.M{"$set": bson.M{"addressProof.$.verified": status}}
+		updateFields := bson.M{"addressProof.$.verified": status}
+		if status == "approved" {
+			updateFields["approvedAt"] = now
+		}
+		update = bson.M{"$set": updateFields}
 	case "cancelCheque":
-		update = bson.M{"$set": bson.M{"cancelCheque.verified": status}}
+		updateFields := bson.M{"cancelCheque.verified": status}
+		if status == "approved" {
+			updateFields["approvedAt"] = now
+		}
+		update = bson.M{"$set": updateFields}
 	default:
 		return nil, fmt.Errorf("invalid document type")
 	}
@@ -205,7 +220,7 @@ func (r *ProviderRepo) UpdateCommission(ctx context.Context, id string, commissi
 	err = r.col.FindOneAndUpdate(
 		ctx,
 		bson.M{"_id": objID},
-		bson.M{"$set": bson.M{"commissionPercentage": commission}},
+		bson.M{"$set": bson.M{"commissionPercentage": utils.RoundTo2(commission)}},
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&provider)
 

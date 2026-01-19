@@ -40,6 +40,16 @@ func (r *AcceptedServiceRepo) FindByID(ctx context.Context, id string) (*domain.
 	return &res, nil
 }
 
+func (r *AcceptedServiceRepo) FindByObjectIDs(ctx context.Context,id primitive.ObjectID) (*domain.AcceptedService, error) {
+	var res domain.AcceptedService
+
+	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&res)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 func (r *AcceptedServiceRepo) CountByUserID(ctx context.Context, userID string, filter bson.M) (int64, error) {
 	userObjID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
@@ -302,17 +312,24 @@ func (r *AcceptedServiceRepo) MarkAsSettled(
 	serviceIDs []primitive.ObjectID,
 	settlementID primitive.ObjectID,
 ) error {
-
 	now := time.Now()
 
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
 		"$or": []bson.M{
-
-			{"isSettled": false},
-			{"isSettled": bson.M{"$exists": false}},
 			{
-				"isSettled":              true,
+				"$or": []bson.M{
+					{"settlementStatus": bson.M{"$exists": false}},
+					{"settlementStatus": ""},
+				},
+			},
+			{
+				"settlementStatus": bson.M{
+					"$in": []string{
+						string(domain.SettleStatusPending),
+						string(domain.SettleStatusSettled),
+					},
+				},
 				"hasComplaintAdjustment": true,
 			},
 		},
@@ -320,12 +337,10 @@ func (r *AcceptedServiceRepo) MarkAsSettled(
 
 	update := bson.M{
 		"$set": bson.M{
-			"isSettled":    true,
-			"settlementId": settlementID,
-			"settledAt":    now,
-			"updatedAt":    now,
+			"settlementStatus": domain.SettleStatusPending,
+			"settlementId":     settlementID,
+			"updatedAt":        now,
 		},
-
 		"$unset": bson.M{
 			"hasComplaintAdjustment": "",
 			"pendingDeductionAmount": "",
@@ -367,13 +382,20 @@ func (r *AcceptedServiceRepo) FindCompletedPaidByProvider(ctx context.Context, p
 	return services, nil
 }
 
-func (r *AcceptedServiceRepo) FindUnsettledByProvider(ctx context.Context, providerID primitive.ObjectID) ([]*domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindUnsettledByProvider(
+	ctx context.Context,
+	providerID primitive.ObjectID,
+) ([]*domain.AcceptedService, error) {
 	filter := bson.M{
 		"provider":      providerID,
 		"status":        "completed",
 		"paymentStatus": "paid",
-		"isSettled":     false,
+		"$or": []bson.M{
+			{"settlementStatus": bson.M{"$exists": false}},
+			{"settlementStatus": ""},
+		},
 	}
+
 	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -388,48 +410,73 @@ func (r *AcceptedServiceRepo) FindUnsettledByProvider(ctx context.Context, provi
 }
 
 func (r *AcceptedServiceRepo) CountUnsettledByIDs(
-    ctx context.Context,
-    serviceIDs []primitive.ObjectID,
-) (int64, error) {
-
-    filter := bson.M{
-        "_id": bson.M{"$in": serviceIDs},
-        "$or": []bson.M{
-            {
-                "isSettled": false,
-            },
-            {
-                "isSettled": bson.M{"$exists": false},
-            },
-            {
-                "$and": []bson.M{
-                    {"isSettled": true},
-                    {"payoutStatus": "complaint_after_settlement"},
-                    {
-                        "$or": []bson.M{
-                            {"isSettledAfterComplaint": false},
-                            {"isSettledAfterComplaint": bson.M{"$exists": false}},
-                        },
-                    },
-                },
-            },
-        },
-    }
-
-    return r.col.CountDocuments(ctx, filter)
-}
-func (r *AcceptedServiceRepo) CountSettledByIDs(
 	ctx context.Context,
 	serviceIDs []primitive.ObjectID,
 ) (int64, error) {
+
 	filter := bson.M{
-		"_id":       bson.M{"$in": serviceIDs},
-		"isSettled": true,
+		"_id": bson.M{"$in": serviceIDs},
+		"$or": []bson.M{
+			{
+				"$or": []bson.M{
+					{"settlementStatus": bson.M{"$exists": false}},
+					{"settlementStatus": ""},
+				},
+			},
+
+			{
+				"$and": []bson.M{
+					{"settlementStatus": string(domain.SettleStatusSettled)},
+					{"payoutStatus": domain.PayoutStatusComplaintAfterSettlement},
+					{
+						"$or": []bson.M{
+							{"isSettledAfterComplaint": false},
+							{"isSettledAfterComplaint": bson.M{"$exists": false}},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	return r.col.CountDocuments(ctx, filter)
 }
 
+func (r *AcceptedServiceRepo) CountSettledByIDs(
+	ctx context.Context,
+	serviceIDs []primitive.ObjectID,
+) (int64, error) {
+	filter := bson.M{
+		"_id": bson.M{"$in": serviceIDs},
+		"settlementStatus": bson.M{
+			"$in": []string{
+				string(domain.SettleStatusPending),
+				string(domain.SettleStatusSettled),
+			},
+		},
+	}
+
+	return r.col.CountDocuments(ctx, filter)
+}
+
+func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(
+	ctx context.Context,
+	serviceID primitive.ObjectID,
+	settledAt *time.Time,
+) error {
+	filter := bson.M{"_id": serviceID}
+	update := bson.M{
+		"$set": bson.M{
+			"settlementStatus":        domain.SettleStatusPending, // Will be in new settlement
+			"isSettledAfterComplaint": true,
+			"settledAfterComplaintAt": settledAt,
+			"updatedAt":               time.Now(),
+		},
+	}
+
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
+}
 func (r *AcceptedServiceRepo) MarkPayoutCreated(
 	ctx context.Context,
 	serviceIDs []primitive.ObjectID,
@@ -641,37 +688,18 @@ func (r *AcceptedServiceRepo) UpdatePayoutStatus(ctx context.Context, serviceID 
 	return err
 }
 
-func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(
-	ctx context.Context,
-	serviceID primitive.ObjectID,
-	settledAt *time.Time,
-) error {
-	filter := bson.M{"_id": serviceID}
-	update := bson.M{
-		"$set": bson.M{
-			"isSettledAfterComplaint":   true,
-			"settledAfterComplaintAt":   settledAt,
-			"updatedAt":                 time.Now(),
-		},
-	}
-
-	_, err := r.col.UpdateOne(ctx, filter, update)
+func (r *AcceptedServiceRepo) UpdatePayoutCancellation(ctx context.Context, serviceID string, cancelled bool) error {
+	objID, _ := primitive.ObjectIDFromHex(serviceID)
+	_, err := r.col.UpdateOne(
+		ctx,
+		bson.M{"_id": objID},
+		bson.M{"$set": bson.M{
+			"isPayoutCancelled": cancelled,
+			"payoutCancelledAt": time.Now(),
+		}},
+	)
 	return err
 }
-
-func (r *AcceptedServiceRepo) UpdatePayoutCancellation(ctx context.Context, serviceID string, cancelled bool) error {
-    objID, _ := primitive.ObjectIDFromHex(serviceID)
-    _, err := r.col.UpdateOne(
-        ctx,
-        bson.M{"_id": objID},
-        bson.M{"$set": bson.M{
-            "isPayoutCancelled": cancelled,
-            "payoutCancelledAt": time.Now(),
-        }},
-    )
-    return err
-}
-
 
 func (r *AcceptedServiceRepo) FindAll(
 	ctx context.Context,
@@ -689,4 +717,24 @@ func (r *AcceptedServiceRepo) FindAll(
 	}
 
 	return services, nil
+}
+
+func (r *AcceptedServiceRepo) MarkServicesAsSettled(
+	ctx context.Context,
+	serviceIDs []primitive.ObjectID,
+	settlementID primitive.ObjectID,
+	settledAt *time.Time,
+) error {
+	filter := bson.M{"_id": bson.M{"$in": serviceIDs}}
+	update := bson.M{
+		"$set": bson.M{
+			"settlementStatus": domain.SettleStatusSettled,
+			"settlementId":     settlementID,
+			"settledAt":        settledAt,
+			"updatedAt":        time.Now(),
+		},
+	}
+
+	_, err := r.col.UpdateMany(ctx, filter, update)
+	return err
 }
