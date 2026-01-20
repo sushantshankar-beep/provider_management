@@ -52,14 +52,14 @@ func (u *S3Uploader) compressImage(fileBytes []byte, contentType string) ([]byte
 		err = jpeg.Encode(&compressed, resized, &jpeg.Options{Quality: 80})
 	}
 	log.Println("COMPRESSION ERRORsssss", contentType)
-    log.Println("COMPRESSION ERROR", err)
+	log.Println("COMPRESSION ERROR", err)
 	if err != nil {
 		return fileBytes, err
 	}
 
 	if compressed.Len() < len(fileBytes) {
-		return compressed.Bytes(), nil
-	}
+	return compressed.Bytes(), nil
+}
 	return fileBytes, nil
 }
 
@@ -109,6 +109,8 @@ func (u *S3Uploader) UploadMiddleware(fieldConfigs []FieldConfig) gin.HandlerFun
 					compressedBytes, err := u.compressImage(fileBytes, contentType)
 					if err == nil {
 						fileBytes = compressedBytes
+					} else {
+						log.Println("COMPRESSION FAILED", err)
 					}
 				}
 

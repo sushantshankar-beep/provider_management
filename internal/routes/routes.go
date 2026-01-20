@@ -40,6 +40,7 @@ func SetupRoutes(
 	permissionHandler *handler.PermissionHandler,
 	zoneMapHandler *handler.ZoneMapHandler,
 	vehicleHandler *handler.VehicleHandler,
+	providerAgreementHandler *handler.AgreementHandler,
 ) {
 	r.GET("/health", func(c *gin.Context) {
         c.JSON(200, gin.H{"status": "ok"})
@@ -350,5 +351,13 @@ func SetupRoutes(
 	{
 		vehicle.GET("/brands", vehicleHandler.GetVehicleBrands)
 		vehicle.GET("/services", vehicleHandler.GetVehicleServices)
+	}
+
+	providerAgreement := admin.Group("/provider-agreement")
+	{
+		providerAgreement.GET("/:id", providerAgreementHandler.GetAgreement)
+		providerAgreement.POST("", providerAgreementHandler.CreateAgreement)
+		providerAgreement.PUT("/:id", providerAgreementHandler.UpdateAgreement)
+
 	}
 }

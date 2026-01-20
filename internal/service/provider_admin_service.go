@@ -1375,7 +1375,7 @@ func (s *ProviderAdminService) GetProviderEarnings(
 			bookingID = "BK" + strconv.FormatInt(service.InternalID, 10)
 			serviceTime := service.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 			bookingDate = serviceTime.Format("2006-01-02 15:04:05")
-			paymentStatus = service.PaymentStatus
+			paymentStatus = string(settlement.SettlementStatus)
 
 			serviceReq, err := s.serviceRequestRepo.FindByID(ctx, service.ServiceRequestID.Hex())
 			if err == nil && serviceReq != nil && len(serviceReq.Problems) > 0 {

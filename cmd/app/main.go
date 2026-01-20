@@ -72,6 +72,7 @@ func main() {
 	permissionRepo := repository. NewPermissionRepo(mongoDB)
 	settlementHistoryRepo := repository.NewSettlementHistoryRepository(mongoDB)
     serviceR := repository.NewServiceRequestRepo(mongoDB)
+	providerAgreementRepo := repository.NewAgreementRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
@@ -93,6 +94,7 @@ func main() {
 	dashboardService := service.NewDashboardService(providerRepo, userRepo, acceptedServiceRepo, settlementRepo, complaintRepo,transactionRepo, amcPurchaseRepo, bidRepo)   
 	permissionService := service.NewPermissionService(permissionRepo)
     zoneMapService := service.NewZoneMapService(providerRepo,adminRepo,roleRepo,acceptedServiceRepo)
+	providerAgreementService := service.NewAgreementService(providerAgreementRepo)
 	 
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
@@ -118,6 +120,8 @@ func main() {
 	permissionHandler := handler.NewPermissionHandler(permissionService)
     zoneMapHandler := handler.NewZoneMapHandler(zoneMapService)
 	vehicleHandler := handler.NewVehicleHandler(logg)
+	providerAgreementHandler := handler.NewAgreementHandler(providerAgreementService)
+
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
@@ -151,6 +155,7 @@ func main() {
 		permissionHandler,
 		zoneMapHandler,
 		vehicleHandler,
+		providerAgreementHandler,
 	)
 
 	srv := &http.Server{
