@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/mongo"
 	"net/http"
-	"provider_management/internal/service"
 	"strconv"
 	"strings"
+	"github.com/gin-gonic/gin"
+	"provider_management/internal/dto"
+	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/service"
 )
 
 type PayoutHandler struct {
@@ -18,6 +19,7 @@ func NewPayoutHandler(svc *service.PayoutService) *PayoutHandler {
 }
 
 func (h *PayoutHandler) Create6HourPayout(c *gin.Context) {
+	
 	if err := h.svc.CreatePayoutLast6Hours(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
@@ -32,40 +34,31 @@ func (h *PayoutHandler) Create6HourPayout(c *gin.Context) {
 	})
 }
 
-func (h *PayoutHandler) GetPayouts(c *gin.Context) {
+func (h *PayoutHandler) GetProviderPayouts(c *gin.Context) {
 	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
-	if page < 1 {
-		page = 1
+	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
+
+	filters := dto.PayoutFilters{
+		Search:     c.Query("search"),
+		ProviderID: c.Query("provider_id"),
+		Status:     c.Query("status"),
+		PeriodFrom: c.Query("period_from"),
+		PeriodTo:   c.Query("period_to"),
+		SortBy:     c.Query("sort_by"),
+		SortOrder:  c.DefaultQuery("sort_order", "desc"),
 	}
 
-	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "10"), 10, 64)
-	if limit < 1 {
-		limit = 10
-	}
-	if limit > 100 {
-		limit = 100
+	sort := dto.PayoutSort{
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.DefaultQuery("sort_order", "desc"),
 	}
 
-	search := c.Query("search")
-	providerID := c.Query("provider_id")
-	status := c.Query("status")
-	periodFrom := c.Query("period_from")
-	periodTo := c.Query("period_to")
-	sortBy := c.Query("sort_by")
-	sortOrder := c.DefaultQuery("sort_order", "desc")
+	pagination := dto.PaginationParams{
+		Page:  page,
+		Limit: limit,
+	}
 
-	payouts, total, totalPages, err := h.svc.GetPayouts(
-		c.Request.Context(),
-		page,
-		limit,
-		search,
-		providerID,
-		status,
-		periodFrom,
-		periodTo,
-		sortBy,
-		sortOrder,
-	)
+	res , err := h.svc.GetProviderPayouts(c.Request.Context(), filters,sort, pagination)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -78,20 +71,15 @@ func (h *PayoutHandler) GetPayouts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Payouts fetched successfully",
-		"data":    payouts,
-		"pagination": gin.H{
-			"page":         page,
-			"limit":        limit,
-			"total_items":  total,
-			"total_pages":  totalPages,
-			"has_next":     page < totalPages,
-			"has_previous": page > 1,
-		},
+		"data":    res.Data,
+		"pagination": res.Pagination,
 	})
 }
 
 func (h *PayoutHandler) GetPayoutServices(c *gin.Context) {
+
 	payoutID := c.Param("id")
+
 	if payoutID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
@@ -101,6 +89,7 @@ func (h *PayoutHandler) GetPayoutServices(c *gin.Context) {
 	}
 
 	services, err := h.svc.GetPayoutServices(c.Request.Context(), payoutID)
+
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -143,6 +132,7 @@ func (h *PayoutHandler) GetProviderPayoutDetails(c *gin.Context) {
 	}
 
 	details, err := h.svc.GetProviderPayoutDetails(c.Request.Context(), payoutID)
+
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			c.JSON(http.StatusNotFound, gin.H{

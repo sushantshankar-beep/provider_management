@@ -1,9 +1,9 @@
-// handler/agreement_handler.go
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"github.com/gin-gonic/gin"
+	"provider_management/internal/dto"
 	"provider_management/internal/service"
 )
 
@@ -41,7 +41,7 @@ func (h *AgreementHandler) GetAgreement(c *gin.Context) {
 }
 
 func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
-	var req service.CreateAgreementRequest
+	var req dto.CreateAgreementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -56,8 +56,9 @@ func (h *AgreementHandler) CreateAgreement(c *gin.Context) {
 }
 
 func (h *AgreementHandler) UpdateAgreement(c *gin.Context) {
+	
 	id := c.Param("id")
-	var req service.UpdateAgreementRequest
+	var req dto.UpdateAgreementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

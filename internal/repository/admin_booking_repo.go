@@ -1,16 +1,16 @@
 package repository
 
 import (
-	"context"
 	"fmt"
+	"time"
 	"strings"
 	"unicode"
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"provider_management/internal/domain"
-	"time"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type AdminBookingRepo struct {
@@ -346,42 +346,6 @@ func (r *AdminBookingRepo) FindServiceRequestsByIDs(ctx context.Context, ids []s
 	return requests, nil
 }
 
-func (r *AdminBookingRepo) FindAcceptedServiceByID(ctx context.Context, id string) (*domain.AcceptedService, error) {
-	var service domain.AcceptedService
-
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err == nil {
-		err = r.acceptedServiceColl.FindOne(ctx, bson.M{"_id": objID}).Decode(&service)
-		if err == nil {
-			return &service, nil
-		}
-	}
-
-	err = r.acceptedServiceColl.FindOne(ctx, bson.M{"_id": id}).Decode(&service)
-	if err != nil {
-		var internalID int64
-		if _, err := fmt.Sscanf(id, "%d", &internalID); err == nil {
-			err = r.acceptedServiceColl.FindOne(ctx, bson.M{"id": internalID}).Decode(&service)
-			if err == nil {
-				return &service, nil
-			}
-		}
-		return nil, err
-	}
-	return &service, nil
-}
-
-func (r *AdminBookingRepo) FindAcceptedServiceByServiceRequestID(
-	ctx context.Context,
-	srID primitive.ObjectID,
-) (*domain.AcceptedService, error) {
-	var svc domain.AcceptedService
-	err := r.acceptedServiceColl.FindOne(ctx, bson.M{
-		"serviceRequest": srID,
-	}).Decode(&svc)
-	return &svc, err
-}
-
 func (r *AdminBookingRepo) UpdateAcceptedService(ctx context.Context, id string, update bson.M) (*domain.AcceptedService, error) {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -454,15 +418,6 @@ func (r *AdminBookingRepo) FindServiceRequestByID(ctx context.Context, id string
 		return nil, err
 	}
 	return &request, nil
-}
-
-func (r *AdminBookingRepo) FindServiceRequestByInternalID(
-	ctx context.Context,
-	internalID int64,
-) (*domain.ServiceRequest, error) {
-	var sr domain.ServiceRequest
-	err := r.serviceRequestColl.FindOne(ctx, bson.M{"id": internalID}).Decode(&sr)
-	return &sr, err
 }
 
 func (r *AdminBookingRepo) FindUserByID(ctx context.Context, id string) (*domain.User, error) {
@@ -597,13 +552,6 @@ func (r *AdminBookingRepo) FindRatingsByServiceIDs(ctx context.Context, serviceI
 	return ratings, nil
 }
 
-func (r *AdminBookingRepo) FindTransactionByTxnID(ctx context.Context, txnID string) (*domain.Transaction, error) {
-	var transaction domain.Transaction
-	filter := bson.M{"txnid": txnID}
-	err := r.transactionColl.FindOne(ctx, filter).Decode(&transaction)
-	return &transaction, err
-}
-
 func (r *AdminBookingRepo) FindTransactionByOrderID(ctx context.Context, orderID string) (*domain.Transaction, error) {
 	var transaction domain.Transaction
 
@@ -640,26 +588,6 @@ func (r *AdminBookingRepo) FindComplaintByID(ctx context.Context, id string) (*d
 		return nil, err
 	}
 	return &complaint, nil
-}
-
-func (r *AdminBookingRepo) FindServiceRequestsByInternalID(ctx context.Context, internalIDs []int64) ([]domain.ServiceRequest, error) {
-	if len(internalIDs) == 0 {
-		return []domain.ServiceRequest{}, nil
-	}
-
-	filter := bson.M{"id": bson.M{"$in": internalIDs}}
-	cursor, err := r.serviceRequestColl.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var requests []domain.ServiceRequest
-	if err := cursor.All(ctx, &requests); err != nil {
-		return nil, err
-	}
-
-	return requests, nil
 }
 
 func (r *AdminBookingRepo) FindProviderByProviderID(ctx context.Context, providerID string) (*domain.Provider, error) {
@@ -748,15 +676,6 @@ func (r *AdminBookingRepo) FindProvidersBySearch(ctx context.Context, search str
 	return providers, nil
 }
 
-func (r *AdminBookingRepo) FindServiceRequestByInternalIDs(ctx context.Context, internalID int64) (*domain.ServiceRequest, error) {
-	var sr domain.ServiceRequest
-	err := r.serviceRequestColl.FindOne(ctx, bson.M{"id": internalID}).Decode(&sr)
-	if err != nil {
-		return nil, err
-	}
-	return &sr, nil
-}
-
 func (r *AdminBookingRepo) UpdateProviderIsAssigned(ctx context.Context, providerID string, isAssigned bool) error {
 	objID, err := primitive.ObjectIDFromHex(providerID)
 	if err != nil {
@@ -771,10 +690,7 @@ func (r *AdminBookingRepo) UpdateProviderIsAssigned(ctx context.Context, provide
 	return err
 }
 
-func (r *AdminBookingRepo) AddBookingNote(
-	ctx context.Context,
-	serviceID primitive.ObjectID,
-	note domain.BookingNote,
+func (r *AdminBookingRepo) AddBookingNote( ctx context.Context, serviceID primitive.ObjectID, note domain.BookingNote,
 ) error {
 	_, err := r.acceptedServiceColl.UpdateOne(
 		ctx,

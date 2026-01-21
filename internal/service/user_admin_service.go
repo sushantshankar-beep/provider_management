@@ -1,17 +1,17 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"math"
-	"strings"
 	"time"
+	"strings"
     "strconv"
-	"provider_management/internal/domain"
-	"provider_management/internal/repository"
-
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"provider_management/internal/repository"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -635,7 +635,7 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 func (s *UserAdminService) AddNote(
 	ctx context.Context,
 	userID string,
-	req AddNoteRequest,
+	req dto.AddNoteRequest,
 ) error {
 
 	if req.Content == "" {

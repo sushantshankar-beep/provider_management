@@ -1,14 +1,13 @@
 package repository
 
 import (
-	"context"
-	"provider_management/internal/domain"
 	"time"
-
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ServiceMasterRepo struct {
@@ -26,13 +25,7 @@ func (r *ServiceMasterRepo) Create(ctx context.Context, service *domain.ServiceM
 	return err
 }
 
-func (r *ServiceMasterRepo) GetServices(
-	ctx context.Context,
-	filter bson.M,
-	skip, limit int64,
-	sortField string,
-	sortOrder int,
-) ([]domain.ServiceMaster, int64, error) {
+func (r *ServiceMasterRepo) GetServices( ctx context.Context, filter bson.M, skip, limit int64, sortField string, sortOrder int ) ([]domain.ServiceMaster, int64, error) {
 	if sortField == "" {
 		sortField = "updatedAt"
 	}
@@ -119,16 +112,4 @@ func (r *ServiceMasterRepo) UpdateStatus(ctx context.Context, id string, status 
 		bson.M{"$set": update},
 	)
 	return err
-}
-
-type CategoryRepo struct {
-	col *mongo.Collection
-}
-
-func NewCategoryRepo(db *mongo.Database) *CategoryRepo {
-	return &CategoryRepo{col: db.Collection("categories")}
-}
-
-func (r *CategoryRepo) CountActive(ctx context.Context) (int64, error) {
-	return r.col.CountDocuments(ctx, bson.M{"status": "active"})
 }

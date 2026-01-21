@@ -339,7 +339,7 @@ func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
 func (h *ProviderAdminHandler) AddNote(c *gin.Context) {
 	providerID := c.Param("id")
 
-	var req service.AddNoteRequest
+	var req dto.AddNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,

@@ -2,9 +2,8 @@ package handler
 
 import (
 	"net/http"
-	"provider_management/internal/service"
-
 	"github.com/gin-gonic/gin"
+	"provider_management/internal/service"
 )
 
 type VehicleBrandHandler struct {

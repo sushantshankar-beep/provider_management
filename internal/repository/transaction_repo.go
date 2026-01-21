@@ -1,20 +1,18 @@
 package repository
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"provider_management/internal/domain"
-	"provider_management/internal/dto"
-	"provider_management/internal/utils"
+	"time"
 	"strconv"
 	"strings"
-	"time"
-
+	"context"
+	"provider_management/internal/dto"
+	"provider_management/internal/utils"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type TransactionRepo struct {
@@ -65,8 +63,8 @@ func (r *TransactionRepo) Create(ctx context.Context, transaction map[string]int
 
 func (r *TransactionRepo) FindWithFilter(
 	ctx context.Context,
-	skip, limit int64,
-	search, status, method, createdAt string,
+	filters dto.TransactionFilters,
+	pagination dto.PaginationParams,
 ) ([]domain.Transaction, int64, error) {
 
 	andFilters := bson.A{
@@ -78,21 +76,19 @@ func (r *TransactionRepo) FindWithFilter(
 		},
 	}
 
-	if status != "" {
-		andFilters = append(andFilters, bson.M{"status": status})
+	if filters.Status != "" {
+		andFilters = append(andFilters, bson.M{"status": filters.Status})
 	}
 
-	if method != "" {
-		andFilters = append(andFilters, bson.M{"method": method})
+	if filters.Method != "" {
+		andFilters = append(andFilters, bson.M{"method": filters.Method})
 	}
 
-	if createdAt != "" {
+	if filters.CreatedAt != "" {
 		const layout = "2006-01-02"
-
-		if date, err := time.Parse(layout, createdAt); err == nil {
+		if date, err := time.Parse(layout, filters.CreatedAt); err == nil {
 			start := date
 			end := date.Add(24 * time.Hour)
-
 			andFilters = append(andFilters, bson.M{
 				"createdAt": bson.M{
 					"$gte": start,
@@ -102,18 +98,17 @@ func (r *TransactionRepo) FindWithFilter(
 		}
 	}
 
-	if search != "" {
-		searchUpper := strings.ToUpper(search)
+	if filters.Search != "" {
+		searchUpper := strings.ToUpper(filters.Search)
 
 		or := bson.A{
-			bson.M{"txnid": bson.M{"$regex": search, "$options": "i"}},
-			bson.M{"status": bson.M{"$regex": search, "$options": "i"}},
-			bson.M{"paymentSource": bson.M{"$regex": search, "$options": "i"}},
+			bson.M{"txnid": bson.M{"$regex": filters.Search, "$options": "i"}},
+			bson.M{"status": bson.M{"$regex": filters.Search, "$options": "i"}},
+			bson.M{"paymentSource": bson.M{"$regex": filters.Search, "$options": "i"}},
 		}
 
 		if strings.HasPrefix(searchUpper, "VW") {
 			idStr := strings.TrimPrefix(searchUpper, "VW")
-		
 			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
 				var user domain.User
 				err := r.col.FindOne(ctx, bson.M{"id": id}).Decode(&user)
@@ -122,11 +117,9 @@ func (r *TransactionRepo) FindWithFilter(
 				}
 			}
 		}
-		
 
 		if strings.HasPrefix(searchUpper, "BK") {
 			idStr := strings.TrimPrefix(searchUpper, "BK")
-		
 			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
 				var service domain.AcceptedService
 				err := r.col.FindOne(ctx, bson.M{"id": id}).Decode(&service)
@@ -135,7 +128,6 @@ func (r *TransactionRepo) FindWithFilter(
 				}
 			}
 		}
-		
 
 		andFilters = append(andFilters, bson.M{"$or": or})
 	}
@@ -143,8 +135,8 @@ func (r *TransactionRepo) FindWithFilter(
 	filter := bson.M{"$and": andFilters}
 
 	opts := options.Find().
-		SetSkip(skip).
-		SetLimit(limit).
+		SetSkip(pagination.Skip).
+		SetLimit(pagination.Limit).
 		SetSort(bson.M{"createdAt": -1})
 
 	cursor, err := r.col.Find(ctx, filter, opts)
@@ -256,7 +248,6 @@ func (r *TransactionRepo) GetAMCRevenueStats(ctx context.Context, period string)
 
 	cursor, err := r.col.Aggregate(ctx, pipeline)
 	if err != nil {
-		log.Printf("Aggregate error: %v", err)
 		return dto.RevenueStats{}, err
 	}
 	defer cursor.Close(ctx)
@@ -268,11 +259,8 @@ func (r *TransactionRepo) GetAMCRevenueStats(ctx context.Context, period string)
 	}
 
 	if err := cursor.All(ctx, &results); err != nil {
-		log.Printf("Cursor.All error: %v", err)
 		return dto.RevenueStats{}, err
 	}
-
-	log.Printf("Found %d daily revenue records", len(results))
 	
 	dataPoints := make([]dto.RevenueDataPoint, len(results))
 	totalAmount := 0.0
@@ -282,10 +270,7 @@ func (r *TransactionRepo) GetAMCRevenueStats(ctx context.Context, period string)
 			Amount: r.Amount,
 		}
 		totalAmount += r.Amount
-		log.Printf("  Date: %s, Amount: %.2f INR, Transactions: %d", r.Day, r.Amount, r.Count)
 	}
-	
-	log.Printf("Total AMC Revenue: %.2f INR", totalAmount)
 
 	return dto.RevenueStats{
 		Period:      period,

@@ -2,13 +2,12 @@ package repository
 
 import (
 	"context"
-	"log"
-	"provider_management/internal/domain"
 	"time"
     "fmt"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type AMCPurchaseRepo struct {
@@ -77,10 +76,7 @@ func (r *AMCPurchaseRepo) FindActiveAMCs(ctx context.Context) ([]domain.AMCPurch
 	return amcs, nil
 }
 
-func (r *AMCPurchaseRepo) FindByID(
-	ctx context.Context,
-	id string,
-) (*domain.AMCPurchase, error) {
+func (r *AMCPurchaseRepo) FindByID(ctx context.Context, id string ) (*domain.AMCPurchase, error) {
 
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -97,7 +93,6 @@ func (r *AMCPurchaseRepo) FindByID(
 		return nil, err
 	}
 
-	log.Println("decoded purchase:", res)
 	return &res, nil
 }
 

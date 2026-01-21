@@ -1,19 +1,19 @@
 package service
 
 import (
-	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-
-	"go.mongodb.org/mongo-driver/bson"
 	"log"
 	"math"
-	"provider_management/internal/domain"
-	"provider_management/internal/repository"
+	"time"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
+	"context"
+	"go.mongodb.org/mongo-driver/bson"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"provider_management/internal/repository"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type AdminBookingService struct {
@@ -165,7 +165,7 @@ type ComplaintInfo struct {
 	RaisedBy    string    `json:"raisedBy"`
 	Problem     string    `json:"problem"`
 	Photos      []string  `json:"photos"`
-	Status      string    `json:"status"`
+	Status      domain.ComplaintStatus    `json:"status"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
@@ -293,8 +293,6 @@ func mapStatusLabelToDB(label string) string {
 }
 
 func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[string]string, zoneFilter bson.M) (*GetAllBookingsResponse, error) {
-	log.Printf("🚀 SERVICE - GetAllBookings started")
-	log.Printf("   Zone Filter: %+v", zoneFilter)
 
 	page, _ := strconv.Atoi(params["page"])
 	limit, _ := strconv.Atoi(params["limit"])
@@ -1169,17 +1167,10 @@ func (s *AdminBookingService) GetInvoiceData(
 	return invoice, nil
 }
 
-func getProviderName(provider *domain.Provider) string {
-	if provider.CompanyName != "" {
-		return provider.CompanyName
-	}
-	return provider.Name
-}
-
 func (s *AdminBookingService) AddNote(
 	ctx context.Context,
 	bookingID string,
-	req AddNoteRequest,
+	req dto.AddNoteRequest,
 ) error {
 
 	if req.Content == "" {
@@ -1189,14 +1180,12 @@ func (s *AdminBookingService) AddNote(
 		return fmt.Errorf("addedBy is required")
 	}
 
-	// 🔥 BK123 → 123
 	cleanID := strings.TrimPrefix(bookingID, "BK")
 	internalID, err := strconv.ParseInt(cleanID, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid booking id")
 	}
 
-	// Find booking
 	svcs, _, err := s.repo.FindAcceptedServices(
 		ctx,
 		bson.M{"id": internalID},

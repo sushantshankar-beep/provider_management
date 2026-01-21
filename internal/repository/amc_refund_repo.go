@@ -1,14 +1,13 @@
 package repository
 
 import (
-	"context"
-	"provider_management/internal/domain"
-	"strings"
 	"time"
-
+	"context"
+	"strings"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -18,6 +17,25 @@ type AMCRefundRepo struct {
 
 func NewAMCRefundRepo(db *mongo.Database) *AMCRefundRepo {
 	return &AMCRefundRepo{col: db.Collection("amcrefundrequests")}
+}
+
+type CheckRefundStatusResult struct {
+	RefundStatus string
+	Amount       float64
+	BankRefNum   string
+	Mode         string
+	SettlementID string
+	BankArn      string
+	ErrorMsg     string
+	RawResponse  map[string]interface{}
+}
+
+type RefundStats struct {
+	Total          int64 `json:"total"`
+	Approved       int64 `json:"approved"`
+	RejectedAdmin  int64 `json:"rejectedAdmin"`
+	Rejected       int64 `json:"rejected"`
+	UnderProcess   int64 `json:"underProcess"`
 }
 
 func (r *AMCRefundRepo) FindByID(ctx context.Context, id string) (*domain.AMCRefundRequest, error) {
@@ -34,11 +52,7 @@ func (r *AMCRefundRepo) FindByID(ctx context.Context, id string) (*domain.AMCRef
 	return &refund, nil
 }
 
-func (r *AMCRefundRepo) FindWithFilter(
-	ctx context.Context,
-	skip, limit int64,
-	search, status, sortBy, sortOrder string,
-) ([]domain.AMCRefundRequest, int64, error) {
+func (r *AMCRefundRepo) FindWithFilter( ctx context.Context, skip, limit int64, search, status, sortBy, sortOrder string ) ([]domain.AMCRefundRequest, int64, error) {
 	filter := bson.M{}
 
 	if status != "" && status != "all" {
@@ -87,12 +101,7 @@ func (r *AMCRefundRepo) FindWithFilter(
 	return refunds, total, nil
 }
 
-func (r *AMCRefundRepo) UpdateStatus(
-	ctx context.Context,
-	id, status, payuRequestID, refundTransactionID string,
-	payuResponse map[string]interface{},
-	adminID primitive.ObjectID,
-	timeline domain.Timeline,
+func (r *AMCRefundRepo) UpdateStatus( ctx context.Context, id, status, payuRequestID, refundTransactionID string, payuResponse map[string]interface{}, adminID primitive.ObjectID, timeline domain.Timeline,
 ) error {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -117,11 +126,8 @@ func (r *AMCRefundRepo) UpdateStatus(
 	return err
 }
 
-func (r *AMCRefundRepo) UpdateStatusRejected(
-	ctx context.Context,
-	id, status, rejectionReason string,
-	adminID primitive.ObjectID,
-	timeline domain.Timeline,
+func (r *AMCRefundRepo) UpdateStatusRejected( ctx context.Context, id, status, rejectionReason string, adminID primitive.ObjectID,
+timeline domain.Timeline,
 ) error {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -145,15 +151,7 @@ func (r *AMCRefundRepo) UpdateStatusRejected(
 	return err
 }
 
-func (r *AMCRefundRepo) UpdateStatusApproved(
-	ctx context.Context,
-	id string,
-	bankRefNum string,
-	settlementID string,
-	refundMode string,
-	bankArn string,
-	rawResponse interface{},
-	timeline domain.Timeline,
+func (r *AMCRefundRepo) UpdateStatusApproved( ctx context.Context, id string, bankRefNum string, settlementID string,refundMode string, bankArn string, rawResponse interface{}, timeline domain.Timeline,
 ) error {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -184,10 +182,7 @@ func (r *AMCRefundRepo) UpdateStatusApproved(
 	return err
 }
 
-func (r *AMCRefundRepo) UpdateStatusRejectedPayU(
-	ctx context.Context,
-	id string,
-	timeline domain.Timeline,
+func (r *AMCRefundRepo) UpdateStatusRejectedPayU( ctx context.Context, id string, timeline domain.Timeline,
 ) error {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -209,10 +204,7 @@ func (r *AMCRefundRepo) UpdateStatusRejectedPayU(
 	return err
 }
 
-func (r *AMCRefundRepo) UpdateLastStatusCheck(
-	ctx context.Context,
-	id string,
-	rawResponse map[string]interface{},
+func (r *AMCRefundRepo) UpdateLastStatusCheck( ctx context.Context, id string, rawResponse map[string]interface{},
 ) error {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -229,26 +221,6 @@ func (r *AMCRefundRepo) UpdateLastStatusCheck(
 
 	_, err = r.col.UpdateOne(ctx, bson.M{"_id": objID}, update)
 	return err
-}
-
-type CheckRefundStatusResult struct {
-	RefundStatus string
-	Amount       float64
-	BankRefNum   string
-	Mode         string
-	SettlementID string
-	BankArn      string
-	ErrorMsg     string
-	RawResponse  map[string]interface{}
-}
-
-
-type RefundStats struct {
-	Total          int64 `json:"total"`
-	Approved       int64 `json:"approved"`
-	RejectedAdmin  int64 `json:"rejectedAdmin"`
-	Rejected       int64 `json:"rejected"`
-	UnderProcess   int64 `json:"underProcess"`
 }
 
 func (r *AMCRefundRepo) GetStats(ctx context.Context) (*RefundStats, error) {

@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"provider_management/internal/dto"
 	"provider_management/internal/service"
 	"strconv"
 )
@@ -72,7 +73,7 @@ func (h *UserAdminHandler) UpdateStatus(c *gin.Context) {
 func (h *UserAdminHandler) AddNote(c *gin.Context) {
 	userID := c.Param("id")
 
-	var req service.AddNoteRequest
+	var req dto.AddNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,

@@ -1,13 +1,13 @@
 package service
 
 import (
-	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
-	"strconv"
-	"provider_management/internal/repository"
 	"time"
+	"context"
+	"provider_management/internal/dto"
+	"provider_management/internal/repository"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type TransactionService struct {
@@ -24,49 +24,28 @@ func NewTransactionService(t *repository.TransactionRepo, s *repository.Accepted
 	}
 }
 
-type TransactionResponse struct {
-	ID            string  `json:"_id"`
-	UserID        string  `json:"user_id"`
-	UserName      string  `json:"user_name,omitempty"`
-	BookingID     string  `json:"booking_id,omitempty"`
-	TxnID         string  `json:"txnid"`
-	Amount        float64 `json:"amount"`
-	Currency      string  `json:"currency"`
-	Status        string  `json:"status"`
-	Method        string  `json:"method,omitempty"`
-	PaymentSource string  `json:"payment_source,omitempty"`
-	CreatedAt     string  `json:"created_at"`
-	UpdatedAt     string  `json:"updated_at"`
-	BookingNo     string  `json:"booking_no,omitempty"`
-}
+func (s *TransactionService) GetTransactions( ctx context.Context, filters dto.TransactionFilters, pagination dto.PaginationParams ) (*dto.PaginatedResponse, error) {
 
-func (s *TransactionService) ListTransactions(
-	ctx context.Context,
-	pageStr, limitStr, search, status, method, createdAt string,
-) ([]TransactionResponse, int64, error) {
-
-	page, _ := strconv.ParseInt(pageStr, 10, 64)
-	limit, _ := strconv.ParseInt(limitStr, 10, 64)
-
-	if page < 1 {
-		page = 1
+	if pagination.Page < 1 {
+		pagination.Page = 1
 	}
-	if limit < 1 {
-		limit = 10
+	if pagination.Limit < 1 {
+	   pagination.Limit = 20
 	}
 
-	skip := (page - 1) * limit
+	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
-	txns, total, err := s.transactions.FindWithFilter(ctx, skip, limit, search, status, method, createdAt)
+	txns, total, err := s.transactions.FindWithFilter(ctx, filters, pagination)
+
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-
-	var result []TransactionResponse
+	
+	result := make([]dto.TransactionResponse, 0, len(txns))
 
 	for _, txn := range txns {
 		indianTime := txn.CreatedAt.Add(5*time.Hour + 30*time.Minute)
-		resp := TransactionResponse{
+		resp := dto.TransactionResponse{
 			ID:            txn.ID.Hex(),
 			TxnID:         txn.TxnID,
 			Amount:        txn.Amount,
@@ -74,7 +53,7 @@ func (s *TransactionService) ListTransactions(
 			Status:        txn.Status,
 			Method:        txn.Method,
 			PaymentSource: txn.PaymentSource,
-			CreatedAt:         indianTime.Format("2006-01-02 15:04:05"), 
+			CreatedAt:     indianTime.Format("2006-01-02 15:04:05"), 
 			UpdatedAt:     indianTime.Format("2006-01-02 15:04:05"), 
 		}
 
@@ -95,10 +74,25 @@ func (s *TransactionService) ListTransactions(
 		result = append(result, resp)
 	}
 
-	return result, total, nil
+	totalPages := int64(0)
+	if total > 0 {
+		totalPages = (total + pagination.Limit - 1) / pagination.Limit
+	}
+
+	return &dto.PaginatedResponse{
+		Data: result,
+		Pagination: dto.PaginationMeta{
+			HasNext:     pagination.Page < totalPages,
+			HasPrevious: pagination.Page > 1,
+			Limit:       pagination.Limit,
+			Page:        pagination.Page,
+			TotalItems:  total,
+			TotalPages:  totalPages,
+		},
+	}, nil
 }
 
-func (s *TransactionService) GetTransaction(ctx context.Context, id string) (*TransactionResponse, error) {
+func (s *TransactionService) GetTransactionById(ctx context.Context, id string) (*dto.TransactionResponse, error) {
 	txn, err := s.transactions.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -106,7 +100,7 @@ func (s *TransactionService) GetTransaction(ctx context.Context, id string) (*Tr
 
 	indianTime := txn.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 
-	resp := &TransactionResponse{
+	resp := dto.TransactionResponse{
 		ID:            txn.ID.Hex(),
 		TxnID:         txn.TxnID,
 		Amount:        txn.Amount,
@@ -139,6 +133,5 @@ func (s *TransactionService) GetTransaction(ctx context.Context, id string) (*Tr
 		}
 	}
 	
-
-	return resp, nil
+	return &resp, nil
 }

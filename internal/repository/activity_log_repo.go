@@ -1,13 +1,13 @@
 package repository
 
 import (
-	"context"
-	"provider_management/internal/domain"
 	"time"
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ActivityLogRepository struct {
@@ -29,11 +29,7 @@ func (r *ActivityLogRepository) Create(ctx context.Context, log *domain.Activity
 	return err
 }
 
-func (r *ActivityLogRepository) GetAll(
-	ctx context.Context,
-	page, limit int,
-	adminID, entityType, action string,
-) ([]domain.ActivityLogResponse, int64, error) {
+func (r *ActivityLogRepository) GetAll( ctx context.Context, page, limit int, adminID, entityType, action string ) ([]domain.ActivityLogResponse, int64, error) {
 
 	filter := bson.M{}
 
@@ -87,11 +83,7 @@ func (r *ActivityLogRepository) GetAll(
 }
 
 
-func (r *ActivityLogRepository) GetByEntityID(
-	ctx context.Context,
-	entityType, entityID string,
-	page, limit int,
-) ([]domain.ActivityLogResponse, int64, error) {
+func (r *ActivityLogRepository) GetByEntityID(ctx context.Context, entityType, entityID string, page, limit int ) ([]domain.ActivityLogResponse, int64, error) {
 
 	filter := bson.M{
 		"entity_type": entityType,

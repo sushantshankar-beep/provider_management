@@ -1,12 +1,12 @@
-// service/agreement_service.go
 package service
 
 import (
+	"time"
 	"context"
 	"html/template"
+	"provider_management/internal/dto"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
-	"time"
 )
 
 type AgreementService struct {
@@ -19,92 +19,22 @@ func NewAgreementService(ar *repository.AgreementRepo) *AgreementService {
 	}
 }
 
-type ParagraphResponse struct {
-	Number  string `json:"number"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
-}
-
-type AgreementResponse struct {
-	ID              string              `json:"_id"`
-	Title           string              `json:"title"`
-	Paragraphs      []ParagraphResponse `json:"paragraphs"`
-	AgreementOf     string              `json:"agreementOf"`
-	AgreementFor    string              `json:"agreementFor"`
-	CompanyName     string              `json:"companyName"`
-	Annexures       string              `json:"annexures"`
-	CommercialTerms string              `json:"commercialTerms"`
-	MarketplaceFee  string              `json:"marketplaceFee"`
-	PaymentGateway  string              `json:"paymentGateway"`
-	AdditionalNotes string              `json:"additionalNotes"`
-	CreatedAt       string              `json:"createdAt"`
-	UpdatedAt       string              `json:"updatedAt"`
-}
-
-type SafeHTMLAgreementResponse struct {
-	ID              string                  `json:"_id"`
-	Title           string                  `json:"title"`
-	Paragraphs      []SafeParagraphResponse `json:"paragraphs"`
-	AgreementOf     template.HTML           `json:"agreementOf"`
-	AgreementFor    template.HTML           `json:"agreementFor"`
-	CompanyName     template.HTML           `json:"companyName"`
-	Annexures       template.HTML           `json:"annexures"`
-	CommercialTerms template.HTML           `json:"commercialTerms"`
-	MarketplaceFee  template.HTML           `json:"marketplaceFee"`
-	PaymentGateway  template.HTML           `json:"paymentGateway"`
-	AdditionalNotes template.HTML           `json:"additionalNotes"`
-	CreatedAt       string                  `json:"createdAt"`
-	UpdatedAt       string                  `json:"updatedAt"`
-}
-
-type SafeParagraphResponse struct {
-	Number  string        `json:"number"`
-	Title   string        `json:"title"`
-	Content template.HTML `json:"content"`
-}
-
-type CreateAgreementRequest struct {
-	Title           string              `json:"title" binding:"required"`
-	Paragraphs      []ParagraphResponse `json:"paragraphs" binding:"required"`
-	AgreementOf     string              `json:"agreementOf"`
-	AgreementFor    string              `json:"agreementFor"`
-	CompanyName     string              `json:"companyName"`
-	Annexures       string              `json:"annexures"`
-	CommercialTerms string              `json:"commercialTerms"`
-	MarketplaceFee  string              `json:"marketplaceFee"`
-	PaymentGateway  string              `json:"paymentGateway"`
-	AdditionalNotes string              `json:"additionalNotes"`
-}
-
-type UpdateAgreementRequest struct {
-	Title           string              `json:"title"`
-	Paragraphs      []ParagraphResponse `json:"paragraphs"`
-	AgreementOf     string              `json:"agreementOf"`
-	AgreementFor    string              `json:"agreementFor"`
-	CompanyName     string              `json:"companyName"`
-	Annexures       string              `json:"annexures"`
-	CommercialTerms string              `json:"commercialTerms"`
-	MarketplaceFee  string              `json:"marketplaceFee"`
-	PaymentGateway  string              `json:"paymentGateway"`
-	AdditionalNotes string              `json:"additionalNotes"`
-}
-
-func (s *AgreementService) GetAgreement(ctx context.Context, id string) (*AgreementResponse, error) {
+func (s *AgreementService) GetAgreement(ctx context.Context, id string) (*dto.AgreementResponse, error) {
 	a, err := s.agreementRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	paragraphs := make([]ParagraphResponse, len(a.Paragraphs))
+	paragraphs := make([]dto.ParagraphResponse, len(a.Paragraphs))
 	for i, p := range a.Paragraphs {
-		paragraphs[i] = ParagraphResponse{
+		paragraphs[i] = dto.ParagraphResponse{
 			Number:  p.Number,
 			Title:   p.Title,
 			Content: p.Content,
 		}
 	}
 
-	return &AgreementResponse{
+	return &dto.AgreementResponse{
 		ID:              a.ID.Hex(),
 		Title:           a.Title,
 		Paragraphs:      paragraphs,
@@ -121,22 +51,22 @@ func (s *AgreementService) GetAgreement(ctx context.Context, id string) (*Agreem
 	}, nil
 }
 
-func (s *AgreementService) GetAgreementSafeHTML(ctx context.Context, id string) (*SafeHTMLAgreementResponse, error) {
+func (s *AgreementService) GetAgreementSafeHTML(ctx context.Context, id string) (*dto.SafeHTMLAgreementResponse, error) {
 	a, err := s.agreementRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	paragraphs := make([]SafeParagraphResponse, len(a.Paragraphs))
+	paragraphs := make([]dto.SafeParagraphResponse, len(a.Paragraphs))
 	for i, p := range a.Paragraphs {
-		paragraphs[i] = SafeParagraphResponse{
+		paragraphs[i] = dto.SafeParagraphResponse{
 			Number:  p.Number,
 			Title:   p.Title,
 			Content: template.HTML(p.Content),
 		}
 	}
 
-	return &SafeHTMLAgreementResponse{
+	return &dto.SafeHTMLAgreementResponse{
 		ID:              a.ID.Hex(),
 		Title:           a.Title,
 		Paragraphs:      paragraphs,
@@ -153,7 +83,7 @@ func (s *AgreementService) GetAgreementSafeHTML(ctx context.Context, id string) 
 	}, nil
 }
 
-func (s *AgreementService) CreateAgreement(ctx context.Context, req CreateAgreementRequest) (*AgreementResponse, error) {
+func (s *AgreementService) CreateAgreement(ctx context.Context, req dto.CreateAgreementRequest) (*dto.AgreementResponse, error) {
 	paragraphs := make([]domain.Paragraph, len(req.Paragraphs))
 	for i, p := range req.Paragraphs {
 		paragraphs[i] = domain.Paragraph{
@@ -182,16 +112,16 @@ func (s *AgreementService) CreateAgreement(ctx context.Context, req CreateAgreem
 		return nil, err
 	}
 
-	respParagraphs := make([]ParagraphResponse, len(paragraphs))
+	respParagraphs := make([]dto.ParagraphResponse, len(paragraphs))
 	for i, p := range paragraphs {
-		respParagraphs[i] = ParagraphResponse{
+		respParagraphs[i] = dto.ParagraphResponse{
 			Number:  p.Number,
 			Title:   p.Title,
 			Content: p.Content,
 		}
 	}
 
-	return &AgreementResponse{
+	return &dto.AgreementResponse{
 		ID:              agreement.ID.Hex(),
 		Title:           agreement.Title,
 		Paragraphs:      respParagraphs,
@@ -208,7 +138,7 @@ func (s *AgreementService) CreateAgreement(ctx context.Context, req CreateAgreem
 	}, nil
 }
 
-func (s *AgreementService) UpdateAgreement(ctx context.Context, id string, req UpdateAgreementRequest) (*AgreementResponse, error) {
+func (s *AgreementService) UpdateAgreement(ctx context.Context, id string, req dto.UpdateAgreementRequest) (*dto.AgreementResponse, error) {
 	existing, err := s.agreementRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -258,16 +188,16 @@ func (s *AgreementService) UpdateAgreement(ctx context.Context, id string, req U
 		return nil, err
 	}
 
-	respParagraphs := make([]ParagraphResponse, len(existing.Paragraphs))
+	respParagraphs := make([]dto.ParagraphResponse, len(existing.Paragraphs))
 	for i, p := range existing.Paragraphs {
-		respParagraphs[i] = ParagraphResponse{
+		respParagraphs[i] = dto.ParagraphResponse{
 			Number:  p.Number,
 			Title:   p.Title,
 			Content: p.Content,
 		}
 	}
 
-	return &AgreementResponse{
+	return &dto.AgreementResponse{
 		ID:              existing.ID.Hex(),
 		Title:           existing.Title,
 		Paragraphs:      respParagraphs,

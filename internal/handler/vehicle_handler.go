@@ -3,37 +3,15 @@ package handler
 import (
 	"net/http"
 	"strings"
-
-	"provider_management/internal/constants"
-	"provider_management/internal/logger"
-
 	"github.com/gin-gonic/gin"
+	"provider_management/internal/dto"
+	"provider_management/internal/constants"
 )
 
-type VehicleHandler struct {
-	log *logger.Logger
-}
+type VehicleHandler struct {}
 
-func NewVehicleHandler(log *logger.Logger) *VehicleHandler {
-	return &VehicleHandler{
-		log: log,
-	}
-}
-
-type BrandResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Logo        string `json:"logo"`
-	VehicleType string `json:"vehicleType"`
-	BrandType   string `json:"brandType"`
-}
-
-type ServiceResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Logo        string `json:"logo"`
-	VehicleType string `json:"vehicleType"`
+func NewVehicleHandler() *VehicleHandler {
+	return &VehicleHandler{}
 }
 
 func (h *VehicleHandler) GetVehicleBrands(c *gin.Context) {
@@ -53,9 +31,9 @@ func (h *VehicleHandler) GetVehicleBrands(c *gin.Context) {
 		filteredBrands = constants.BrandData
 	}
 
-	formattedBrands := []BrandResponse{}
+	formattedBrands := []dto.BrandResponse{}
 	for _, brand := range filteredBrands {
-		formattedBrand := BrandResponse{
+		formattedBrand := dto.BrandResponse{
 			ID:          getString(brand, "_id"),
 			Name:        getString(brand, "name"),
 			Slug:        getString(brand, "slug"),
@@ -90,9 +68,9 @@ func (h *VehicleHandler) GetVehicleServices(c *gin.Context) {
 		filteredServices = constants.ServicesData
 	}
 
-	formattedServices := []ServiceResponse{}
+	formattedServices := []dto.ServiceResponse{}
 	for _, service := range filteredServices {
-		formattedService := ServiceResponse{
+		formattedService := dto.ServiceResponse{
 			ID:          getString(service, "_id"),
 			Name:        getString(service, "name"),
 			Logo:        getString(service, "logo"),

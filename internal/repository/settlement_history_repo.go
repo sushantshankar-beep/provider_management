@@ -1,14 +1,14 @@
 package repository
 
 import (
-	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"provider_management/internal/domain"
 	"time"
+	"context"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type SettlementHistoryRepository struct {
@@ -18,6 +18,7 @@ type SettlementHistoryRepository struct {
 func NewSettlementHistoryRepository(db *mongo.Database) *SettlementHistoryRepository {
 	return &SettlementHistoryRepository{collection: db.Collection("settlementHistory")}
 }
+
 func (r *SettlementHistoryRepository) Create(ctx context.Context, settlement *domain.SettlementRecord) (*domain.SettlementRecord, error) {
 	result, err := r.collection.InsertOne(ctx, settlement)
 	if err != nil {
@@ -78,10 +79,7 @@ func (r *SettlementHistoryRepository) FindWithPagination(ctx context.Context, fi
 	return settlements, nil
 }
 
-func (r *SettlementHistoryRepository) UpdateByID(
-	ctx context.Context,
-	id primitive.ObjectID,
-	updateData map[string]interface{},
+func (r *SettlementHistoryRepository) UpdateByID( ctx context.Context, id primitive.ObjectID, updateData map[string]interface{},
 ) error {
 	filter := bson.M{"_id": id}
 	update := bson.M{"$set": updateData}
@@ -125,10 +123,7 @@ func (r *SettlementHistoryRepository) FindByServiceID(ctx context.Context, servi
 	return &record, nil
 }
 
-func (r *SettlementHistoryRepository) UpdateStatusBySettlementID(
-	ctx context.Context,
-	settlementID primitive.ObjectID,
-	status domain.SettlementStatus,
+func (r *SettlementHistoryRepository) UpdateStatusBySettlementID(ctx context.Context, settlementID primitive.ObjectID, status domain.SettlementStatus,
 	settledAt *time.Time,
 ) error {
 	filter := bson.M{"settlementId": settlementID}
@@ -145,7 +140,6 @@ func (r *SettlementHistoryRepository) UpdateStatusBySettlementID(
 }
 
 
-// GetSettlementRecords with pagination and filtering
 func (r *SettlementHistoryRepository) GetSettlementRecords(
 	ctx context.Context,
 	filter bson.M,
@@ -154,19 +148,17 @@ func (r *SettlementHistoryRepository) GetSettlementRecords(
 	sortField string,
 	sortOrder int,
 ) ([]*domain.SettlementRecord, int64, error) {
-	// Get total count first
+
 	total, err := r.collection.CountDocuments(ctx, filter)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// Set up pagination options
 	opts := options.Find()
 	opts.SetSkip(int64(skip))
 	opts.SetLimit(int64(limit))
 	opts.SetSort(bson.M{sortField: sortOrder})
 
-	// Find records with pagination
 	cursor, err := r.collection.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, 0, err

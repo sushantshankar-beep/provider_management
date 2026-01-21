@@ -740,7 +740,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 func (s *ProviderAdminService) AddNote(
 	ctx context.Context,
 	providerID string,
-	req AddNoteRequest,
+	req dto.AddNoteRequest,
 ) error {
 	if req.Content == "" {
 		return fmt.Errorf("note content is required")
@@ -1371,12 +1371,13 @@ func (s *ProviderAdminService) GetProviderEarnings(
 		paymentStatus := "Pending"
 
 		service, err := s.services.FindByObjectIDs(ctx, settlement.ServiceID)
+		log.Println("Sjbadkscszcjhbbhjsz",service)
 		if err == nil && service != nil {
 			bookingID = "BK" + strconv.FormatInt(service.InternalID, 10)
 			serviceTime := service.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 			bookingDate = serviceTime.Format("2006-01-02 15:04:05")
 			paymentStatus = string(settlement.SettlementStatus)
-
+            log.Println("jbkdcsjbxckscx",paymentStatus)
 			serviceReq, err := s.serviceRequestRepo.FindByID(ctx, service.ServiceRequestID.Hex())
 			if err == nil && serviceReq != nil && len(serviceReq.Problems) > 0 {
 				serviceType = serviceReq.Problems[0] 

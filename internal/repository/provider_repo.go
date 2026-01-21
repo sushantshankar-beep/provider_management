@@ -1,16 +1,16 @@
 package repository
 
 import (
-	"context"
 	"fmt"
-	"provider_management/internal/domain"
+	"time"
+	"context"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"provider_management/internal/dto"
 	"provider_management/internal/utils"
-    "time"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ProviderRepo struct {
@@ -21,12 +21,7 @@ func NewProviderRepo(db *mongo.Database) *ProviderRepo {
 	return &ProviderRepo{col: db.Collection("providerschemas")}
 }
 
-func (r *ProviderRepo) FindAll(
-	ctx context.Context,
-	query bson.M,
-	skip, limit int64,
-	sort string,
-) ([]domain.Provider, int64, error) {
+func (r *ProviderRepo) FindAll( ctx context.Context, query bson.M, skip, limit int64, sort string ) ([]domain.Provider, int64, error) {
 	sortOpts := bson.M{}
 	if sort != "" {
 		if sort[0] == '-' {
@@ -280,20 +275,19 @@ func (r *ProviderRepo) CountInactive(ctx context.Context, query bson.M) (int64, 
 	return count, nil
 }
 
-
 func (r *ProviderRepo) CountByMultipleStatuses(ctx context.Context, filter bson.M, field string, statuses []string) (int64, error) {
-    countFilter := bson.M{}
-    for k, v := range filter {
-        countFilter[k] = v
-    }
+	countFilter := bson.M{}
+	for k, v := range filter {
+		countFilter[k] = v
+	}
 
-    countFilter[field] = bson.M{"$in": statuses}
+	countFilter[field] = bson.M{"$in": statuses}
 
-    count, err := r.col.CountDocuments(ctx, countFilter)
-    if err != nil {
-        return 0, err
-    }
-    return count, nil
+	count, err := r.col.CountDocuments(ctx, countFilter)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (r *ProviderRepo) GetStats(ctx context.Context) (dto.ProvidersStats, error) {
@@ -368,7 +362,7 @@ func (r *ProviderRepo) Update(ctx context.Context, id string, updateData bson.M)
 	}
 
 	update := bson.M{"$set": updateData}
-	
+
 	var provider domain.Provider
 	err = r.col.FindOneAndUpdate(
 		ctx,
@@ -383,10 +377,7 @@ func (r *ProviderRepo) Update(ctx context.Context, id string, updateData bson.M)
 	return &provider, nil
 }
 
-func (r *ProviderRepo) AggregateZoneStats(
-	ctx context.Context,
-	pipeline []bson.M,
-) ([]domain.ZoneStats, error) {
+func (r *ProviderRepo) AggregateZoneStats( ctx context.Context, pipeline []bson.M) ([]domain.ZoneStats, error) {
 
 	cursor, err := r.col.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -402,10 +393,7 @@ func (r *ProviderRepo) AggregateZoneStats(
 	return results, nil
 }
 
-func (r *ProviderRepo) AggregateActivationTeam(
-	ctx context.Context,
-	pipeline []bson.M,
-) ([]domain.ActivationTeamMember, error) {
+func (r *ProviderRepo) AggregateActivationTeam( ctx context.Context, pipeline []bson.M ) ([]domain.ActivationTeamMember, error) {
 
 	cursor, err := r.col.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -422,29 +410,29 @@ func (r *ProviderRepo) AggregateActivationTeam(
 }
 
 func (r *ProviderRepo) CountByCreator(ctx context.Context, adminID primitive.ObjectID) (int, error) {
-    filter := bson.M{
-        "createdBy": adminID,
-    }
-    
-    count, err := r.col.CountDocuments(ctx, filter)
-    if err != nil {
-        return 0, err
-    }
-    
-    return int(count), nil
+	filter := bson.M{
+		"createdBy": adminID,
+	}
+
+	count, err := r.col.CountDocuments(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(count), nil
 }
 
 func (r *ProviderRepo) CountByCreators(ctx context.Context, adminIDs []primitive.ObjectID) (int, error) {
-    filter := bson.M{
-        "createdBy": bson.M{"$in": adminIDs},
-    }
-    
-    count, err := r.col.CountDocuments(ctx, filter)
-    if err != nil {
-        return 0, err
-    }
-    
-    return int(count), nil
+	filter := bson.M{
+		"createdBy": bson.M{"$in": adminIDs},
+	}
+
+	count, err := r.col.CountDocuments(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(count), nil
 }
 
 func (r *ProviderRepo) CountByCreatedBy(ctx context.Context, adminIDs []primitive.ObjectID) (int, error) {
@@ -457,15 +445,11 @@ func (r *ProviderRepo) CountByCreatedBy(ctx context.Context, adminIDs []primitiv
 	return int(count), nil
 }
 
-func (r *ProviderRepo) FindByObjectIDs(
-	ctx context.Context,
-	ids []primitive.ObjectID,
-) ([]domain.Provider, error) {
-
+func (r *ProviderRepo) FindByObjectIDs( ctx context.Context, ids []primitive.ObjectID ) ([]domain.Provider, error) {
 	filter := bson.M{
 		"_id": bson.M{"$in": ids},
 	}
-
+	
 	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
 		return nil, err

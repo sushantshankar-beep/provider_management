@@ -1,17 +1,15 @@
 package service
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"math"
+	"context"
+	"errors"
 	"strconv"
 	"strings"
-
+	"go.mongodb.org/mongo-driver/bson"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
-
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -36,11 +34,10 @@ func NewZoneMapService(
 	}
 }
 
-
 type ActivationTeamMember struct {
-	ActivationPersonName      string `json:"activationPersonName"`
-	AssignZone                string `json:"assignZone"`
-	TotalActivatedProviders   int64  `json:"totalActivatedProviders"`
+	ActivationPersonName    string `json:"activationPersonName"`
+	AssignZone              string `json:"assignZone"`
+	TotalActivatedProviders int64  `json:"totalActivatedProviders"`
 }
 
 type AdminWithRole struct {
@@ -74,10 +71,7 @@ func (s *ZoneMapService) ValidateAdminAccess(ctx context.Context, adminID string
 	}, nil
 }
 
-func (s *ZoneMapService) GetZoneStats(
-	ctx context.Context,
-	adminID string,
-) ([]domain.ZoneStats, error) {
+func (s *ZoneMapService) GetZoneStats(ctx context.Context, adminID string ) ([]domain.ZoneStats, error) {
 
 	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
 	if err != nil {
@@ -88,7 +82,6 @@ func (s *ZoneMapService) GetZoneStats(
 		return nil, errors.New("only admin can access zone statistics")
 	}
 
-	// 2️⃣ Zone scope filtering
 	matchStage := bson.M{}
 	if len(adminWithRole.Role.ZoneName) > 0 {
 		matchStage["zoneName"] = bson.M{
@@ -120,53 +113,40 @@ func (s *ZoneMapService) GetZoneStats(
 	return s.providers.AggregateZoneStats(ctx, pipeline)
 }
 
-func (s *ZoneMapService) GetActivationTeam(
-    ctx context.Context,
-    adminID string,
-    zoneName string,
-) ([]domain.ActivationTeamMember, error) {
+func (s *ZoneMapService) GetActivationTeam( ctx context.Context, adminID string, zoneName string ) ([]domain.ActivationTeamMember, error) {
 
-    adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
-    if err != nil {
-        return nil, err
-    }
+	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
+	if err != nil {
+		return nil, err
+	}
 
-    if adminWithRole.Role.RoleType != "admin" {
-        return nil, errors.New("only admin can access activation team")
-    }
+	if adminWithRole.Role.RoleType != "admin" {
+		return nil, errors.New("only admin can access activation team")
+	}
 
-    if len(adminWithRole.Role.ZoneScope) > 0 &&
-        !contains(adminWithRole.Role.ZoneScope, zoneName) {
-        return nil, errors.New("access denied for this zone")
-    }
+	if len(adminWithRole.Role.ZoneScope) > 0 &&
+		!contains(adminWithRole.Role.ZoneScope, zoneName) {
+		return nil, errors.New("access denied for this zone")
+	}
 
-    pipeline := []bson.M{
-        {"$match": bson.M{"city": zoneName}},
-        {"$group": bson.M{
-            "_id":            "$createdBy",
-            "totalActivated": bson.M{"$sum": 1},
-        }},
-        {"$project": bson.M{
-            "activationPersonName":    "$_id",
-            "assignZone":              zoneName,
-            "totalActivatedProviders": "$totalActivated",
-            "_id":                     0,
-        }},
-    }
+	pipeline := []bson.M{
+		{"$match": bson.M{"city": zoneName}},
+		{"$group": bson.M{
+			"_id":            "$createdBy",
+			"totalActivated": bson.M{"$sum": 1},
+		}},
+		{"$project": bson.M{
+			"activationPersonName":    "$_id",
+			"assignZone":              zoneName,
+			"totalActivatedProviders": "$totalActivated",
+			"_id":                     0,
+		}},
+	}
 
-    return s.providers.AggregateActivationTeam(ctx, pipeline)
+	return s.providers.AggregateActivationTeam(ctx, pipeline)
 }
 
-
-func (s *ZoneMapService) GetProvidersByActivator(
-	ctx context.Context,
-	adminID string,
-	zoneName string,
-	activatorName string,
-	pageStr string,
-	limitStr string,
-	sort string,
-) (*ProviderListResponse, error) {
+func (s *ZoneMapService) GetProvidersByActivator( ctx context.Context, adminID string, zoneName string, activatorName string, pageStr string, limitStr string, sort string ) (*ProviderListResponse, error) {
 	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
 	if err != nil {
 		return nil, err
@@ -290,13 +270,7 @@ func (s *ZoneMapService) GetProvidersByActivator(
 	}, nil
 }
 
-func (s *ZoneMapService) GetMyProviders(
-	ctx context.Context,
-	adminID string,
-	pageStr string,
-	limitStr string,
-	sort string,
-) (*ProviderListResponse, error) {
+func (s *ZoneMapService) GetMyProviders( ctx context.Context, adminID string, pageStr string, limitStr string, sort string ) (*ProviderListResponse, error) {
 	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
 	if err != nil {
 		return nil, err

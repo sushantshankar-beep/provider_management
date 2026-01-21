@@ -221,6 +221,7 @@ func SetupRoutes(
 		bookings.POST("/:bookingId/notes", rbac.Check("bookings", "add_booking_notes"), bookingAdminHandler.AddNote)
 	}
 
+	//Done
 	complaints := admin.Group("/complaints")
 	{
 		complaints.GET("", rbac.Check("complaints", "view_complaint"), complaintHandler.GetAll)
@@ -232,16 +233,18 @@ func SetupRoutes(
 		complaints.POST("/:id/notes", rbac.Check("complaints", "add_complaint_notes"), complaintHandler.AddNote)
 		complaints.PATCH("/:id/status", rbac.Check("complaints", "status"), complaintHandler.UpdateStatus)
 	}
-
+ 
+	//Done
 	userTransactions := admin.Group("/user-transaction")
 	{
 		userTransactions.GET("", rbac.Check("paymentandtransactions", "view_users_transaction"), transactionHandler.GetAll)
 		userTransactions.GET("/:id", rbac.Check("paymentandtransactions", "view_user_transaction_details"), transactionHandler.GetByID)
 	}
 
+	//Done
 	providerPayout := admin.Group("/provider-payout")
 	{
-		providerPayout.GET("", rbac.Check("paymentandtransactions", "view_provider_payout"), payoutHandler.GetPayouts)
+		providerPayout.GET("", rbac.Check("paymentandtransactions", "view_provider_payout"), payoutHandler.GetProviderPayouts)
 		providerPayout.GET("/:id/details", rbac.Check("paymentandtransactions", "view_provider_payout_details"), payoutHandler.GetProviderPayoutDetails)
 		providerPayout.GET("/:id/bookings", rbac.Check("paymentandtransactions", "view_provider_payout_details"), payoutHandler.GetPayoutServices)
 		providerPayout.POST("/6hour", rbac.Check("paymentandtransactions", "create"), payoutHandler.Create6HourPayout)
@@ -253,7 +256,6 @@ func SetupRoutes(
 		providerSettlement.POST("/create", rbac.Check("paymentandtransactions", "create_provider_settlement"), settlementHandler.CreateSettlement)
 		providerSettlement.POST("/:id/settle", rbac.Check("paymentandtransactions", "process_final_settlement"), settlementHandler.ChangeProviderSettlementStatus)
 		providerSettlement.GET("/:id", rbac.Check("paymentandtransactions", "check_final_settlement"), settlementHandler.GetSettlementByID)
-		providerSettlement.POST("/export", rbac.Check("paymentandtransactions", "export"), settlementHandler.ExportSettlements)
 	}
 
 	services := admin.Group("/services")
@@ -323,13 +325,14 @@ func SetupRoutes(
 		zones.DELETE("/:id", zoneHandler.Delete)
 
 	}
-
+	//Done
 	vehicleBrands := admin.Group("/vehicle-brands")
 	{
 		vehicleBrands.GET("", vehicleBrandHandler.GetBrands)
 		vehicleBrands.GET("/models", vehicleBrandHandler.GetModels)
 	}
 
+	//Done
 	panelPermission := admin.Group("/permission")
 	{
 		panelPermission.GET("", permissionHandler.GetAllPermissions)
@@ -347,12 +350,14 @@ func SetupRoutes(
 		zoneMap.GET("/my-providers", zoneMapHandler.GetMyProviders)
 	}
 
+	//Done
 	vehicle := admin.Group("/vehicle")
 	{
 		vehicle.GET("/brands", vehicleHandler.GetVehicleBrands)
 		vehicle.GET("/services", vehicleHandler.GetVehicleServices)
 	}
 
+	//Done
 	providerAgreement := admin.Group("/provider-agreement")
 	{
 		providerAgreement.GET("/:id", providerAgreementHandler.GetAgreement)

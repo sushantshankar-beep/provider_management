@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"provider_management/internal/dto"
 	"provider_management/internal/service"
  "provider_management/internal/middleware"
 )
@@ -154,7 +155,7 @@ func (h *AdminBookingHandler) GetInvoiceData(c *gin.Context) {
 func (h *AdminBookingHandler) AddNote(c *gin.Context) {
 	bookingID := c.Param("bookingId")
 
-	var req service.AddNoteRequest
+	var req dto.AddNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,

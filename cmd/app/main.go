@@ -9,7 +9,6 @@ import (
 	"provider_management/internal/config"
 	"provider_management/internal/db"
 	"provider_management/internal/handler"
-	"provider_management/internal/logger"
 	"provider_management/internal/middleware"
 	"provider_management/internal/repository"
 	"provider_management/internal/routes"
@@ -26,7 +25,6 @@ func main() {
 		log.Println("⚠️ .env not loaded:", err)
 	}
 	cfg := config.Load()
-	logg := logger.NewLogger()
 
 	awsSession, err := config.InitAWSSession()
 	if err != nil {
@@ -99,7 +97,7 @@ func main() {
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
 	vehicleBrandService := service.NewVehicleBrandService(vehicleBrandRepo)
-	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
+	transactionHandler := handler.NewTransactionHandler(transactionService)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
 	adminBookingHandler := handler.NewAdminBookingHandler(adminBookingService)
@@ -119,7 +117,7 @@ func main() {
     dashboardHandler := handler.NewDashboardHandler(dashboardService)
 	permissionHandler := handler.NewPermissionHandler(permissionService)
     zoneMapHandler := handler.NewZoneMapHandler(zoneMapService)
-	vehicleHandler := handler.NewVehicleHandler(logg)
+	vehicleHandler := handler.NewVehicleHandler()
 	providerAgreementHandler := handler.NewAgreementHandler(providerAgreementService)
 
 	r := gin.Default() 

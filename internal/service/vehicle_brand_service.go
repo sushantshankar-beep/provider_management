@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"provider_management/internal/dto"
 	"provider_management/internal/repository"
 )
 
@@ -16,21 +17,15 @@ func NewVehicleBrandService(b *repository.VehicleBrandRepo) *VehicleBrandService
 	}
 }
 
-type VehicleBrandResponse struct {
-	BrandName   string   `json:"brandName"`
-	VehicleType string   `json:"vehicleType"`
-	ModelName   []string `json:"modelName"`
-}
-
-func (s *VehicleBrandService) GetVehicleBrands(ctx context.Context, vehicleType, brandName string) ([]VehicleBrandResponse, error) {
+func (s *VehicleBrandService) GetVehicleBrands(ctx context.Context, vehicleType, brandName string) ([]dto.VehicleBrandResponse, error) {
 	brands, err := s.brands.FindWithFilter(ctx, vehicleType, brandName)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]VehicleBrandResponse, len(brands))
+	result := make([]dto.VehicleBrandResponse, len(brands))
 	for i, b := range brands {
-		result[i] = VehicleBrandResponse{
+		result[i] = dto.VehicleBrandResponse{
 			BrandName:   b.BrandName,
 			VehicleType: b.VehicleType,
 			ModelName:   b.ModelName,

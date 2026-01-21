@@ -18,7 +18,6 @@ const (
 	PayoutStatusPending          PaymentPayoutStatus = "pending"
 	PayoutStatusPartiallySettled PaymentPayoutStatus = "partially settled"
 	PayoutStatusSettled          PaymentPayoutStatus = "settled"
-	PayoutStatusComplaint        PaymentPayoutStatus = "complaint raised"
 )
 
 type PaymentPayout struct {

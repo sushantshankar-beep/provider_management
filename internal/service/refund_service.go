@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
+	"provider_management/internal/dto"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
      "provider_management/internal/utils"
@@ -66,7 +68,7 @@ type RefundListResponse struct {
 	TotalPages int64            `json:"total_pages"`
 }
 
-func (s *RefundService) ProcessRefund(ctx context.Context, req RefundRequest) error {
+func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest) error {
 	log.Printf("ProcessRefund - Starting refund for user %s, amount: %.2f", req.UserID, req.Amount)
 	log.Println("request", req)
 

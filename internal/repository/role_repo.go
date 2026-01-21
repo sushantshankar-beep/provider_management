@@ -1,14 +1,12 @@
 package repository
 
 import (
-	"context"
 	"time"
-
-	"provider_management/internal/domain"
-
+    "context"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type RoleRepository struct {
@@ -25,7 +23,6 @@ type ZoneStatsAggResult struct {
 	TotalActivationMembers int `bson:"totalActivationMembers"`
 	TotalProviders         int `bson:"totalProviders"`
 }
-
 
 func (r *RoleRepository) Create(ctx context.Context, role *domain.Role) error {
 	role.CreatedAt = time.Now()
@@ -57,11 +54,7 @@ func (r *RoleRepository) List(ctx context.Context, filter bson.M) ([]domain.Role
 	return roles, nil
 }
 
-func (r *RoleRepository) UpdateStatus(
-	ctx context.Context,
-	id primitive.ObjectID,
-	status domain.RoleStatus,
-) error {
+func (r *RoleRepository) UpdateStatus( ctx context.Context, id primitive.ObjectID, status domain.RoleStatus) error {
 	_, err := r.collection.UpdateOne(
 		ctx,
 		bson.M{"_id": id},
@@ -74,13 +67,12 @@ func (r *RoleRepository) UpdateStatus(
 	)
 	return err
 }
-func (r *RoleRepository) DeleteByID(
-	ctx context.Context,
-	id primitive.ObjectID,
-) error {
+
+func (r *RoleRepository) DeleteByID( ctx context.Context, id primitive.ObjectID ) error {
 	_, err := r.collection.DeleteOne(ctx, bson.M{"_id": id})
 	return err
 }
+
 func (r *RoleRepository) FindByID(ctx context.Context,id primitive.ObjectID) (*domain.Role, error) {
 
 	var role domain.Role
@@ -99,7 +91,6 @@ func (r *RoleRepository) FindByID(ctx context.Context,id primitive.ObjectID) (*d
 
 	return &role, nil
 }
-
 
 func (r *RoleRepository) ListWithCreator(ctx context.Context, filter bson.M) ([]bson.M, error) {
 	pipeline := []bson.M{
@@ -150,11 +141,7 @@ func (r *RoleRepository) ListWithCreator(ctx context.Context, filter bson.M) ([]
 
 	return roles, nil
 }
-func (r *RoleRepository) UpdateByID(
-	ctx context.Context,
-	id primitive.ObjectID,
-	update bson.M,
-) error {
+func (r *RoleRepository) UpdateByID( ctx context.Context, id primitive.ObjectID, update bson.M ) error {
 	_, err := r.collection.UpdateOne(
 		ctx,
 		bson.M{"_id": id},
@@ -163,17 +150,14 @@ func (r *RoleRepository) UpdateByID(
 	return err
 }
 
-func (r *RoleRepository) FindByIDWithCreator(
-	ctx context.Context,
-	id primitive.ObjectID,
-) (bson.M, error) {
-
+func (r *RoleRepository) FindByIDWithCreator( ctx context.Context, id primitive.ObjectID ) (bson.M, error) {
+	
 	pipeline := []bson.M{
 		{
 			"$match": bson.M{
 				"$or": []bson.M{
 					{"_id": id},
-					{"_id": id.Hex()}, // safety for string _id
+					{"_id": id.Hex()},
 				},
 			},
 		},

@@ -1,14 +1,14 @@
 package repository
 
 import (
+	"time"
 	"context"
 	"strings"
-	"time"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+     "provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"provider_management/internal/domain"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type OrderRepo struct {
@@ -39,11 +39,7 @@ func (r *OrderRepo) FindByID(ctx context.Context, id string) (*domain.AMCPurchas
 	return &order, nil
 }
 
-func (r *OrderRepo) FindWithFilter(
-	ctx context.Context,
-	skip, limit int64,
-	search, planStatus, paymentStatus, createdAt, sortBy, sortOrder string,
-) ([]domain.AMCPurchase, int64, error) {
+func (r *OrderRepo) FindWithFilter(ctx context.Context, skip, limit int64, search, planStatus, paymentStatus, createdAt, sortBy, sortOrder string ) ([]domain.AMCPurchase, int64, error) {
 
 	andConditions := bson.A{
 		bson.M{"paymentStatus": bson.M{"$in": bson.A{"success", "failed"}}},
@@ -130,11 +126,7 @@ func (r *OrderRepo) FindWithFilter(
 	return orders, total, nil
 }
 
-
-func (r *OrderRepo) UpdateStatus(
-	ctx context.Context,
-	id, planStatus, paymentStatus string,
-) (*domain.AMCPurchase, error) {
+func (r *OrderRepo) UpdateStatus( ctx context.Context, id, planStatus, paymentStatus string ) (*domain.AMCPurchase, error) {
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, err
