@@ -2,16 +2,15 @@ package handler
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"io"
-	"log"
 	"net/http"
 	"strconv"
-	"provider_management/internal/domain"
+	"github.com/gin-gonic/gin"
 	"provider_management/internal/dto"
-	"provider_management/internal/middleware"
+	"provider_management/internal/domain"
 	"provider_management/internal/service"
+	"provider_management/internal/middleware"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ProviderAdminHandler struct {
@@ -24,28 +23,32 @@ func NewProviderAdminHandler(svc *service.ProviderAdminService) *ProviderAdminHa
 
 func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 
-	page := c.DefaultQuery("page", "1")
-	limit := c.DefaultQuery("limit", "10")
-	sort := c.DefaultQuery("sort", "-createdAt")
-	search := c.Query("search")
-	status := c.Query("status")
-	name := c.Query("name")
-	mobile := c.Query("mobile")
-	providerID := c.Query("providerId")
-	kycStatus := c.Query("kycStatus")
-	accountStatus := c.Query("accountStatus")
-	vehicleType := c.Query("vehicleType")
-	zone := c.Query("zone")
-	startDate := c.Query("startDate")
-	filter := c.Query("filter")
+	filters := dto.ProviderFilters{
+		Search:        c.Query("search"),
+		Status:        c.Query("status"),
+		Name:          c.Query("name"),
+		Mobile:        c.Query("mobile"),
+		ProviderID:    c.Query("providerId"),
+		KYCStatus:     c.Query("kycStatus"),
+		AccountStatus: c.Query("accountStatus"),
+		VehicleType:   c.Query("vehicleType"),
+		Zone:          c.Query("zone"),
+		StartDate:     c.Query("startDate"),
+		Filter:        c.Query("filter"),
+	}
 
 	zoneFilter := middleware.GetZoneFilter(c)
 
-	res, err := h.svc.GetAllProviders(
-		c.Request.Context(),
-		page, limit, sort, search, status, name, mobile,
-		providerID, kycStatus, accountStatus, vehicleType, zone, startDate, filter, zoneFilter,
-	)
+	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
+	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
+
+	pagination := dto.ProviderPagination{
+		Page:  page,
+		Limit: limit,
+		Sort:  c.DefaultQuery("sort", "-createdAt"),
+	}
+    
+	res, err := h.svc.GetAllProviders(c.Request.Context(),filters, pagination, zoneFilter)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -62,6 +65,7 @@ func (h *ProviderAdminHandler) GetAll(c *gin.Context) {
 		"data":    res,
 	})
 }
+
 func (h *ProviderAdminHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 
@@ -144,6 +148,7 @@ func (h *ProviderAdminHandler) UpdateKYC(c *gin.Context) {
 }
 
 func (h *ProviderAdminHandler) VerifyDocument(c *gin.Context) {
+
 	id := c.Param("id")
 
 	var body struct {
@@ -160,10 +165,7 @@ func (h *ProviderAdminHandler) VerifyDocument(c *gin.Context) {
 		return
 	}
 
-	res, err := h.svc.VerifyDocument(
-		c.Request.Context(),
-		id, body.DocumentType, body.DocumentID, body.Action,
-	)
+	res, err := h.svc.VerifyDocument( c.Request.Context(), id, body.DocumentType, body.DocumentID, body.Action)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -226,6 +228,7 @@ func (h *ProviderAdminHandler) UpdateAccountAction(c *gin.Context) {
 		"data":    res,
 	})
 }
+
 func (h *ProviderAdminHandler) UpdateCommission(c *gin.Context) {
 	id := c.Param("id")
 
@@ -258,6 +261,7 @@ func (h *ProviderAdminHandler) UpdateCommission(c *gin.Context) {
 }
 
 func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
+
 	id := c.Param("id")
 	documentType := c.Query("documentType")
 	documentID := c.Query("documentId")
@@ -330,11 +334,11 @@ func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
 
 	written, err := io.Copy(c.Writer, resp.Body)
 	if err != nil {
-		log.Printf("Error copying file: %v", err)
+		fmt.Printf("Error copying file: %v", err)
 		return
 	}
 
-	log.Printf("Successfully streamed %d bytes of %s", written, contentType)
+	fmt.Printf("Successfully streamed %d bytes of %s", written, contentType)
 }
 func (h *ProviderAdminHandler) AddNote(c *gin.Context) {
 	providerID := c.Param("id")
@@ -433,12 +437,7 @@ func (h *ProviderAdminHandler) CreateProvider(c *gin.Context) {
 		}
 	}
 
-	if _, err := h.svc.CreateProvider(
-		c.Request.Context(),
-		req,
-		admin.ID,
-		admin.Role,
-	); err != nil {
+	if _, err := h.svc.CreateProvider( c.Request.Context(), req, admin.ID, admin.Role ); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": "Failed to create provider: " + err.Error(),
@@ -519,12 +518,7 @@ func (h *ProviderAdminHandler) UpdateProvider(c *gin.Context) {
 		}
 	}
 
-	if _, err := h.svc.UpdateProvider(
-		c.Request.Context(),
-		id,
-		req,
-		admin.ID,
-	); err != nil {
+	if _, err := h.svc.UpdateProvider( c.Request.Context(), id, req, admin.ID ); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": err.Error(),
@@ -592,23 +586,23 @@ func (h *ProviderAdminHandler) GetActivationPersonProviders(c *gin.Context) {
 	personID := c.Param("person")
 	zoneName := c.Param("zone")
 
-	page := c.DefaultQuery("page", "1")
-	limit := c.DefaultQuery("limit", "10")
-	sort := c.DefaultQuery("sort", "-createdAt")
-	search := c.Query("search")
+	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
+	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
+
+	filters := dto.ProviderFilters{
+		Search:        c.Query("search"),
+	}
+
+	pagination := dto.ProviderPagination{
+		Page:  page,
+		Limit: limit,
+		Sort:  c.DefaultQuery("sort", "-createdAt"),
+	}
 
 	adminZones := middleware.GetAdminZones(c)
 
-	res, err := h.svc.GetActivationPersonProviders(
-		c.Request.Context(),
-		personID,
-		zoneName,
-		page,
-		limit,
-		sort,
-		search,
-		adminZones,
-	)
+	res, err := h.svc.GetActivationPersonProviders( c.Request.Context(), personID, zoneName, filters, pagination, adminZones)
+
 	if err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   true,

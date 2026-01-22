@@ -1,21 +1,18 @@
 package service
 
 import (
-	"context"
+	"time"
 	"fmt"
-	"log"
 	"math"
 	"strconv"
 	"strings"
-
-	"provider_management/internal/constants"
-	"provider_management/internal/domain"
-	"provider_management/internal/dto"
-	"provider_management/internal/repository"
-	"provider_management/internal/utils"
-	"time"
-
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
+	"provider_management/internal/dto"
+	"provider_management/internal/utils"
+	"provider_management/internal/domain"
+	"provider_management/internal/constants"
+	"provider_management/internal/repository"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -52,103 +49,6 @@ func NewProviderAdminService(
 	}
 }
 
-type ProviderListResponse struct {
-	Providers  []ProviderResponse `json:"providers"`
-	Counts     ProviderCounts     `json:"counts"`
-	Pagination Pagination         `json:"pagination"`
-}
-
-type ProviderResponse struct {
-	ID            string               `json:"id"`
-	ProviderID    string               `json:"provider_id"`
-	Name          string               `json:"name"`
-	Mobile        string               `json:"mobile"`
-	Email         string               `json:"email"`
-	KYC           string               `json:"kyc"`
-	Account       string               `json:"account"`
-	Vehicle       string               `json:"vehicle"`
-	Zone          string               `json:"zone"`
-	DOJ           string               `json:"doj"`
-	ProfileURL    string               `json:"profile_url"`
-	IsServiceOn   bool                 `json:"is_service_on"`
-	IsActive      string               `json:"is_active"`
-	IdentityProof []domain.Proof       `json:"identity_proof"`
-	AddressProof  []domain.Proof       `json:"address_proof"`
-	CancelCheque  *domain.CancelCheque `json:"cancel_cheque"`
-	Status        string               `json:"status"`
-	TotalJobs     int64                `json:"total_jobs"`
-	CompletedJobs int64                `json:"completed_jobs"`
-}
-
-type ProviderCounts struct {
-	Total      int64 `json:"total"`
-	Active     int64 `json:"active"`
-	Inactive   int64 `json:"inactive"`
-	PendingKYC int64 `json:"pending_kyc"`
-}
-
-type ProviderDetailResponse struct {
-	ID                   string                `json:"id"`
-	ProviderID           string                `json:"provider_id"`
-	Name                 string                `json:"name"`
-	Phone                string                `json:"phone"`
-	Email                string                `json:"email"`
-	AlternateContact     string                `json:"alternate_contact"`
-	ProfileURL           string                `json:"profile_url"`
-	Address              string                `json:"address"`
-	PermanentAddress     string                `json:"permanent_address"`
-	City                 string                `json:"city"`
-	Status               string                `json:"status"`
-	Account              string                `json:"account"`
-	KYC                  string                `json:"kyc"`
-	VehicleType          []string              `json:"vehicle_type"`
-	VehicleNumber        string                `json:"vehicle_number"`
-	ProviderBrands       []string              `json:"provider_brands"`
-	ProviderServices     []string              `json:"provider_services"`
-	GSTNumber            string                `json:"gst_number"`
-	CompanyName          string                `json:"company_name"`
-	Description          string                `json:"description"`
-	Zone                 string                `json:"zone"`
-	DOJ                  string                `json:"doj"`
-	IdentityProof        []domain.Proof        `json:"identity_proof"`
-	AddressProof         []domain.Proof        `json:"address_proof"`
-	CancelCheque         *domain.CancelCheque  `json:"cancel_cheque"`
-	BankDetails          *domain.BankDetails   `json:"bank_details"`
-	IsServiceOn          bool                  `json:"is_service_on"`
-	IsActive             string                `json:"is_active"`
-	IsSocketConnected    bool                  `json:"is_socket_connected"`
-	Location             *domain.GeoPoint      `json:"location"`
-	TotalJobs            int64                 `json:"total_jobs"`
-	CompletedJobs        int64                 `json:"completed_jobs"`
-	RecentServices       []domain.Service      `json:"recent_services"`
-	CommissionPercentage float64               `json:"commission_percentage,omitempty"`
-	Notes                []domain.ProviderNote `json:"notes,omitempty"`
-	ApprovedAt           string                `json:"approved_at"`
-}
-
-type DocumentResponse struct {
-	DocumentID   string `json:"document_id,omitempty"`
-	DocumentType string `json:"document_type"`
-	Type         string `json:"type,omitempty"`
-	File         string `json:"file"`
-	Verified     string `json:"verified"`
-}
-
-type ZoneStatsResponse struct {
-	Zones                   []domain.ZoneStats `json:"zones"`
-	TotalZones              int                `json:"totalZones"`
-	TotalProviders          int                `json:"totalProviders"`
-	TotalActivationMembers  int                `json:"totalActivationMembers"`
-	NewlyActivatedProviders int                `json:"newlyActivatedProviders"`
-}
-
-type ActivationTeamResponse struct {
-	ZoneName        string                        `json:"zoneName"`
-	TotalProviders  int64                         `json:"totalProviders"`
-	TotalActivators int64                         `json:"totalActivators"`
-	Team            []domain.ActivationTeamMember `json:"team"`
-}
-
 type JobHistoryItem struct {
 	BookingID      string  `json:"booking_id"`
 	ServiceType    string  `json:"service_type"`
@@ -160,27 +60,17 @@ type JobHistoryItem struct {
 }
 
 
-func (s *ProviderAdminService) GetAllProviders(
-	ctx context.Context,
-	pageStr, limitStr, sort, search, status, name, mobile,
-	providerID, kycStatus, accountStatus, vehicleType, zone, startDate, filter string,
-	zoneFilter bson.M,
-) (*ProviderListResponse, error) {
+func (s *ProviderAdminService) GetAllProviders( ctx context.Context, filters dto.ProviderFilters, pagination dto.ProviderPagination, zoneFilter bson.M) (*dto.ProviderListResponse, error) {
 
-	page, err := strconv.Atoi(pageStr)
-	if err != nil || page < 1 {
-		page = 1
+	if pagination.Page < 1 {
+		pagination.Page = 1
 	}
 
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit < 1 {
-		limit = 10
-	}
-	if limit > 100 {
-		limit = 100
+	if pagination.Limit < 1 {
+		pagination.Limit = 20
 	}
 
-	skip := int64((page - 1) * limit)
+	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
 	var conditions []bson.M
 
@@ -198,16 +88,16 @@ func (s *ProviderAdminService) GetAllProviders(
 		string(domain.AccountStatusActive),
 	}
 
-	if filter == "inactive" {
+	if filters.Filter == "inactive" {
 		conditions = append(conditions, bson.M{"isActive": bson.M{"$in": inactiveStatuses}})
 	}
 
-	if filter == "active" {
+	if filters.Filter == "active" {
 		conditions = append(conditions, bson.M{"isActive": bson.M{"$in": activeStatus}})
 	}
 
-	if filter != "" {
-		switch filter {
+	if filters.Filter != "" {
+		switch filters.Filter {
 		case "Pending":
 			conditions = append(conditions, bson.M{"status": domain.StatusPending})
 		case "verified":
@@ -217,8 +107,8 @@ func (s *ProviderAdminService) GetAllProviders(
 		}
 	}
 
-	if startDate != "" {
-		if t, err := time.Parse("2006-01-02", startDate); err == nil {
+	if filters.StartDate != "" {
+		if t, err := time.Parse("2006-01-02", filters.StartDate); err == nil {
 			endOfDay := t.Add(24*time.Hour - time.Second)
 			conditions = append(conditions, bson.M{
 				"createdAt": bson.M{
@@ -229,18 +119,18 @@ func (s *ProviderAdminService) GetAllProviders(
 		}
 	}
 
-	if search != "" {
+	if filters.Search != "" {
 		searchConditions := []bson.M{
-			{"name": bson.M{"$regex": search, "$options": "i"}},
-			{"phone": bson.M{"$regex": search, "$options": "i"}},
-			{"email": bson.M{"$regex": search, "$options": "i"}},
-			{"city": bson.M{"$regex": search, "$options": "i"}},
-			{"address": bson.M{"$regex": search, "$options": "i"}},
-			{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": search, "$options": "i"}}},
+			{"name": bson.M{"$regex": filters.Search, "$options": "i"}},
+			{"phone": bson.M{"$regex": filters.Search, "$options": "i"}},
+			{"email": bson.M{"$regex": filters.Search, "$options": "i"}},
+			{"city": bson.M{"$regex": filters.Search, "$options": "i"}},
+			{"address": bson.M{"$regex": filters.Search, "$options": "i"}},
+			{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": filters.Search, "$options": "i"}}},
 		}
 
-		if strings.HasPrefix(strings.ToUpper(search), "PRO") {
-			idSearch := strings.TrimPrefix(strings.ToUpper(search), "PRO")
+		if strings.HasPrefix(strings.ToUpper(filters.Search), "PRO") {
+			idSearch := strings.TrimPrefix(strings.ToUpper(filters.Search), "PRO")
 			searchConditions = append(searchConditions, bson.M{
 				"$or": []bson.M{
 					{"id": bson.M{"$regex": idSearch, "$options": "i"}},
@@ -250,8 +140,8 @@ func (s *ProviderAdminService) GetAllProviders(
 		} else {
 			searchConditions = append(searchConditions, bson.M{
 				"$or": []bson.M{
-					{"id": bson.M{"$regex": search, "$options": "i"}},
-					{"_id": bson.M{"$regex": search, "$options": "i"}},
+					{"id": bson.M{"$regex": filters.Search, "$options": "i"}},
+					{"_id": bson.M{"$regex": filters.Search, "$options": "i"}},
 				},
 			})
 		}
@@ -259,14 +149,14 @@ func (s *ProviderAdminService) GetAllProviders(
 		conditions = append(conditions, bson.M{"$or": searchConditions})
 	}
 
-	if name != "" {
-		conditions = append(conditions, bson.M{"name": bson.M{"$regex": name, "$options": "i"}})
+	if filters.Name != "" {
+		conditions = append(conditions, bson.M{"name": bson.M{"$regex": filters.Name, "$options": "i"}})
 	}
-	if mobile != "" {
-		conditions = append(conditions, bson.M{"phone": bson.M{"$regex": mobile, "$options": "i"}})
+	if filters.Mobile != "" {
+		conditions = append(conditions, bson.M{"phone": bson.M{"$regex": filters.Mobile, "$options": "i"}})
 	}
-	if providerID != "" {
-		idSearch := strings.TrimPrefix(strings.ToUpper(providerID), "PRO")
+	if filters.ProviderID != "" {
+		idSearch := strings.TrimPrefix(strings.ToUpper(filters.ProviderID), "PRO")
 		conditions = append(conditions, bson.M{
 			"$or": []bson.M{
 				{"id": bson.M{"$regex": idSearch, "$options": "i"}},
@@ -274,24 +164,24 @@ func (s *ProviderAdminService) GetAllProviders(
 			},
 		})
 	}
-	if zone != "" {
+	if filters.Zone != "" {
 		conditions = append(conditions, bson.M{
 			"$or": []bson.M{
-				{"city": bson.M{"$regex": zone, "$options": "i"}},
-				{"address": bson.M{"$regex": zone, "$options": "i"}},
+				{"city": bson.M{"$regex": filters.Zone, "$options": "i"}},
+				{"address": bson.M{"$regex": filters.Zone, "$options": "i"}},
 			},
 		})
 	}
-	if vehicleType != "" {
-		conditions = append(conditions, bson.M{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": vehicleType, "$options": "i"}}})
+	if filters.VehicleType != "" {
+		conditions = append(conditions, bson.M{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": filters.VehicleType, "$options": "i"}}})
 	}
 
-	if status != "" {
-		conditions = append(conditions, bson.M{"status": status})
+	if filters.Status != "" {
+		conditions = append(conditions, bson.M{"status": filters.Status})
 	}
 
-	if kycStatus != "" {
-		kycStatusLower := strings.ToLower(kycStatus)
+	if filters.KYCStatus != "" {
+		kycStatusLower := strings.ToLower(filters.KYCStatus)
 		switch kycStatusLower {
 		case "active", "verified":
 			conditions = append(conditions, bson.M{"status": domain.StatusActive})
@@ -302,8 +192,8 @@ func (s *ProviderAdminService) GetAllProviders(
 		}
 	}
 
-	if accountStatus != "" {
-		accountStatusLower := strings.ToLower(accountStatus)
+	if filters.AccountStatus != "" {
+		accountStatusLower := strings.ToLower(filters.AccountStatus)
 		switch accountStatusLower {
 		case "active":
 			conditions = append(conditions, bson.M{
@@ -324,9 +214,7 @@ func (s *ProviderAdminService) GetAllProviders(
 		query["$and"] = conditions
 	}
 
-	log.Println("Final Query:", query)
-
-	providers, total, err := s.providers.FindAll(ctx, query, skip, int64(limit), sort)
+	providers, total, err := s.providers.FindAll(ctx, query, pagination.Skip, pagination.Limit, pagination.Sort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch providers: %v", err)
 	}
@@ -343,11 +231,11 @@ func (s *ProviderAdminService) GetAllProviders(
 	inactiveCount, _ := s.providers.CountByMultipleStatuses(ctx, countQuery, "isActive", inactiveStatuses)
 	pendingKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusPending)
 
-	formattedProviders := make([]ProviderResponse, len(providers))
+	formattedProviders := make([]dto.ProviderAllResponse, len(providers))
 	for i, p := range providers {
 		totalJobs, completedJobs, err := s.services.GetServiceStats(ctx, p.ID.Hex())
 		if err != nil {
-			log.Printf("Error getting service stats for provider %s: %v", p.ID, err)
+		    fmt.Printf("Error getting service stats for provider %s: %v", p.ID, err)
 			totalJobs = 0
 			completedJobs = 0
 		}
@@ -388,7 +276,7 @@ func (s *ProviderAdminService) GetAllProviders(
 			}
 		}
 
-		formattedProviders[i] = ProviderResponse{
+		formattedProviders[i] = dto.ProviderAllResponse{
 			ID:            p.ID.Hex(),
 			ProviderID:    providerIDStr,
 			Name:          defaultStr(p.Name, "N/A"),
@@ -411,46 +299,49 @@ func (s *ProviderAdminService) GetAllProviders(
 		}
 	}
 
-	totalPages := 1
-	if total > 0 && limit > 0 {
-		totalPages = int(math.Ceil(float64(total) / float64(limit)))
-	}
+	var totalPages int64 = 1
+    if total > 0 && pagination.Limit > 0 {
+	    totalPages = int64(math.Ceil(float64(total) / float64(pagination.Limit)))
+    }
 
-	return &ProviderListResponse{
+
+	return &dto.ProviderListResponse{
 		Providers: formattedProviders,
-		Counts: ProviderCounts{
+		Counts: dto.ProviderCounts{
 			Total:      total,
 			Active:     activeCount,
 			Inactive:   inactiveCount,
 			PendingKYC: pendingKycCount,
 		},
-		Pagination: Pagination{
-			CurrentPage: page,
+		Pagination: dto.ProviderMetaPagination{
+			CurrentPage: pagination.Page,
 			TotalPages:  totalPages,
 			Total:       total,
-			Limit:       limit,
-			HasNext:     page < totalPages,
-			HasPrev:     page > 1,
+			Limit:       pagination.Limit,
+			HasNext:     pagination.Page < totalPages,
+			HasPrev:     pagination.Page > 1,
 		},
 	}, nil
 }
 
-func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (*ProviderDetailResponse, error) {
+func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (*dto.ProviderDetailResponse, error) {
 	provider, err := s.providers.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	totalJobs, completedJobs, err := s.services.GetServiceStats(ctx, provider.ID.Hex())
+
 	if err != nil {
-		log.Printf("Error getting service stats: %v", err)
+		fmt.Printf("Error getting service stats: %v", err)
 		totalJobs = 0
 		completedJobs = 0
 	}
 
 	recentServices, err := s.services.FindByProviderID(ctx, provider.ID.Hex(), 10)
+
 	if err != nil {
-		log.Printf("Error fetching recent services: %v", err)
+		fmt.Printf("Error fetching recent services: %v", err)
 		recentServices = []domain.Service{}
 	}
 
@@ -486,7 +377,7 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 	brandNames := constants.GetBrandNamesByIDs(provider.ProviderBrands)
 	serviceNames := constants.GetServiceNamesByIDs(provider.ProviderServices)
 
-	return &ProviderDetailResponse{
+	return &dto.ProviderDetailResponse{
 		ID:                   provider.ID.Hex(),
 		ProviderID:           providerIDStr,
 		Name:                 defaultStr(provider.Name, "N/A"),
@@ -527,6 +418,7 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 }
 
 func (s *ProviderAdminService) UpdateProviderStatus(ctx context.Context, id, status string) (*domain.Provider, error) {
+
 	validStatuses := map[string]bool{
 		domain.StatusActive:   true,
 		domain.StatusPending:  true,
@@ -542,6 +434,7 @@ func (s *ProviderAdminService) UpdateProviderStatus(ctx context.Context, id, sta
 }
 
 func (s *ProviderAdminService) UpdateProviderKYC(ctx context.Context, id, kycStatus string) (*domain.Provider, error) {
+
 	statusMap := map[string]string{
 		"active":   domain.StatusActive,
 		"verified": domain.StatusActive,
@@ -550,6 +443,7 @@ func (s *ProviderAdminService) UpdateProviderKYC(ctx context.Context, id, kycSta
 	}
 
 	statusLower := strings.ToLower(kycStatus)
+
 	mappedStatus, exists := statusMap[statusLower]
 	if !exists {
 		return nil, fmt.Errorf("invalid KYC status")
@@ -558,21 +452,20 @@ func (s *ProviderAdminService) UpdateProviderKYC(ctx context.Context, id, kycSta
 	return s.providers.UpdateKYCStatus(ctx, id, mappedStatus)
 }
 
-func (s *ProviderAdminService) VerifyDocument(
-	ctx context.Context,
-	id, documentType, documentID, action string,
-) (*domain.Provider, error) {
+func (s *ProviderAdminService) VerifyDocument( ctx context.Context, id, documentType, documentID, action string ) (*domain.Provider, error) {
 
 	if action != "approve" && action != "reject" {
 		return nil, fmt.Errorf("invalid action (approve/reject required)")
 	}
 
 	verificationStatus := domain.VerificationApproved
+
 	if action == "reject" {
 		verificationStatus = domain.VerificationRejected
 	}
 
 	provider, err := s.providers.UpdateDocumentVerification(ctx, id, documentType, documentID, verificationStatus)
+
 	if err != nil {
 		return nil, err
 	}
@@ -623,6 +516,7 @@ func (s *ProviderAdminService) VerifyDocument(
 }
 
 func (s *ProviderAdminService) UpdateProviderAccountAction(ctx context.Context, id, action string) (*domain.Provider, error) {
+
 	statusMap := map[string]string{
 		"activate":  domain.AccountStatusActive,
 		"suspend":   domain.AccountStatusSuspended,
@@ -638,6 +532,7 @@ func (s *ProviderAdminService) UpdateProviderAccountAction(ctx context.Context, 
 }
 
 func (s *ProviderAdminService) UpdateProviderCommission(ctx context.Context, id string, commissionPercentage float64) (*domain.Provider, error) {
+
 	if commissionPercentage < 0 || commissionPercentage > 100 {
 		return nil, fmt.Errorf("commission percentage must be between 0 and 100")
 	}
@@ -653,16 +548,15 @@ func formatDateDetailed(t time.Time) string {
 	return t.Format("Jan 2, 2006")
 }
 
-func (s *ProviderAdminService) GetDocumentURL(
-	ctx context.Context,
-	providerID, documentType, documentID string,
-) (*DocumentResponse, error) {
+func (s *ProviderAdminService) GetDocumentURL( ctx context.Context, providerID, documentType, documentID string ) (*dto.DocumentResponse, error) {
+
 	provider, err := s.providers.FindByID(ctx, providerID)
 	if err != nil {
 		return nil, fmt.Errorf("provider not found")
 	}
 
 	switch documentType {
+
 	case "identity":
 		if len(provider.IdentityProof) == 0 {
 			return nil, fmt.Errorf("no identity proof documents found")
@@ -671,7 +565,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 		if documentID != "" {
 			for _, proof := range provider.IdentityProof {
 				if proof.ID.Hex() == documentID {
-					return &DocumentResponse{
+					return &dto.DocumentResponse{
 						DocumentID:   proof.ID.Hex(),
 						DocumentType: "identity",
 						Type:         proof.Type,
@@ -684,7 +578,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 		}
 
 		proof := provider.IdentityProof[0]
-		return &DocumentResponse{
+		return &dto.DocumentResponse{
 			DocumentID:   proof.ID.Hex(),
 			DocumentType: "identity",
 			Type:         proof.Type,
@@ -700,7 +594,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 		if documentID != "" {
 			for _, proof := range provider.AddressProof {
 				if proof.ID.Hex() == documentID {
-					return &DocumentResponse{
+					return &dto.DocumentResponse{
 						DocumentID:   proof.ID.Hex(),
 						DocumentType: "address",
 						Type:         proof.Type,
@@ -713,7 +607,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 		}
 
 		proof := provider.AddressProof[0]
-		return &DocumentResponse{
+		return &dto.DocumentResponse{
 			DocumentID:   proof.ID.Hex(),
 			DocumentType: "address",
 			Type:         proof.Type,
@@ -726,7 +620,7 @@ func (s *ProviderAdminService) GetDocumentURL(
 			return nil, fmt.Errorf("no cancel cheque document found")
 		}
 
-		return &DocumentResponse{
+		return &dto.DocumentResponse{
 			DocumentType: "cancel_cheque",
 			File:         provider.CancelCheque.File,
 			Verified:     provider.CancelCheque.Verified,
@@ -737,11 +631,8 @@ func (s *ProviderAdminService) GetDocumentURL(
 	}
 }
 
-func (s *ProviderAdminService) AddNote(
-	ctx context.Context,
-	providerID string,
-	req dto.AddNoteRequest,
-) error {
+func (s *ProviderAdminService) AddNote( ctx context.Context, providerID string, req dto.AddNoteRequest ) error {
+
 	if req.Content == "" {
 		return fmt.Errorf("note content is required")
 	}
@@ -764,6 +655,7 @@ func (s *ProviderAdminService) AddNote(
 	return s.providers.AddProviderNote(ctx, objectID, note)
 }
 func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.CreateProviderRequest, createdBy primitive.ObjectID, role string) (*domain.Provider, error) {
+
 	providerID := time.Now().UnixNano() / 1000000
 
 	provider := &domain.Provider{
@@ -823,6 +715,7 @@ func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.Creat
 	}
 
 	err := s.providers.Create(ctx, provider)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create provider: %v", err)
 	}
@@ -830,11 +723,7 @@ func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.Creat
 	return provider, nil
 }
 
-func (s *ProviderAdminService) UpdateProvider(
-	ctx context.Context,
-	id string,
-	req dto.UpdateProviderRequest,
-	updatedBy primitive.ObjectID,
+func (s *ProviderAdminService) UpdateProvider( ctx context.Context, id string, req dto.UpdateProviderRequest, updatedBy primitive.ObjectID,
 ) (*domain.Provider, error) {
 
 	_, err := s.providers.FindByID(ctx, id)
@@ -908,19 +797,19 @@ func (s *ProviderAdminService) UpdateProvider(
 	return s.providers.Update(ctx, id, update)
 }
 
-func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[string][]string, adminID primitive.ObjectID) (*ZoneStatsResponse, error) {
+func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[string][]string, adminID primitive.ObjectID) (*dto.ProviderZoneStatsResponse, error) {
 	zoneNames := adminZones["zoneName"]
 
 	if len(zoneNames) == 0 {
-		return &ZoneStatsResponse{
-			Zones:                  []domain.ZoneStats{},
+		return &dto.ProviderZoneStatsResponse{
+			Zones:                  []dto.ProviderZoneStats{},
 			TotalZones:             0,
 			TotalProviders:         0,
 			TotalActivationMembers: 0,
 		}, nil
 	}
 
-	results := make([]domain.ZoneStats, 0, len(zoneNames))
+	results := make([]dto.ProviderZoneStats, 0, len(zoneNames))
 
 	totalProvidersAcrossZones := 0
 	totalActivationMembersAcrossZones := 0
@@ -928,7 +817,7 @@ func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[
 	for _, zoneName := range zoneNames {
 		subAdminIDs, err := s.getSubAdminsByZone(ctx, zoneName)
 		if err != nil {
-			results = append(results, domain.ZoneStats{
+			results = append(results, dto.ProviderZoneStats{
 				ZoneName:               zoneName,
 				TotalProviders:         0,
 				TotalActivationMembers: 0,
@@ -940,7 +829,7 @@ func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[
 		totalActivationMembersAcrossZones += totalActivationMembers
 
 		if totalActivationMembers == 0 {
-			results = append(results, domain.ZoneStats{
+			results = append(results, dto.ProviderZoneStats{
 				ZoneName:               zoneName,
 				TotalProviders:         0,
 				TotalActivationMembers: 0,
@@ -950,7 +839,7 @@ func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[
 
 		totalProviders, err := s.countProvidersByCreators(ctx, subAdminIDs)
 		if err != nil {
-			results = append(results, domain.ZoneStats{
+			results = append(results, dto.ProviderZoneStats{
 				ZoneName:               zoneName,
 				TotalProviders:         0,
 				TotalActivationMembers: totalActivationMembers,
@@ -960,14 +849,14 @@ func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[
 
 		totalProvidersAcrossZones += totalProviders
 
-		results = append(results, domain.ZoneStats{
+		results = append(results, dto.ProviderZoneStats{
 			ZoneName:               zoneName,
 			TotalProviders:         totalProviders,
 			TotalActivationMembers: totalActivationMembers,
 		})
 	}
 
-	return &ZoneStatsResponse{
+	return &dto.ProviderZoneStatsResponse{
 		Zones:                   results,
 		TotalZones:              len(results),
 		TotalProviders:          totalProvidersAcrossZones,
@@ -1012,11 +901,7 @@ func (s *ProviderAdminService) countProvidersByCreators(ctx context.Context, adm
 	return s.providers.CountByCreators(ctx, adminIDs)
 }
 
-func (s *ProviderAdminService) GetZoneActivationTeam(
-	ctx context.Context,
-	zoneName string,
-	adminZones map[string][]string,
-) (*ActivationTeamResponse, error) {
+func (s *ProviderAdminService) GetZoneActivationTeam( ctx context.Context, zoneName string, adminZones map[string][]string ) (*dto.ProviderActivationTeamResponse, error) {
 
 	roleIDs, err := s.role.FindRoleIDsByZoneName(ctx, zoneName)
 	if err != nil {
@@ -1024,11 +909,11 @@ func (s *ProviderAdminService) GetZoneActivationTeam(
 	}
 
 	if len(roleIDs) == 0 {
-		return &ActivationTeamResponse{
+		return &dto.ProviderActivationTeamResponse{
 			ZoneName:        zoneName,
 			TotalProviders:  0,
 			TotalActivators: 0,
-			Team:            []domain.ActivationTeamMember{},
+			Team:            []dto.ProviderActivationTeamMember{},
 		}, nil
 	}
 
@@ -1038,11 +923,11 @@ func (s *ProviderAdminService) GetZoneActivationTeam(
 	}
 
 	if len(adminIDs) == 0 {
-		return &ActivationTeamResponse{
+		return &dto.ProviderActivationTeamResponse{
 			ZoneName:        zoneName,
 			TotalProviders:  0,
 			TotalActivators: 0,
-			Team:            []domain.ActivationTeamMember{},
+			Team:            []dto.ProviderActivationTeamMember{},
 		}, nil
 	}
 
@@ -1058,11 +943,11 @@ func (s *ProviderAdminService) GetZoneActivationTeam(
 	}
 
 	if len(subAdminIDs) == 0 {
-		return &ActivationTeamResponse{
+		return &dto.ProviderActivationTeamResponse{
 			ZoneName:        zoneName,
 			TotalProviders:  0,
 			TotalActivators: 0,
-			Team:            []domain.ActivationTeamMember{},
+			Team:            []dto.ProviderActivationTeamMember{},
 		}, nil
 	}
 
@@ -1076,7 +961,7 @@ func (s *ProviderAdminService) GetZoneActivationTeam(
 		return nil, fmt.Errorf("failed to get activation team details: %v", err)
 	}
 
-	return &ActivationTeamResponse{
+	return &dto.ProviderActivationTeamResponse{
 		ZoneName:        zoneName,
 		TotalProviders:  int64(totalProviders),
 		TotalActivators: int64(len(subAdminIDs)),
@@ -1084,11 +969,7 @@ func (s *ProviderAdminService) GetZoneActivationTeam(
 	}, nil
 }
 
-func (s *ProviderAdminService) getActivationTeamDetails(
-	ctx context.Context,
-	adminIDs []primitive.ObjectID,
-	zoneName string,
-) ([]domain.ActivationTeamMember, error) {
+func (s *ProviderAdminService) getActivationTeamDetails( ctx context.Context, adminIDs []primitive.ObjectID, zoneName string, ) ([]dto.ProviderActivationTeamMember, error) {
 
 	pipeline := []bson.M{
 		{
@@ -1131,13 +1012,8 @@ func (s *ProviderAdminService) getActivationTeamDetails(
 	return team, nil
 }
 
-func (s *ProviderAdminService) GetActivationPersonProviders(
-	ctx context.Context,
-	personID string,
-	zoneName string,
-	pageStr, limitStr, sort, search string,
-	adminZones map[string][]string,
-) (*ProviderListResponse, error) {
+func (s *ProviderAdminService) GetActivationPersonProviders( ctx context.Context, personID string, zoneName string, filters dto.ProviderFilters, pagination dto.ProviderPagination, adminZones map[string][]string,
+) (*dto.ProviderListResponse, error) {
 
 	adminObjectID, err := primitive.ObjectIDFromHex(personID)
 	if err != nil {
@@ -1168,30 +1044,29 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 		}
 	}
 
-	page, _ := strconv.Atoi(pageStr)
-	if page < 1 {
-		page = 1
+	if pagination.Page < 1 {
+		pagination.Page = 1
 	}
 
-	limit, _ := strconv.Atoi(limitStr)
-	if limit < 1 {
-		limit = 10
-	}
-	if limit > 100 {
-		limit = 100
+	if pagination.Limit < 1 {
+		pagination.Limit = 20
 	}
 
-	skip := int64((page - 1) * limit)
+	if pagination.Limit > 100 {
+		pagination.Limit = 100
+	}
+
+	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
 	conditions := []bson.M{
 		{"createdBy": adminObjectID},
 	}
 
-	if search != "" {
+	if filters.Search != "" {
 		searchConditions := []bson.M{
-			{"name": bson.M{"$regex": search, "$options": "i"}},
-			{"phone": bson.M{"$regex": search, "$options": "i"}},
-			{"email": bson.M{"$regex": search, "$options": "i"}},
+			{"name": bson.M{"$regex": filters.Search, "$options": "i"}},
+			{"phone": bson.M{"$regex": filters.Search, "$options": "i"}},
+			{"email": bson.M{"$regex": filters.Search, "$options": "i"}},
 		}
 
 		conditions = append(conditions, bson.M{"$or": searchConditions})
@@ -1199,13 +1074,8 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 
 	query := bson.M{"$and": conditions}
 
-	providers, total, err := s.providers.FindAll(
-		ctx,
-		query,
-		skip,
-		int64(limit),
-		sort,
-	)
+	providers, total, err := s.providers.FindAll(ctx, query, pagination.Skip, pagination.Limit, pagination.Sort)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch providers")
 	}
@@ -1220,7 +1090,7 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 	inactiveCount, _ := s.providers.CountByMultipleStatuses(ctx, query, "isActive", inactiveStatuses)
 	pendingKycCount, _ := s.providers.CountByStatus(ctx, query, "status", domain.StatusPending)
 
-	formatted := make([]ProviderResponse, len(providers))
+	formatted := make([]dto.ProviderAllResponse, len(providers))
 	for i, p := range providers {
 		totalJobs, completedJobs, _ := s.services.GetServiceStats(ctx, p.ID.Hex())
 
@@ -1258,7 +1128,7 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 			}
 		}
 
-		formatted[i] = ProviderResponse{
+		formatted[i] =dto.ProviderAllResponse{
 			ID:            p.ID.Hex(),
 			ProviderID:    providerIDStr,
 			Name:          defaultStr(p.Name, "N/A"),
@@ -1281,23 +1151,23 @@ func (s *ProviderAdminService) GetActivationPersonProviders(
 		}
 	}
 
-	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+	totalPages := int64(math.Ceil(float64(total) / float64(pagination.Limit)))
 
-	return &ProviderListResponse{
+	return &dto.ProviderListResponse{
 		Providers: formatted,
-		Counts: ProviderCounts{
+		Counts: dto.ProviderCounts{
 			Total:      total,
 			Active:     activeCount,
 			Inactive:   inactiveCount,
 			PendingKYC: pendingKycCount,
 		},
-		Pagination: Pagination{
-			CurrentPage: page,
+		Pagination: dto.ProviderMetaPagination{
+			CurrentPage: pagination.Page,
 			TotalPages:  totalPages,
 			Total:       total,
-			Limit:       limit,
-			HasNext:     page < totalPages,
-			HasPrev:     page > 1,
+			Limit:       pagination.Limit,
+			HasNext:     pagination.Page < totalPages,
+			HasPrev:     pagination.Page > 1,
 		},
 	}, nil
 }
@@ -1371,13 +1241,13 @@ func (s *ProviderAdminService) GetProviderEarnings(
 		paymentStatus := "Pending"
 
 		service, err := s.services.FindByObjectIDs(ctx, settlement.ServiceID)
-		log.Println("Sjbadkscszcjhbbhjsz",service)
+
 		if err == nil && service != nil {
 			bookingID = "BK" + strconv.FormatInt(service.InternalID, 10)
 			serviceTime := service.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 			bookingDate = serviceTime.Format("2006-01-02 15:04:05")
 			paymentStatus = string(settlement.SettlementStatus)
-            log.Println("jbkdcsjbxckscx",paymentStatus)
+           
 			serviceReq, err := s.serviceRequestRepo.FindByID(ctx, service.ServiceRequestID.Hex())
 			if err == nil && serviceReq != nil && len(serviceReq.Problems) > 0 {
 				serviceType = serviceReq.Problems[0] 

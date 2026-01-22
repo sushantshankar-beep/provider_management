@@ -81,17 +81,15 @@ func (r *ProviderRepo) FindOne(ctx context.Context, query bson.M) (*domain.Provi
 }
 
 func (r *ProviderRepo) UpdateStatus(ctx context.Context, id string, status string) (*domain.Provider, error) {
+
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, err
 	}
 
 	var provider domain.Provider
-	err = r.col.FindOneAndUpdate(
-		ctx,
-		bson.M{"_id": objID},
-		bson.M{"$set": bson.M{"status": status}},
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
+
+	err = r.col.FindOneAndUpdate( ctx, bson.M{"_id": objID}, bson.M{"$set": bson.M{"status": status}}, options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&provider)
 
 	if err != nil {
@@ -101,6 +99,7 @@ func (r *ProviderRepo) UpdateStatus(ctx context.Context, id string, status strin
 }
 
 func (r *ProviderRepo) UpdateKYCStatus(ctx context.Context, id string, status string) (*domain.Provider, error) {
+
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, err
@@ -120,13 +119,7 @@ func (r *ProviderRepo) UpdateKYCStatus(ctx context.Context, id string, status st
 	return &provider, nil
 }
 
-func (r *ProviderRepo) UpdateDocumentVerification(
-	ctx context.Context,
-	providerID string,
-	documentType string,
-	documentID string,
-	status string,
-) (*domain.Provider, error) {
+func (r *ProviderRepo) UpdateDocumentVerification( ctx context.Context, providerID string, documentType string, documentID string, status string ) (*domain.Provider, error) {
 
 	providerObjID, err := primitive.ObjectIDFromHex(providerID)
 	if err != nil {
@@ -147,6 +140,7 @@ func (r *ProviderRepo) UpdateDocumentVerification(
 	now := primitive.NewDateTimeFromTime(time.Now())
 
 	switch documentType {
+
 	case "identityProof":
 		filter["identityProof._id"] = docObjID
 		updateFields := bson.M{"identityProof.$.verified": status}
@@ -154,6 +148,7 @@ func (r *ProviderRepo) UpdateDocumentVerification(
 			updateFields["approvedAt"] = now
 		}
 		update = bson.M{"$set": updateFields}
+
 	case "addressProof":
 		filter["addressProof._id"] = docObjID
 		updateFields := bson.M{"addressProof.$.verified": status}
@@ -161,23 +156,20 @@ func (r *ProviderRepo) UpdateDocumentVerification(
 			updateFields["approvedAt"] = now
 		}
 		update = bson.M{"$set": updateFields}
+
 	case "cancelCheque":
 		updateFields := bson.M{"cancelCheque.verified": status}
 		if status == "approved" {
 			updateFields["approvedAt"] = now
 		}
 		update = bson.M{"$set": updateFields}
+
 	default:
 		return nil, fmt.Errorf("invalid document type")
 	}
 
 	var updatedProvider domain.Provider
-	err = r.col.FindOneAndUpdate(
-		ctx,
-		filter,
-		update,
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
-	).Decode(&updatedProvider)
+	err = r.col.FindOneAndUpdate( ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After), ).Decode(&updatedProvider)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update document: %v", err)
 	}
@@ -192,12 +184,7 @@ func (r *ProviderRepo) UpdateAccountStatus(ctx context.Context, id string, statu
 	}
 
 	var provider domain.Provider
-	err = r.col.FindOneAndUpdate(
-		ctx,
-		bson.M{"_id": objID},
-		bson.M{"$set": bson.M{"isActive": status}},
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
-	).Decode(&provider)
+	err = r.col.FindOneAndUpdate( ctx, bson.M{"_id": objID}, bson.M{"$set": bson.M{"isActive": status}}, options.FindOneAndUpdate().SetReturnDocument(options.After), ).Decode(&provider)
 
 	if err != nil {
 		return nil, err
@@ -212,12 +199,7 @@ func (r *ProviderRepo) UpdateCommission(ctx context.Context, id string, commissi
 	}
 
 	var provider domain.Provider
-	err = r.col.FindOneAndUpdate(
-		ctx,
-		bson.M{"_id": objID},
-		bson.M{"$set": bson.M{"commissionPercentage": utils.RoundTo2(commission)}},
-		options.FindOneAndUpdate().SetReturnDocument(options.After),
-	).Decode(&provider)
+	err = r.col.FindOneAndUpdate(ctx, bson.M{"_id": objID}, bson.M{"$set": bson.M{"commissionPercentage": utils.RoundTo2(commission)}}, options.FindOneAndUpdate().SetReturnDocument(options.After), ).Decode(&provider)
 
 	if err != nil {
 		return nil, err
@@ -342,11 +324,7 @@ func (r *ProviderRepo) GetStats(ctx context.Context) (dto.ProvidersStats, error)
 }
 
 func (r *ProviderRepo) AddProviderNote(ctx context.Context, providerID primitive.ObjectID, note domain.ProviderNote) error {
-	_, err := r.col.UpdateOne(
-		ctx,
-		bson.M{"_id": providerID},
-		bson.M{"$push": bson.M{"notes": note}},
-	)
+	_, err := r.col.UpdateOne( ctx, bson.M{"_id": providerID}, bson.M{"$push": bson.M{"notes": note}})
 	return err
 }
 
@@ -377,15 +355,16 @@ func (r *ProviderRepo) Update(ctx context.Context, id string, updateData bson.M)
 	return &provider, nil
 }
 
-func (r *ProviderRepo) AggregateZoneStats( ctx context.Context, pipeline []bson.M) ([]domain.ZoneStats, error) {
+func (r *ProviderRepo) AggregateZoneStats( ctx context.Context, pipeline []bson.M) ([]dto.ProviderZoneStats, error) {
 
 	cursor, err := r.col.Aggregate(ctx, pipeline)
+	
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
-	var results []domain.ZoneStats
+	var results []dto.ProviderZoneStats
 	if err := cursor.All(ctx, &results); err != nil {
 		return nil, err
 	}
@@ -393,7 +372,7 @@ func (r *ProviderRepo) AggregateZoneStats( ctx context.Context, pipeline []bson.
 	return results, nil
 }
 
-func (r *ProviderRepo) AggregateActivationTeam( ctx context.Context, pipeline []bson.M ) ([]domain.ActivationTeamMember, error) {
+func (r *ProviderRepo) AggregateActivationTeam( ctx context.Context, pipeline []bson.M ) ([]dto.ProviderActivationTeamMember, error) {
 
 	cursor, err := r.col.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -401,7 +380,7 @@ func (r *ProviderRepo) AggregateActivationTeam( ctx context.Context, pipeline []
 	}
 	defer cursor.Close(ctx)
 
-	var results []domain.ActivationTeamMember
+	var results []dto.ProviderActivationTeamMember
 	if err := cursor.All(ctx, &results); err != nil {
 		return nil, err
 	}
