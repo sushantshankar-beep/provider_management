@@ -151,6 +151,7 @@ type ProviderDetailResponse struct {
 	AgreementSubmittedAt *time.Time                   `json:"agreementSubmittedAt,omitempty"`
 	Notes                []domain.ProviderNote       `json:"notes,omitempty"`
 	ApprovedAt           string                      `json:"approvedAt"`
+	IsAgreementSubmitted bool                        `json:"isAgreementSubmitted"`
 }
 
 type DocumentResponse struct {
