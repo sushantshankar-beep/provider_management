@@ -1,16 +1,16 @@
 package repository
 
 import (
-	"fmt"
-	"time"
-	"strings"
-	"unicode"
 	"context"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"fmt"
 	"provider_management/internal/domain"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"strings"
+	"time"
+	"unicode"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type AdminBookingRepo struct {
@@ -31,7 +31,7 @@ func NewAdminBookingRepo(db *mongo.Database) *AdminBookingRepo {
 		userColl:            db.Collection("users"),
 		providerColl:        db.Collection("providerschemas"),
 		ratingColl:          db.Collection("ratings"),
-		transactionColl:     db.Collection("transactions"),
+		transactionColl:     db.Collection("payment_transactions"),
 		complaintColl:       db.Collection("complaints"),
 	}
 	repo.ensureIndexes(context.Background())
@@ -525,44 +525,18 @@ func (r *AdminBookingRepo) UpdateProvider(ctx context.Context, id string, update
 	return &provider, nil
 }
 
-func (r *AdminBookingRepo) FindRatingsByServiceIDs(ctx context.Context, serviceIDs []string) ([]domain.Rating, error) {
-	var objIDs []primitive.ObjectID
-	for _, id := range serviceIDs {
-		if objID, err := primitive.ObjectIDFromHex(id); err == nil {
-			objIDs = append(objIDs, objID)
-		}
-	}
+func (r *AdminBookingRepo) FindTransactionByServiceID(ctx context.Context, serviceID string) (*domain.Transaction, error) {
+	var transaction domain.Transaction
 
-	if len(objIDs) == 0 {
-		return []domain.Rating{}, nil
-	}
+	filter := bson.M{"serviceId": serviceID, "status": "paid"}
+	opts := options.FindOne().SetSort(bson.D{{Key: "createdAt", Value: -1}})
 
-	filter := bson.M{"service": bson.M{"$in": objIDs}}
-	cursor, err := r.ratingColl.Find(ctx, filter)
+	err := r.transactionColl.FindOne(ctx, filter, opts).Decode(&transaction)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
 
-	var ratings []domain.Rating
-	if err := cursor.All(ctx, &ratings); err != nil {
-		return nil, err
-	}
-
-	return ratings, nil
-}
-
-func (r *AdminBookingRepo) FindTransactionByOrderID(ctx context.Context, orderID string) (*domain.Transaction, error) {
-	var transaction domain.Transaction
-
-	filter := bson.M{"$or": []bson.M{
-		{"txnid": orderID},
-		{"mihpayid": orderID},
-		{"_id": orderID},
-	}}
-
-	err := r.transactionColl.FindOne(ctx, filter).Decode(&transaction)
-	return &transaction, err
+	return &transaction, nil
 }
 
 func (r *AdminBookingRepo) FindComplaintByID(ctx context.Context, id string) (*domain.Complaint, error) {

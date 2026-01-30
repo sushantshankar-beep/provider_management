@@ -243,11 +243,7 @@ func (s *ZoneMapService) GetProvidersByActivator( ctx context.Context, adminID s
 			DOJ:           formatDate(p.CreatedAt),
 			ProfileURL:    p.ProfileURL,
 			IsServiceOn:   p.IsServiceOn,
-			IdentityProof: p.IdentityProof,
-			AddressProof:  p.AddressProof,
-			CancelCheque:  p.CancelCheque,
 			IsActive:      string(p.IsActive),
-			Status:        p.Status,
 			TotalJobs:     totalJobs,
 			CompletedJobs: completedJobs,
 		}
@@ -356,11 +352,7 @@ func (s *ZoneMapService) GetMyProviders( ctx context.Context, adminID string, pa
 			DOJ:           formatDate(p.CreatedAt),
 			ProfileURL:    p.ProfileURL,
 			IsServiceOn:   p.IsServiceOn,
-			IdentityProof: p.IdentityProof,
-			AddressProof:  p.AddressProof,
-			CancelCheque:  p.CancelCheque,
 			IsActive:      string(p.IsActive),
-			Status:        p.Status,
 			TotalJobs:     totalJobs,
 			CompletedJobs: completedJobs,
 		}

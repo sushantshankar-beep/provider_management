@@ -39,7 +39,7 @@ func SetupRoutes(
 	zoneFilter *middleware.ZoneFilterMiddleware,
 	permissionHandler *handler.PermissionHandler,
 	zoneMapHandler *handler.ZoneMapHandler,
-	vehicleHandler *handler.VehicleHandler,
+	providerBrandServiceHandler *handler.ProviderBrandServiceHandler,
 	providerAgreementHandler *handler.AgreementHandler,
 ) {
 	r.GET("/health", func(c *gin.Context) {
@@ -173,10 +173,10 @@ func SetupRoutes(
 		providers.POST("",
 		    rbac.Check("providers", "create_provider_profile"),
 			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
-				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
-				{FormFieldName: "identityProof", ContextKey: "identityProof"},
-				{FormFieldName: "addressProof", ContextKey: "addressProof"},
-				{FormFieldName: "cancelCheque", ContextKey: "cancelCheque"},
+				{FormFieldName: "profileUrl", ContextKey: "profileUrl"},
+				{FormFieldName: "aadhaarFront", ContextKey: "aadhaarFront"},
+			    {FormFieldName: "aadhaarBack", ContextKey: "aadhaarBack"},
+			    {FormFieldName: "pan", ContextKey: "pan"},
 			}),
 			providerAdminHandler.CreateProvider,
 		)
@@ -184,10 +184,10 @@ func SetupRoutes(
 		providers.PUT("/:id",
 		    rbac.Check("providers", "edit_provider_profile"),
 			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
-				{FormFieldName: "profileImage", ContextKey: "profileUrl"},
-				{FormFieldName: "identityProof", ContextKey: "identityProof"},
-				{FormFieldName: "addressProof", ContextKey: "addressProof"},
-				{FormFieldName: "cancelCheque", ContextKey: "cancelCheque"},
+				{FormFieldName: "profileUrl", ContextKey: "profileUrl"},
+				{FormFieldName: "aadhaarFront", ContextKey: "aadhaarFront"},
+			    {FormFieldName: "aadhaarBack", ContextKey: "aadhaarBack"},
+			    {FormFieldName: "pan", ContextKey: "pan"},
 			}),
 			providerAdminHandler.UpdateProvider,
 		)
@@ -219,6 +219,7 @@ func SetupRoutes(
 		bookings.PUT("/:bookingId/cancel", rbac.Check("bookings", "booking_action"), bookingAdminHandler.CancelBooking)
 		bookings.PUT("/:bookingId/complete", rbac.Check("bookings", "booking_action"), bookingAdminHandler.MarkBookingCompleted)
 		bookings.POST("/:bookingId/notes", rbac.Check("bookings", "add_booking_notes"), bookingAdminHandler.AddNote)
+		bookings.GET("/invoice", bookingAdminHandler.GetInvoice)
 	}
 
 	//Done
@@ -248,6 +249,7 @@ func SetupRoutes(
 		providerPayout.GET("/:id/details", rbac.Check("paymentandtransactions", "view_provider_payout_details"), payoutHandler.GetProviderPayoutDetails)
 		providerPayout.GET("/:id/bookings", rbac.Check("paymentandtransactions", "view_provider_payout_details"), payoutHandler.GetPayoutServices)
 		providerPayout.POST("/6hour", rbac.Check("paymentandtransactions", "create"), payoutHandler.Create6HourPayout)
+		providerPayout.GET("/stats", rbac.Check("paymentandtransactions", "view_provider_payout"), payoutHandler.GetPayoutStats)
 	}
 
 	providerSettlement := admin.Group("/provider-settlement")
@@ -353,8 +355,8 @@ func SetupRoutes(
 	//Done
 	vehicle := admin.Group("/vehicle")
 	{
-		vehicle.GET("/brands", vehicleHandler.GetVehicleBrands)
-		vehicle.GET("/services", vehicleHandler.GetVehicleServices)
+		vehicle.GET("/brands",  providerBrandServiceHandler.GetProviderBrands)
+		vehicle.GET("/services",   providerBrandServiceHandler.GetProviderServices)
 	}
 
 	//Done

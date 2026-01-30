@@ -17,10 +17,8 @@ type TransactionResponse struct {
 	ID            string  `json:"_id"`
 	UserID        string  `json:"user_id"`
 	UserName      string  `json:"user_name,omitempty"`
-	BookingID     string  `json:"booking_id,omitempty"`
 	TxnID         string  `json:"txnid"`
 	Amount        float64 `json:"amount"`
-	Currency      string  `json:"currency"`
 	Status        string  `json:"status"`
 	Method        string  `json:"method,omitempty"`
 	PaymentSource string  `json:"payment_source,omitempty"`
@@ -42,3 +40,4 @@ type PaginationMeta struct {
 	TotalItems  int64 `json:"total_items"`
 	TotalPages  int64 `json:"total_pages"`
 }
+

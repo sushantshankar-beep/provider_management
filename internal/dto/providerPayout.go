@@ -28,11 +28,13 @@ type PayoutResponse struct {
 	ProviderID        string    `json:"provider_id"`
 	ProviderName      string    `json:"provider_name"`
 	ServiceIDs        []primitive.ObjectID   `json:"service_ids"`
-	BaseAmount        float64   `json:"base_amount"`
+	TotalPayAmount        float64   `json:"total_pay_amount"`
 	CommissionPercent float64   `json:"commission_percent"`
 	CommissionAmount  float64   `json:"commission_amount"`
 	GSTPercent        float64   `json:"gst_percent"`
 	GSTAmount         float64   `json:"gst_amount"`
+	TDSPercent        float64   `json:"tds_percent"`
+	TDSAmount         float64   `json:"tds_amount"`
 	NetPayable        float64   `json:"net_payable"`
 	Status            string    `json:"status"`
 	PeriodFrom        time.Time `json:"period_from"`
@@ -56,6 +58,8 @@ type PayoutServiceResponse struct {
 	CommissionAmount         float64 `json:"commission_amount"`
 	GSTPercent               float64 `json:"gst_percent"`
 	GSTAmount                float64 `json:"gst_amount"`
+	TDSPercent               float64 `json:"tds_percent"`
+	TDSAmount                float64 `json:"tds_amount"`
 	NetAmount                float64 `json:"net_amount"`
 	PartialAmount            float64 `json:"partial_amount"`
 	PayoutID                 string  `json:"payout_id"`
@@ -68,6 +72,7 @@ type PayoutServiceResponse struct {
 	PayoutStatus             domain.PayoutStatus  `json:"payout_status"`
 	IsPayoutCancelled        bool    `json:"isPayoutCancelled"`
 	IsSettledAfterComplaint  bool    `json:"is_settled_after_complaint"`
+	TotalPaidAmount         float64   `json:"total_paid_amount"`
 }
 
 type ProviderPayoutDetailsResponse struct {

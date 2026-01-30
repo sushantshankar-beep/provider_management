@@ -1,11 +1,14 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
+	"log"
 	"net/http"
 	"provider_management/internal/dto"
+	"provider_management/internal/middleware"
 	"provider_management/internal/service"
- "provider_management/internal/middleware"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AdminBookingHandler struct {
@@ -17,23 +20,34 @@ func NewAdminBookingHandler(svc *service.AdminBookingService) *AdminBookingHandl
 }
 
 func (h *AdminBookingHandler) GetAllBookings(c *gin.Context) {
-	params := make(map[string]string)
-	for key, value := range c.Request.URL.Query() {
-		if len(value) > 0 {
-			params[key] = value[0]
-		}
+
+	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
+	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "10"), 10, 64)
+
+	filters := dto.BookingFilters{
+		Search:        c.Query("search"),
+		Status:        c.Query("status"),
+		PaymentStatus: c.Query("paymentStatus"),
+		ServiceType:   c.Query("serviceType"),
+		VehicleType:   c.Query("vehicleType"),
+		UserID:        c.Query("userId"),
+		ProviderID:    c.Query("providerId"),
+		BookingID:     c.Query("bookingId"),
+		StartDate:     c.Query("startDate"),
+		EndDate:       c.Query("endDate"),
+		Sort:          c.Query("sort"),
 	}
 
 	zoneFilter := middleware.GetZoneFilter(c)
 
-	if _, ok := params["page"]; !ok {
-		params["page"] = "1"
-	}
-	if _, ok := params["limit"]; !ok {
-		params["limit"] = "10"
+	pagination := dto.BookingPagination{
+		Page:  page,
+		Limit: limit,
+		Sort:  c.DefaultQuery("sort", ""),
 	}
 
-	res, err := h.svc.GetAllBookings(c.Request.Context(), params, zoneFilter)
+	res, err := h.svc.GetAllBookings(c.Request.Context(), filters,pagination, zoneFilter)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
@@ -191,5 +205,22 @@ func (h *AdminBookingHandler) AddNote(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Note added successfully",
+	})
+}
+
+func (h *AdminBookingHandler) GetInvoice(c *gin.Context) {
+	bookingID := c.Query("bookingId")
+    log.Println("dlkcsnjsndjkdc",bookingID)
+	invoice, err := h.svc.GetInvoice(c.Request.Context(), bookingID)
+	log.Println("invoiceeee",invoice)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "invoice not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"invoice": invoice,
 	})
 }

@@ -26,25 +26,25 @@ func NewComplaintRepository(db *mongo.Database) *ComplaintRepository {
 	}
 }
 
-func (r *ComplaintRepository) Create(ctx context.Context, complaint *domain.Complaint) error {
-	complaint.CreatedAt = time.Now()
-	complaint.UpdatedAt = time.Now()
+// func (r *ComplaintRepository) Create(ctx context.Context, complaint *domain.Complaint) error {
+// 	complaint.CreatedAt = time.Now()
+// 	complaint.UpdatedAt = time.Now()
 
-	if complaint.InternalID == 0 {
-		internalID, err := r.GenerateInternalID(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to generate internal ID: %w", err)
-		}
-		complaint.InternalID = internalID
-	}
+// 	if complaint.InternalID == 0 {
+// 		internalID, err := r.GenerateInternalID(ctx)
+// 		if err != nil {
+// 			return fmt.Errorf("failed to generate internal ID: %w", err)
+// 		}
+// 		complaint.InternalID = internalID
+// 	}
 
-	_, err := r.collection.InsertOne(ctx, complaint)
-	if err != nil {
-		return fmt.Errorf("failed to create complaint: %w", err)
-	}
+// 	_, err := r.collection.InsertOne(ctx, complaint)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create complaint: %w", err)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (r *ComplaintRepository) GetByID(ctx context.Context, id string) (*domain.Complaint, error) {
 	objectID, err := primitive.ObjectIDFromHex(id)
@@ -303,7 +303,7 @@ func (r *ComplaintRepository) UpdateStatus(ctx context.Context, id string, statu
 	return r.Update(ctx, id, update)
 }
 
-func (r *ComplaintRepository) AddNote( ctx context.Context, internalID int64, note domain.ComplaintNote ) error {
+func (r *ComplaintRepository) AddNote( ctx context.Context, complaintID string, note domain.ComplaintNote ) error {
 
 	update := bson.M{
 		"$push": bson.M{
@@ -314,14 +314,14 @@ func (r *ComplaintRepository) AddNote( ctx context.Context, internalID int64, no
 		},
 	}
 
-	result, err := r.collection.UpdateOne( ctx, bson.M{"id": internalID}, update )
+	result, err := r.collection.UpdateOne( ctx, bson.M{"complaintNumber": complaintID}, update )
 
 	if err != nil {
 		return fmt.Errorf("database error: %w", err)
 	}
 
 	if result.MatchedCount == 0 {
-		return fmt.Errorf("complaint not found with id: %d", internalID)
+		return fmt.Errorf("complaint not found with id: %d", complaintID)
 	}
 
 	return nil
@@ -458,4 +458,22 @@ func (r *ComplaintRepository) GetDashboardStats(ctx context.Context) (dto.Compla
 	}
 
 	return stats, nil
+}
+
+func (r *ComplaintRepository) GetByComplaintNumber(
+	ctx context.Context,
+	complaintNumber string,
+) (*domain.Complaint, error) {
+
+	var complaint domain.Complaint
+	err := r.collection.FindOne(
+		ctx,
+		bson.M{"complaintNumber": complaintNumber},
+	).Decode(&complaint)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &complaint, nil
 }

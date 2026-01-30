@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"time"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"provider_management/internal/domain"
 )
@@ -27,31 +28,27 @@ type ProviderFilters struct {
 }
 
 type CreateProviderRequest struct {
-	Name              string               `form:"name" binding:"required"`
+	Name              string               `form:"name"`
 	CompanyName       string               `form:"companyName"`
-	Phone             string               `form:"phone" binding:"required"`
+	Phone             string               `form:"phone"`
 	Email             string               `form:"email"`
 	AlternateContact  string               `form:"alternateContact"`
-	City              string               `form:"city" binding:"required"`
-	Address           string               `form:"address" binding:"required"`
+	City              string               `form:"city"`
+	Address           string               `form:"address""`
 	PermanentAddress  string               `form:"permanentAddress"`
 	ShopAddress       string               `form:"shopAddress"`
-	VehicleType       []string             `form:"vehicleType" binding:"required"`
+	VehicleType       []string             `form:"vehicleType"`
 	VehicleNumber     string               `form:"vehicleNumber"`
 	ProviderBrands    []string             `form:"providerBrands"`
-	ProviderServices  []string             `form:"providerServices" binding:"required"`
+	ProviderServices  []string             `form:"providerServices"`
 	GSTNumber         string               `form:"gstNumber"`
 	Description       string               `form:"description"`
 	ProfileURL        string               `form:"-"`
-	IdentityProofs    []domain.Proof       `form:"-"`
-	AddressProofs     []domain.Proof       `form:"-"`
-	CancelCheque      *domain.CancelCheque `form:"-"`
-	BankDetails       *domain.BankDetails  `form:"-"`
 	AccountHolderName string               `form:"accountHolderName"`
 	AccountNumber     string               `form:"accountNumber"`
 	IfscCode          string               `form:"ifscCode"`
 	BranchName        string               `form:"branchName"`
-	Upi               string               `form:"upi"`
+	Upi               string               `form:"upiId"`
 }
 
 type UpdateProviderRequest struct {
@@ -102,10 +99,6 @@ type ProviderAllResponse struct {
 	ProfileURL    string               `json:"profile_url"`
 	IsServiceOn   bool                 `json:"is_service_on"`
 	IsActive      string               `json:"is_active"`
-	IdentityProof []domain.Proof       `json:"identity_proof"`
-	AddressProof  []domain.Proof       `json:"address_proof"`
-	CancelCheque  *domain.CancelCheque `json:"cancel_cheque"`
-	Status        string               `json:"status"`
 	TotalJobs     int64                `json:"total_jobs"`
 	CompletedJobs int64                `json:"completed_jobs"`
 }
@@ -128,42 +121,36 @@ type ProviderMetaPagination struct {
 }
 
 type ProviderDetailResponse struct {
-	ID                   string                `json:"id"`
-	ProviderID           string                `json:"provider_id"`
-	Name                 string                `json:"name"`
-	Phone                string                `json:"phone"`
-	Email                string                `json:"email"`
-	AlternateContact     string                `json:"alternate_contact"`
-	ProfileURL           string                `json:"profile_url"`
-	Address              string                `json:"address"`
-	PermanentAddress     string                `json:"permanent_address"`
-	City                 string                `json:"city"`
-	Status               string                `json:"status"`
-	Account              string                `json:"account"`
-	KYC                  string                `json:"kyc"`
-	VehicleType          []string              `json:"vehicle_type"`
-	VehicleNumber        string                `json:"vehicle_number"`
-	ProviderBrands       []string              `json:"provider_brands"`
-	ProviderServices     []string              `json:"provider_services"`
-	GSTNumber            string                `json:"gst_number"`
-	CompanyName          string                `json:"company_name"`
-	Description          string                `json:"description"`
-	Zone                 string                `json:"zone"`
-	DOJ                  string                `json:"doj"`
-	IdentityProof        []domain.Proof        `json:"identity_proof"`
-	AddressProof         []domain.Proof        `json:"address_proof"`
-	CancelCheque         *domain.CancelCheque  `json:"cancel_cheque"`
-	BankDetails          *domain.BankDetails   `json:"bank_details"`
-	IsServiceOn          bool                  `json:"is_service_on"`
-	IsActive             string                `json:"is_active"`
-	IsSocketConnected    bool                  `json:"is_socket_connected"`
-	Location             *domain.GeoPoint      `json:"location"`
-	TotalJobs            int64                 `json:"total_jobs"`
-	CompletedJobs        int64                 `json:"completed_jobs"`
-	RecentServices       []domain.Service      `json:"recent_services"`
-	CommissionPercentage float64               `json:"commission_percentage,omitempty"`
-	Notes                []domain.ProviderNote `json:"notes,omitempty"`
-	ApprovedAt           string                `json:"approved_at"`
+	ID                   string                      `json:"id"`
+	ProviderID           string                      `json:"providerId"`
+	Name                 string                      `json:"name"`
+	Phone                string                      `json:"phone"`
+	Email                string                      `json:"email"`
+	AlternateContact     string                      `json:"alternateContact"`
+	ProfileURL           string                      `json:"profileUrl"`
+	Address              string                      `json:"address"`
+	PermanentAddress     string                      `json:"permanentAddress"`
+	City                 string                      `json:"city"`
+	Account              string                      `json:"account"`
+	VehicleType          []string                    `json:"vehicleType"`
+	VehicleNumber        string                      `json:"vehicleNumber"`
+	ProviderBrands       []string                    `json:"providerBrands"`
+	ProviderServices     []string                    `json:"providerServices"`
+	CompanyName          string                      `json:"companyName"`
+	Description          string                      `json:"description"`
+	Zone                 string                      `json:"zone"`
+	DOJ                  string                      `json:"doj"`
+	KYCStatus            string                      `json:"kycStatus"`
+	KYCID                primitive.ObjectID           `json:"kycId,omitempty"`
+	KYCDocuments         []domain.KYCDocument        `json:"providerDocuments"`
+	BankDetails          *domain.ProviderBankDetails `json:"bankDetails"`
+	IsActive             string                      `json:"isActive"`
+	TotalJobs            int64                       `json:"totalJobs"`
+	CompletedJobs        int64                       `json:"completedJobs"`
+	CommissionPercentage float64                     `json:"commissionPercentage,omitempty"`
+	AgreementSubmittedAt *time.Time                   `json:"agreementSubmittedAt,omitempty"`
+	Notes                []domain.ProviderNote       `json:"notes,omitempty"`
+	ApprovedAt           string                      `json:"approvedAt"`
 }
 
 type DocumentResponse struct {

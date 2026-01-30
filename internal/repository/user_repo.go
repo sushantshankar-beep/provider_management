@@ -1,15 +1,17 @@
 package repository
 
 import (
-	"fmt"
-	"time"
 	"context"
-	"provider_management/internal/dto"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"fmt"
+	"log"
 	"provider_management/internal/domain"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"provider_management/internal/dto"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type UserRepo struct {
@@ -29,7 +31,7 @@ type UserStatistics struct {
 
 func (r *UserRepo) FindByID(ctx context.Context, id string) (*domain.User, error) {
 	var res domain.User
-
+    log.Println("kjqbejdksbnkjbasjkba",id)
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err == nil {
 		err = r.col.FindOne(ctx, bson.M{"_id": objID}).Decode(&res)
@@ -309,10 +311,10 @@ func (r *UserRepo) GetStats(ctx context.Context) (dto.UsersStats, error) {
 	return stats, nil
 }
 
-func (r *UserRepo) AddUserNote(ctx context.Context, userID int64, note domain.UserNote) error {
+func (r *UserRepo) AddUserNote(ctx context.Context, userID string, note domain.UserNote) error {
 	_, err := r.col.UpdateOne(
 		ctx,
-		bson.M{"id": userID},
+		bson.M{"userCode": userID},
 		bson.M{
 			"$push": bson.M{
 				"notes": note,

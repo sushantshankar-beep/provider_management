@@ -172,3 +172,26 @@ func (r *SettlementHistoryRepository) GetSettlementRecords(
 
 	return records, total, nil
 }
+
+// repository/settlement_repo.go
+func (r *SettlementHistoryRepository) FindLatestByServiceID(
+	ctx context.Context,
+	serviceID primitive.ObjectID,
+) (*domain.SettlementRecord, error) {
+
+	var settlement domain.SettlementRecord
+
+	err := r.collection.
+		FindOne(
+			ctx,
+			bson.M{"serviceId": serviceID},
+			options.FindOne().SetSort(bson.M{"createdAt": -1}),
+		).
+		Decode(&settlement)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &settlement, nil
+}

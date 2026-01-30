@@ -1,13 +1,15 @@
 package handler
 
 import (
+	"log"
 	"net/http"
+	"provider_management/internal/dto"
+	"provider_management/internal/service"
 	"strconv"
 	"strings"
+
 	"github.com/gin-gonic/gin"
-	"provider_management/internal/dto"
 	"go.mongodb.org/mongo-driver/mongo"
-	"provider_management/internal/service"
 )
 
 type PayoutHandler struct {
@@ -19,7 +21,7 @@ func NewPayoutHandler(svc *service.PayoutService) *PayoutHandler {
 }
 
 func (h *PayoutHandler) Create6HourPayout(c *gin.Context) {
-	
+	log.Println("ksjndjkcnkjs")
 	if err := h.svc.CreatePayoutLast6Hours(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
@@ -164,3 +166,29 @@ func (h *PayoutHandler) GetProviderPayoutDetails(c *gin.Context) {
 	})
 }
 
+func (h *PayoutHandler) GetPayoutStats(c *gin.Context) {
+	var req service.GetSettlementStatsRequest
+
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   true,
+			"message": "Invalid query parameters: " + err.Error(),
+		})
+		return
+	}
+
+	stats, err := h.svc.GetPayoutStats(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Settlement stats fetched successfully",
+		"data":    stats,
+	})
+}

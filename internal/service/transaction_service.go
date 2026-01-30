@@ -1,13 +1,10 @@
 package service
 
 import (
-	"fmt"
-	"log"
-	"time"
 	"context"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"time"
 )
 
 type TransactionService struct {
@@ -32,24 +29,23 @@ func (s *TransactionService) GetTransactions( ctx context.Context, filters dto.T
 	if pagination.Limit < 1 {
 	   pagination.Limit = 20
 	}
-
+   
 	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
 	txns, total, err := s.transactions.FindWithFilter(ctx, filters, pagination)
-
+    
 	if err != nil {
 		return nil, err
 	}
 	
 	result := make([]dto.TransactionResponse, 0, len(txns))
-
+   
 	for _, txn := range txns {
 		indianTime := txn.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 		resp := dto.TransactionResponse{
-			ID:            txn.ID.Hex(),
+			ID:            txn.ID,
 			TxnID:         txn.TxnID,
 			Amount:        txn.Amount,
-			Currency:      txn.Currency,
 			Status:        txn.Status,
 			Method:        txn.Method,
 			PaymentSource: txn.PaymentSource,
@@ -57,17 +53,18 @@ func (s *TransactionService) GetTransactions( ctx context.Context, filters dto.T
 			UpdatedAt:     indianTime.Format("2006-01-02 15:04:05"), 
 		}
 
-		if txn.UserID != primitive.NilObjectID {
-			if user, err := s.users.FindByID(ctx, txn.UserID.Hex()); err == nil {
-				resp.UserID = fmt.Sprintf("VW%d", user.InternalID)
-				resp.UserName = user.Name
-			}
-		}
-		
-		if txn.ServiceID != primitive.NilObjectID {
-			if as, err := s.services.FindByID(ctx, txn.ServiceID.Hex()); err == nil {
-				resp.BookingID = as.ID.Hex()
-				resp.BookingNo = fmt.Sprintf("BK%d", as.InternalID)
+		if txn.ServiceID != "" {
+			service, err := s.services.FindByID(ctx, txn.ServiceID)
+			if err == nil && service != nil {
+				resp.BookingNo = service.ServiceNumber
+
+				if service.User.Hex() != "" {
+					user, err := s.users.FindByID(ctx, service.User.Hex())
+					if err == nil && user != nil {
+						resp.UserID = user.UserCode
+						resp.UserName = user.Name
+					}
+				}
 			}
 		}
 
@@ -101,10 +98,9 @@ func (s *TransactionService) GetTransactionById(ctx context.Context, id string) 
 	indianTime := txn.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 
 	resp := dto.TransactionResponse{
-		ID:            txn.ID.Hex(),
+		ID:            txn.ID,
 		TxnID:         txn.TxnID,
 		Amount:        txn.Amount,
-		Currency:      txn.Currency,
 		Status:        txn.Status,
 		Method:        txn.Method,
 		PaymentSource: txn.PaymentSource,
@@ -113,23 +109,18 @@ func (s *TransactionService) GetTransactionById(ctx context.Context, id string) 
 
 	}
 
-	if txn.UserID != primitive.NilObjectID {
-		user, err := s.users.FindByID(ctx, txn.UserID.Hex())
-		if err == nil {
-			resp.UserID = fmt.Sprintf("VW%d", user.InternalID)
-			resp.UserName = user.Name
-		} else {
-			log.Printf("Failed to fetch user %s: %v", txn.UserID.Hex(), err)
-		}
-	}
+	if txn.ServiceID != "" {
+		service, err := s.services.FindByID(ctx, txn.ServiceID)
+		if err == nil && service != nil {
+			resp.BookingNo = service.ServiceNumber
 
-	if txn.ServiceID != primitive.NilObjectID {
-		acceptedService, err := s.services.FindByID(ctx, txn.ServiceID.Hex())
-		if err == nil {
-			resp.BookingID = acceptedService.ID.Hex()
-			resp.BookingNo = fmt.Sprintf("BK%d", acceptedService.InternalID)
-		} else {
-			log.Printf("Failed to fetch accepted service %s: %v", txn.ServiceID.Hex(), err)
+			if service.User.Hex() != "" {
+				user, err := s.users.FindByID(ctx, service.User.Hex())
+				if err == nil && user != nil {
+					resp.UserID = user.UserCode
+					resp.UserName = user.Name
+				}
+			}
 		}
 	}
 	

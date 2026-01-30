@@ -1,26 +1,32 @@
 package repository
 
 import (
-	"fmt"
-	"time"
-	"strconv"
-	"strings"
 	"context"
+	"fmt"
+	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/utils"
+	"strings"
+	"time"
+
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"provider_management/internal/domain"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type TransactionRepo struct {
 	col *mongo.Collection
+	userCol      *mongo.Collection 
+	serviceCol   *mongo.Collection
 }
 
 func NewTransactionRepo(db *mongo.Database) *TransactionRepo {
-	return &TransactionRepo{col: db.Collection("transactions")}
+    return &TransactionRepo{
+        col:       db.Collection("payment_transactions"),
+        userCol:   db.Collection("users"),      
+        serviceCol: db.Collection("services"), 
+    }
 }
 
 func (r *TransactionRepo) FindAll(ctx context.Context, skip, limit int64) ([]domain.Transaction, error) {
@@ -62,108 +68,147 @@ func (r *TransactionRepo) Create(ctx context.Context, transaction map[string]int
 }
 
 func (r *TransactionRepo) FindWithFilter(
-	ctx context.Context,
-	filters dto.TransactionFilters,
-	pagination dto.PaginationParams,
+    ctx context.Context,
+    filters dto.TransactionFilters,
+    pagination dto.PaginationParams,
 ) ([]domain.Transaction, int64, error) {
 
-	andFilters := bson.A{
-		bson.M{
-			"$or": bson.A{
-				bson.M{"AMCPurchaseId": bson.M{"$exists": false}},
-				bson.M{"AMCPurchaseId": primitive.NilObjectID},
-			},
-		},
-	}
+    andFilters := bson.A{
+        bson.M{
+            "$or": bson.A{
+                bson.M{"AMCPurchaseId": bson.M{"$exists": false}},
+                bson.M{"AMCPurchaseId": primitive.NilObjectID},
+            },
+        },
+    }
 
-	if filters.Status != "" {
-		andFilters = append(andFilters, bson.M{"status": filters.Status})
-	}
+    if filters.Status != "" {
+        andFilters = append(andFilters, bson.M{"status": filters.Status})
+    }
 
-	if filters.Method != "" {
-		andFilters = append(andFilters, bson.M{"method": filters.Method})
-	}
+    if filters.Method != "" {
+        andFilters = append(andFilters, bson.M{"method": filters.Method})
+    }
 
-	if filters.CreatedAt != "" {
-		const layout = "2006-01-02"
-		if date, err := time.Parse(layout, filters.CreatedAt); err == nil {
-			start := date
-			end := date.Add(24 * time.Hour)
-			andFilters = append(andFilters, bson.M{
-				"createdAt": bson.M{
-					"$gte": start,
-					"$lt":  end,
-				},
-			})
-		}
-	}
+    if filters.CreatedAt != "" {
+        const layout = "2006-01-02"
+        if date, err := time.Parse(layout, filters.CreatedAt); err == nil {
+            andFilters = append(andFilters, bson.M{
+                "createdAt": bson.M{
+                    "$gte": date,
+                    "$lt":  date.Add(24 * time.Hour),
+                },
+            })
+        }
+    }
 
-	if filters.Search != "" {
-		searchUpper := strings.ToUpper(filters.Search)
+    if filters.Search != "" {
 
-		or := bson.A{
-			bson.M{"txnid": bson.M{"$regex": filters.Search, "$options": "i"}},
-			bson.M{"status": bson.M{"$regex": filters.Search, "$options": "i"}},
-			bson.M{"paymentSource": bson.M{"$regex": filters.Search, "$options": "i"}},
-		}
+        search := strings.TrimSpace(filters.Search)
 
-		if strings.HasPrefix(searchUpper, "VW") {
-			idStr := strings.TrimPrefix(searchUpper, "VW")
-			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
-				var user domain.User
-				err := r.col.FindOne(ctx, bson.M{"id": id}).Decode(&user)
-				if err == nil {
-					or = append(or, bson.M{"userId": user.ID})
-				}
-			}
-		}
+        orFilters := bson.A{
+            bson.M{"txnid": bson.M{"$regex": search, "$options": "i"}},
+            bson.M{"status": bson.M{"$regex": search, "$options": "i"}},
+            bson.M{"paymentSource": bson.M{"$regex": search, "$options": "i"}},
+        }
 
-		if strings.HasPrefix(searchUpper, "BK") {
-			idStr := strings.TrimPrefix(searchUpper, "BK")
-			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
-				var service domain.AcceptedService
-				err := r.col.FindOne(ctx, bson.M{"id": id}).Decode(&service)
-				if err == nil {
-					or = append(or, bson.M{"serviceId": service.ID})
-				}
-			}
-		}
+        var users []domain.User
+        userCursor, err := r.userCol.Find(ctx, bson.M{
+            "$or": bson.A{
+                bson.M{"userId": bson.M{"$regex": search, "$options": "i"}},
+                bson.M{"name": bson.M{"$regex": search, "$options": "i"}},
+                bson.M{"phone": bson.M{"$regex": search, "$options": "i"}},
+            },
+        })
 
-		andFilters = append(andFilters, bson.M{"$or": or})
-	}
 
-	filter := bson.M{"$and": andFilters}
+        if err == nil {
+            _ = userCursor.All(ctx, &users)
+        }
 
-	opts := options.Find().
-		SetSkip(pagination.Skip).
-		SetLimit(pagination.Limit).
-		SetSort(bson.M{"createdAt": -1})
+        var userIDs []string
+        for _, u := range users {
+            userIDs = append(userIDs, string(u.ID))
+        }
 
-	cursor, err := r.col.Find(ctx, filter, opts)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer cursor.Close(ctx)
+        serviceIDMap := make(map[primitive.ObjectID]bool)
 
-	var txns []domain.Transaction
-	if err := cursor.All(ctx, &txns); err != nil {
-		return nil, 0, err
-	}
+        if len(userIDs) > 0 {
+            svcCursor, err := r.serviceCol.Find(ctx, bson.M{
+                "user": bson.M{"$in": userIDs},
+            })
+            if err == nil {
+                for svcCursor.Next(ctx) {
+                    var s domain.AcceptedService
+                    if svcCursor.Decode(&s) == nil {
+                        serviceIDMap[s.ID] = true
+                    }
+                }
+            }
+        }
 
-	total, err := r.col.CountDocuments(ctx, filter)
-	if err != nil {
-		return nil, 0, err
-	}
+        svcCursor2, err := r.serviceCol.Find(ctx, bson.M{
+            "$or": bson.A{
+                bson.M{"serviceNumber": bson.M{"$regex": search, "$options": "i"}},
+                bson.M{"orderId": bson.M{"$regex": search, "$options": "i"}},
+            },
+        })
 
-	return txns, total, nil
+        if err == nil {
+            for svcCursor2.Next(ctx) {
+                var s domain.AcceptedService
+                if svcCursor2.Decode(&s) == nil {
+                    serviceIDMap[s.ID] = true
+                }
+            }
+        }
+
+        if len(serviceIDMap) > 0 {
+            var serviceIDs []primitive.ObjectID
+            for id := range serviceIDMap {
+                serviceIDs = append(serviceIDs, id)
+            }
+
+            orFilters = append(orFilters, bson.M{
+                "serviceId": bson.M{"$in": serviceIDs},
+            })
+        }
+
+        andFilters = append(andFilters, bson.M{"$or": orFilters})
+    }
+
+    filter := bson.M{"$and": andFilters}
+
+    opts := options.Find().
+        SetSkip(pagination.Skip).
+        SetLimit(pagination.Limit).
+        SetSort(bson.M{"createdAt": -1})
+
+    cursor, err := r.col.Find(ctx, filter, opts)
+    if err != nil {
+        return nil, 0, err
+    }
+    defer cursor.Close(ctx)
+
+    var txns []domain.Transaction
+    if err := cursor.All(ctx, &txns); err != nil {
+        return nil, 0, err
+    }
+
+    total, err := r.col.CountDocuments(ctx, filter)
+    if err != nil {
+        return nil, 0, err
+    }
+
+    return txns, total, nil
 }
 
-func (r *TransactionRepo) FindByServiceID(ctx context.Context, serviceID primitive.ObjectID) (*domain.Transaction, error) {
+func (r *TransactionRepo) FindByServiceID(ctx context.Context, serviceID string) (*domain.Transaction, error) {
 	var transaction domain.Transaction
 	err := r.col.FindOne(ctx, bson.M{"serviceId": serviceID}).Decode(&transaction)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return nil, fmt.Errorf("transaction not found for service ID: %s", serviceID.Hex())
+			return nil, fmt.Errorf("transaction not found for service ID: %s", serviceID)
 		}
 		return nil, fmt.Errorf("failed to find transaction: %w", err)
 	}
@@ -179,7 +224,7 @@ func (r *TransactionRepo) FindByTxnID(ctx context.Context, txnID string) (*domai
 	return &transaction, nil
 }
 
-func (r *TransactionRepo) UpdateRefundID(ctx context.Context, transactionID primitive.ObjectID, refundID primitive.ObjectID) error {
+func (r *TransactionRepo) UpdateRefundID(ctx context.Context, transactionID string, refundID primitive.ObjectID) error {
 	update := bson.M{
 		"$set": bson.M{
 			"refundId":  refundID,
@@ -331,4 +376,73 @@ func (r *TransactionRepo) GetTransactionStats(
 	}
 
 	return stats, nil
+}
+
+func (r *TransactionRepo) FindByServiceIDs(
+    ctx context.Context,
+    serviceIDs []primitive.ObjectID,
+) ([]domain.Transaction, error) {
+
+    serviceIDStrings := make([]string, 0, len(serviceIDs))
+    for _, id := range serviceIDs {
+        serviceIDStrings = append(serviceIDStrings, id.Hex())
+    }
+
+    filter := bson.M{
+        "serviceId": bson.M{"$in": serviceIDStrings},
+    }
+
+    cursor, err := r.col.Find(ctx, filter)
+    if err != nil {
+        return nil, err
+    }
+    defer cursor.Close(ctx)
+
+    var transactions []domain.Transaction
+    if err := cursor.All(ctx, &transactions); err != nil {
+        return nil, err
+    }
+
+    return transactions, nil
+}
+
+func (r *TransactionRepo) SumAmountByServiceIDs(
+	ctx context.Context,
+	serviceIDs []string,
+) (float64, error) {
+
+	if len(serviceIDs) == 0 {
+		return 0, nil
+	}
+
+	pipeline := mongo.Pipeline{
+		{{"$match", bson.M{
+			"serviceId": bson.M{"$in": serviceIDs},
+			"status":    "paid",
+		}}},
+		{{"$group", bson.M{
+			"_id":   nil,
+			"total": bson.M{"$sum": "$amount"},
+		}}},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		Total float64 `bson:"total"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return 0, err
+	}
+
+	if len(result) == 0 {
+		return 0, nil
+	}
+
+	return result[0].Total, nil
 }

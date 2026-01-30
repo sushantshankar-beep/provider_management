@@ -84,8 +84,6 @@ func (h *ComplaintHandler) GetByID(c *gin.Context) {
 
 	id := c.Param("id")
 
-	id = strings.TrimPrefix(id, "CMP")
-
     res, err := h.complaintService.GetComplaintWithDetails(c.Request.Context(), id)
 
 	if err != nil {
@@ -105,7 +103,6 @@ func (h *ComplaintHandler) GetByID(c *gin.Context) {
 
 func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 	id := c.Param("id")
-	id = strings.TrimPrefix(id, "CMP")
 
 	var req dto.AssessComplaintRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -140,7 +137,7 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 		return
 	}
 
-	complaint, err := h.complaintService.GetComplaint(c.Request.Context(), id)
+	complaint, err := h.complaintService.GetComplaintByNumber(c.Request.Context(), id)
 	if err != nil {
 
 		c.JSON(http.StatusNotFound, gin.H{
@@ -150,7 +147,7 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 		return
 	}
 
-	acceptedService, err := h.acceptedServiceRepo.FindByID(c.Request.Context(), complaint.AcceptedServiceID)
+	acceptedService, err := h.acceptedServiceRepo.FindByID(c.Request.Context(), complaint.AcceptedService)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   true,
@@ -159,15 +156,13 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 		return
 	}
 
-	if acceptedService.OrderID == "" {
+	if acceptedService.PaymentStatus != "paid" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
-			"message": "No transaction associated with this booking",
+			"message": "Payment not completed for this booking",
 		})
 		return
 	}
-
-	req.TxnID = acceptedService.OrderID
 
 	if err := h.complaintService.AssessComplaint(c.Request.Context(), id, req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -250,16 +245,6 @@ func (h *ComplaintHandler) StartAssessment(c *gin.Context) {
 func (h *ComplaintHandler) AddNote(c *gin.Context) {
 
 	complaintID := c.Param("id")
-	complaintID = strings.TrimPrefix(complaintID, "CMP")
-	internalID, err := strconv.ParseInt(complaintID, 10, 64)
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   true,
-			"message": "Invalid complaint id",
-		})
-		return
-	}
 
 	var req dto.AddNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -286,7 +271,7 @@ func (h *ComplaintHandler) AddNote(c *gin.Context) {
 		return
 	}
 
-	if err := h.complaintService.AddNote(c.Request.Context(), internalID, req); err != nil {
+	if err := h.complaintService.AddNote(c.Request.Context(), complaintID, req); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": "Failed to add note: " + err.Error(),

@@ -119,63 +119,7 @@ func (r *ProviderRepo) UpdateKYCStatus(ctx context.Context, id string, status st
 	return &provider, nil
 }
 
-func (r *ProviderRepo) UpdateDocumentVerification( ctx context.Context, providerID string, documentType string, documentID string, status string ) (*domain.Provider, error) {
 
-	providerObjID, err := primitive.ObjectIDFromHex(providerID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid provider id")
-	}
-
-	var docObjID primitive.ObjectID
-	if documentType == "identityProof" || documentType == "addressProof" {
-		docObjID, err = primitive.ObjectIDFromHex(documentID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid document id")
-		}
-	}
-
-	filter := bson.M{"_id": providerObjID}
-	update := bson.M{}
-
-	now := primitive.NewDateTimeFromTime(time.Now())
-
-	switch documentType {
-
-	case "identityProof":
-		filter["identityProof._id"] = docObjID
-		updateFields := bson.M{"identityProof.$.verified": status}
-		if status == "approved" {
-			updateFields["approvedAt"] = now
-		}
-		update = bson.M{"$set": updateFields}
-
-	case "addressProof":
-		filter["addressProof._id"] = docObjID
-		updateFields := bson.M{"addressProof.$.verified": status}
-		if status == "approved" {
-			updateFields["approvedAt"] = now
-		}
-		update = bson.M{"$set": updateFields}
-
-	case "cancelCheque":
-		updateFields := bson.M{"cancelCheque.verified": status}
-		if status == "approved" {
-			updateFields["approvedAt"] = now
-		}
-		update = bson.M{"$set": updateFields}
-
-	default:
-		return nil, fmt.Errorf("invalid document type")
-	}
-
-	var updatedProvider domain.Provider
-	err = r.col.FindOneAndUpdate( ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After), ).Decode(&updatedProvider)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update document: %v", err)
-	}
-
-	return &updatedProvider, nil
-}
 
 func (r *ProviderRepo) UpdateAccountStatus(ctx context.Context, id string, status string) (*domain.Provider, error) {
 	objID, err := primitive.ObjectIDFromHex(id)
@@ -441,4 +385,37 @@ func (r *ProviderRepo) FindByObjectIDs( ctx context.Context, ids []primitive.Obj
 	}
 
 	return providers, nil
+}
+
+func (r *ProviderRepo) UpdateKYCID(
+	ctx context.Context,
+	providerID primitive.ObjectID,
+	kycID primitive.ObjectID,
+) error {
+
+	_, err := r.col.UpdateOne(
+		ctx,
+		bson.M{"_id": providerID},
+		bson.M{
+			"$set": bson.M{
+				"kycId":     kycID,
+				"updatedAt": time.Now(),
+			},
+		},
+	)
+
+	return err
+}
+
+func (r *ProviderRepo) FindByPhone(ctx context.Context, phone string) (*domain.Provider, error) {
+	var provider domain.Provider
+	filter := bson.M{"phone": phone}
+	err := r.col.FindOne(ctx, filter).Decode(&provider)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &provider, nil
 }

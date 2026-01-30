@@ -1,265 +1,40 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"math"
-	"time"
-	"strconv"
-	"strings"
-	"unicode"
-	"context"
-	"go.mongodb.org/mongo-driver/bson"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"provider_management/internal/utils"
+	"strconv"
+	"strings"
+	"time"
+	"unicode"
 )
 
 type AdminBookingService struct {
-	repo *repository.AdminBookingRepo
+	repo            *repository.AdminBookingRepo
+	Invoicerepo     *repository.InvoiceRepo
+	transactionRepo *repository.TransactionRepo
+	settlementRepo  *repository.SettlementHistoryRepository
+	ratingRepo  *repository.RatingRepo
 }
 
-func NewAdminBookingService(repo *repository.AdminBookingRepo) *AdminBookingService {
-	return &AdminBookingService{repo: repo}
+func NewAdminBookingService(repo *repository.AdminBookingRepo, Invoicerepo *repository.InvoiceRepo, transactionRepo *repository.TransactionRepo, settlementRepo *repository.SettlementHistoryRepository,ratingRepo  *repository.RatingRepo) *AdminBookingService {
+	return &AdminBookingService{
+		repo:            repo,
+		Invoicerepo:     Invoicerepo,
+		transactionRepo: transactionRepo,
+		settlementRepo:  settlementRepo,
+		ratingRepo: ratingRepo,
+	}
 
 }
-
-type BookingResponse struct {
-	ID             string      `json:"id"`
-	BookingID      string      `json:"bookingId"`
-	UserID         string      `json:"userId"`
-	CustomerName   string      `json:"customerName"`
-	Phone          string      `json:"phone"`
-	Email          string      `json:"email"`
-	ProviderName   string      `json:"providerName,omitempty"`
-	ProviderPhone  string      `json:"providerPhone,omitempty"`
-	ProviderID     string      `json:"providerId,omitempty"`
-	VehicleType    string      `json:"vehicleType"`
-	ServiceBidType string      `json:"serviceBidType"`
-	ServiceType    string      `json:"serviceType"`
-	Problems       []string    `json:"problems"`
-	BookingDate    time.Time   `json:"bookingDate"`
-	CompletedAt    *time.Time  `json:"completedAt"`
-	Zone           string      `json:"zone"`
-	Status         string      `json:"status"`
-	Amount         float64     `json:"amount"`
-	PaymentStatus  string      `json:"paymentStatus"`
-	UserRating     *RatingInfo `json:"userRating,omitempty"`
-	ProviderRating *RatingInfo `json:"providerRating,omitempty"`
-}
-
-type BookingStats struct {
-	TotalBookings      int64   `json:"totalBookings"`
-	InProgressBookings int64   `json:"inProgressBookings"`
-	PendingBookings    int64   `json:"pendingBookings"`
-	CompletedBookings  int64   `json:"completedBookings"`
-	CancelledBookings  int64   `json:"cancelledBookings"`
-	TotalRevenue       float64 `json:"totalRevenue"`
-}
-
-type GetAllBookingsResponse struct {
-	Bookings    []BookingResponse `json:"bookings"`
-	TotalPages  int               `json:"totalPages"`
-	CurrentPage int               `json:"currentPage"`
-	Total       int64             `json:"total"`
-	Stats       BookingStats      `json:"stats"`
-}
-
-type DetailedBookingResponse struct {
-	ID                 string                  `json:"id"`
-	BookingID          string                  `json:"bookingId"`
-	UserID             string                  `json:"userId"`
-	ProviderID         string                  `json:"providerId"`
-	CustomerName       string                  `json:"customerName"`
-	Phone              string                  `json:"phone"`
-	Email              string                  `json:"email"`
-	Location           string                  `json:"location"`
-	ProviderName       string                  `json:"providerName"`
-	ProviderPhone      string                  `json:"providerPhone"`
-	MechanicType       []string                `json:"mechanicType"`
-	Rating             *RatingsSummary         `json:"rating"`
-	VehicleType        string                  `json:"vehicleType"`
-	VehicleNumber      string                  `json:"vehicleNumber"`
-	Brand              string                  `json:"brand"`
-	Model              string                  `json:"model"`
-	Year               int                     `json:"year"`
-	FuelType           string                  `json:"fuelType"`
-	ServiceType        string                  `json:"serviceType"`
-	Problems           []string                `json:"problems"`
-	Description        string                  `json:"description"`
-	BookingDate        time.Time               `json:"bookingDate"`
-	Zone               string                  `json:"zone"`
-	Status             string                  `json:"status"`
-	Amount             float64                 `json:"amount"`
-	PaymentStatus      string                  `json:"paymentStatus"`
-	PaymentDetails     *PaymentDetailsInfo     `json:"paymentDetails"`
-	EstimatedTime      *EstimatedTimeInfo      `json:"estimatedTime,omitempty"`
-	Distance           string                  `json:"distance,omitempty"`
-	OTP                *OTPInfo                `json:"otp"`
-	Timeline           *TimelineInfo           `json:"timeline"`
-	UserRating         *RatingInfo             `json:"userRating"`
-	ProviderRating     *RatingInfo             `json:"providerRating"`
-	UserComplaint      *ComplaintInfo          `json:"userComplaint"`
-	ProviderComplaint  *ComplaintInfo          `json:"providerComplaint"`
-	TransactionDetails *TransactionDetailsInfo `json:"transactionDetails"`
-	ProviderEarnings   *ProviderEarningsInfo   `json:"providerEarnings"`
-	Notes              []domain.BookingNote    `bson:"notes,omitempty" json:"notes,omitempty"`
-	AllBookings        []BookingSummary        `json:"allBookings"`
-	SettlementStatus   SettlementStatus        `json:"settlement_status"`
-}
-
-type BookingNote struct {
-	ID        string    `json:"id"`
-	Content   string    `json:"content"`
-	AddedBy   string    `json:"added_by"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-type RatingsSummary struct {
-	User     float64 `json:"user"`
-	Provider float64 `json:"provider"`
-}
-
-type PaymentDetailsInfo struct {
-	ServiceCharge float64 `json:"serviceCharge"`
-	Discount      float64 `json:"discount"`
-	Subtotal      float64 `json:"subtotal"`
-	GST           float64 `json:"gst"`
-	Total         float64 `json:"total"`
-}
-
-type EstimatedTimeInfo struct {
-	Value int    `json:"value"`
-	Unit  string `json:"unit"`
-}
-
-type OTPInfo struct {
-	Verified   bool       `json:"verified"`
-	Code       string     `json:"code"`
-	VerifiedAt *time.Time `json:"verifiedAt"`
-}
-
-type TimelineInfo struct {
-	CreatedAt     time.Time  `json:"createdAt"`
-	ReachedAt     *time.Time `json:"reachedAt"`
-	StartedAt     *time.Time `json:"startedAt"`
-	CompletedAt   *time.Time `json:"completedAt"`
-	CancelledAt   *time.Time `json:"cancelledAt,omitempty"`
-	OTPVerifiedAt *time.Time `json:"otpVerifiedAt"`
-	JobStartedAt  *time.Time `json:"jobStartedAt"`
-}
-
-type RatingInfo struct {
-	Stars             int       `json:"stars"`
-	Review            string    `json:"review"`
-	RecommendToFriend bool      `json:"recommendToFriend"`
-	CreatedAt         time.Time `json:"createdAt"`
-	RatedBy           string    `json:"ratedBy"`
-	RatedTo           string    `json:"ratedTo"`
-}
-
-type ComplaintInfo struct {
-	ID          string    `json:"id"`
-	ComplaintID string    `json:"complaintId"`
-	RaisedBy    string    `json:"raisedBy"`
-	Problem     string    `json:"problem"`
-	Photos      []string  `json:"photos"`
-	Status      domain.ComplaintStatus    `json:"status"`
-	CreatedAt   time.Time `json:"createdAt"`
-}
-
-type TransactionDetailsInfo struct {
-	TransactionID     string  `json:"transactionId"`
-	TransactionNumber int64   `json:"transactionNumber"`
-	Amount            float64 `json:"amount"`
-	Status            string  `json:"status"`
-	PaymentStatus     string  `json:"paymentStatus"`
-	PaymentMethod     string  `json:"paymentMethod"`
-}
-
-type ProviderEarningsInfo struct {
-	UserPaid           float64        `json:"userPaid"`
-	Commission         CommissionInfo `json:"commission"`
-	GST                GSTInfo        `json:"gst"`
-	NetPayout          float64        `json:"netPayout"`
-	PayoutStatus       string         `json:"payoutStatus"`
-	PaymentMode        string         `json:"paymentMode"`
-	ExpectedTime       string         `json:"expectedTime"`
-	ExpectedPayoutDate *time.Time     `json:"expectedPayoutDate"`
-}
-
-type CommissionInfo struct {
-	Percentage float64 `json:"percentage"`
-	Amount     float64 `json:"amount"`
-}
-
-type GSTInfo struct {
-	Percentage float64 `json:"percentage"`
-	Amount     float64 `json:"amount"`
-}
-
-type BookingSummary struct {
-	ID          string    `json:"id"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"createdAt"`
-	CancelledBy string    `json:"cancelledBy,omitempty"`
-}
-
-type InvoiceData struct {
-	InvoiceNumber string          `json:"invoiceNumber"`
-	InvoiceDate   string          `json:"invoiceDate"`
-	ServiceDate   string          `json:"serviceDate,omitempty"`
-	Provider      InvoiceProvider `json:"provider"`
-	Customer      InvoiceCustomer `json:"customer"`
-	Vehicle       InvoiceVehicle  `json:"vehicle"`
-	Service       InvoiceService  `json:"service"`
-	Pricing       InvoicePricing  `json:"pricing"`
-}
-
-type InvoiceProvider struct {
-	Name      string `json:"name"`
-	Address   string `json:"address,omitempty"`
-	GSTNumber string `json:"gstNumber,omitempty"`
-	Phone     string `json:"phone,omitempty"`
-}
-
-type InvoiceCustomer struct {
-	Name    string `json:"name"`
-	Phone   string `json:"phone,omitempty"`
-	Address string `json:"address,omitempty"`
-}
-
-type InvoiceVehicle struct {
-	Brand         string `json:"brand,omitempty"`
-	Model         string `json:"model,omitempty"`
-	Year          int    `json:"year,omitempty"`
-	VehicleType   string `json:"vehicleType,omitempty"`
-	VehicleNumber string `json:"vehicleNumber,omitempty"`
-	FuelType      string `json:"fuelType,omitempty"`
-}
-
-type InvoiceService struct {
-	Type          string   `json:"type"`
-	Problems      []string `json:"problems"`
-	Status        string   `json:"status"`
-	PaymentStatus string   `json:"paymentStatus"`
-}
-
-type InvoicePricing struct {
-	ServiceCharge string `json:"serviceCharge"`
-	Discount      string `json:"discount"`
-	Subtotal      string `json:"subtotal"`
-	GST           string `json:"gst"`
-	Total         string `json:"total"`
-}
-
-type SettlementStatus string
-
-const (
-	SettleStatusPending SettlementStatus = "pending"
-	SettleStatusSettled SettlementStatus = "settled"
-)
 
 const (
 	StatusNotStarted  = "not_started"
@@ -292,21 +67,20 @@ func mapStatusLabelToDB(label string) string {
 	}
 }
 
-func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[string]string, zoneFilter bson.M) (*GetAllBookingsResponse, error) {
+func (s *AdminBookingService) GetAllBookings(ctx context.Context, filters dto.BookingFilters, pagination dto.BookingPagination, zoneFilter bson.M) (*dto.BookingListResponse, error) {
 
-	page, _ := strconv.Atoi(params["page"])
-	limit, _ := strconv.Atoi(params["limit"])
-	if page < 1 {
-		page = 1
+	if pagination.Page < 1 {
+		pagination.Page = 1
 	}
-	if limit < 1 {
-		limit = 10
+	if pagination.Limit < 1 {
+		pagination.Limit = 10
 	}
+	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
 	filter := bson.M{}
 
-	if status := params["status"]; status != "" {
-		if status == "in_progress" {
+	if filters.Status != "" {
+		if filters.Status == "in_progress" {
 			filter["status"] = bson.M{
 				"$in": []string{
 					StatusStarted,
@@ -316,188 +90,242 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 				},
 			}
 		} else {
-			filter["status"] = mapStatusLabelToDB(status)
+			filter["status"] = mapStatusLabelToDB(filters.Status)
 		}
 	}
 
-	if paymentStatus := params["paymentStatus"]; paymentStatus != "" {
-		filter["paymentStatus"] = paymentStatus
+	if filters.PaymentStatus != "" {
+		filter["paymentStatus"] = filters.PaymentStatus
 	}
 
-	if serviceType := params["serviceType"]; serviceType != "" {
-		filter["serviceType"] = serviceType
+	if filters.ServiceType != "" {
+		filter["serviceType"] = filters.ServiceType
 	}
 
-	if vehicleType := params["vehicleType"]; vehicleType != "" {
-		filter["vehicleType"] = vehicleType
+	if filters.VehicleType != "" {
+		filter["vehicleType"] = filters.VehicleType
 	}
 
-	if userID := params["userId"]; userID != "" {
-		if primitive.IsValidObjectID(userID) {
-			objID, _ := primitive.ObjectIDFromHex(userID)
-			filter["user"] = objID
-		} else {
-			cleanID := strings.ReplaceAll(userID, "VW", "")
-			if internalID, err := strconv.ParseInt(cleanID, 10, 64); err == nil {
-				if user, err := s.repo.FindUserByInternalID(ctx, internalID); err == nil {
-					objID, _ := primitive.ObjectIDFromHex(user.ID)
-					filter["user"] = objID
-				} else {
-					return &GetAllBookingsResponse{
-						Bookings:    []BookingResponse{},
-						TotalPages:  0,
-						CurrentPage: page,
-						Total:       0,
-						Stats:       BookingStats{},
-					}, nil
-				}
+	if filters.UserID != "" {
+		if err := s.addUserFilter(ctx, filters.UserID, filter); err != nil {
+			return s.buildEmptyResponse(filters, pagination)
+		}
+	}
+
+	if filters.ProviderID != "" {
+		if err := s.addProviderFilter(ctx, filters.ProviderID, filter); err != nil {
+			return s.buildEmptyResponse(filters, pagination)
+		}
+	}
+
+	if filters.BookingID != "" {
+		s.addBookingIDFilter(filters.BookingID, filter)
+	}
+
+	if filters.Search != "" {
+		if err := s.addSearchFilter(ctx, filters.Search, filter); err != nil {
+			return s.buildEmptyResponse(filters, pagination)
+		}
+	}
+
+	s.addDateFilters(filters, filter)
+
+	if len(zoneFilter) > 0 {
+		allowedZones := s.extractAllowedZones(zoneFilter)
+		if len(allowedZones) > 0 {
+			if err := s.addZoneFilter(ctx, allowedZones, filter); err != nil {
+				return s.buildEmptyResponse(filters, pagination)
 			}
 		}
 	}
 
-	if providerID := params["providerId"]; providerID != "" {
-		var providerObjectID primitive.ObjectID
-		if primitive.IsValidObjectID(providerID) {
-			providerObjectID, _ = primitive.ObjectIDFromHex(providerID)
-			filter["provider"] = providerObjectID
-		} else {
-			if provider, err := s.repo.FindProviderByProviderID(ctx, providerID); err == nil && provider != nil {
-				providerObjectID = provider.ID
-				filter["provider"] = providerObjectID
-			} else {
-				if internalID, err := strconv.ParseInt(providerID, 10, 64); err == nil {
-					if provider, err := s.repo.FindProviderByInternalID(ctx, internalID); err == nil && provider != nil {
-						providerObjectID = provider.ID
-						filter["provider"] = providerObjectID
-					}
-				}
-			}
-		}
+	services, total, err := s.repo.FindAcceptedServices(ctx, filter, pagination.Skip, pagination.Limit, pagination.Sort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch bookings: %w", err)
 	}
 
-	if bookingID := params["bookingId"]; bookingID != "" {
-		cleanID := strings.ReplaceAll(bookingID, "BK", "")
-		if numericID, err := strconv.ParseInt(cleanID, 10, 64); err == nil {
-			filter["id"] = numericID
-		}
+	if len(services) == 0 {
+		return s.buildEmptyResponse(filters, pagination)
 	}
 
-	if search := params["search"]; search != "" {
-		searchConditions := []bson.M{}
-		cleanSearch := strings.ReplaceAll(search, "BK", "")
-
-		if bookingID, err := strconv.ParseInt(cleanSearch, 10, 64); err == nil {
-			searchConditions = append(searchConditions, bson.M{"id": bookingID})
-		}
-
-		cleanSearch = strings.ReplaceAll(search, "VW", "")
-		if userID, err := strconv.ParseInt(cleanSearch, 10, 64); err == nil {
-			if users, err := s.repo.FindUsersByInternalID(ctx, userID); err == nil && len(users) > 0 {
-				userIDs := make([]primitive.ObjectID, 0, len(users))
-				for _, user := range users {
-					objID, _ := primitive.ObjectIDFromHex(user.ID)
-					userIDs = append(userIDs, objID)
-				}
-				searchConditions = append(searchConditions, bson.M{"user": bson.M{"$in": userIDs}})
-			}
-		}
-
-		if users, err := s.repo.FindUsersBySearch(ctx, search); err == nil && len(users) > 0 {
-			userIDs := make([]primitive.ObjectID, 0, len(users))
-			for _, user := range users {
-				objID, _ := primitive.ObjectIDFromHex(user.ID)
-				userIDs = append(userIDs, objID)
-			}
-			searchConditions = append(searchConditions, bson.M{"user": bson.M{"$in": userIDs}})
-		}
-
-		if providers, err := s.repo.FindProvidersBySearch(ctx, search); err == nil && len(providers) > 0 {
-			providerIDs := make([]primitive.ObjectID, 0, len(providers))
-			for _, provider := range providers {
-				providerIDs = append(providerIDs, provider.ID)
-			}
-			searchConditions = append(searchConditions, bson.M{"provider": bson.M{"$in": providerIDs}})
-		}
-
-		if len(searchConditions) > 0 {
-			filter["$or"] = searchConditions
-		} else {
-			return &GetAllBookingsResponse{
-				Bookings:    []BookingResponse{},
-				TotalPages:  0,
-				CurrentPage: page,
-				Total:       0,
-				Stats:       BookingStats{},
-			}, nil
-		}
-	}
-
-	if startDate := params["startDate"]; startDate != "" {
-		if sd, err := time.Parse("2006-01-02", startDate); err == nil {
-			sd = time.Date(sd.Year(), sd.Month(), sd.Day(), 0, 0, 0, 0, time.UTC)
-			filter["startedAt"] = bson.M{"$gte": sd}
-		}
-	}
-	if endDate := params["endDate"]; endDate != "" {
-		if ed, err := time.Parse("2006-01-02", endDate); err == nil {
-			ed = time.Date(ed.Year(), ed.Month(), ed.Day(), 23, 59, 59, 999999999, time.UTC)
-			filter["completedAt"] = bson.M{"$lte": ed}
-		}
-	}
-	allowedZones := s.extractAllowedZones(zoneFilter)
-
-	if len(allowedZones) > 0 {
-
-		matchingSRs, err := s.repo.FindServiceRequestsByZones(ctx, allowedZones)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(matchingSRs) == 0 {
-			stats, _ := s.GetBookingStats(ctx, params)
-			return &GetAllBookingsResponse{
-				Bookings:    []BookingResponse{},
-				TotalPages:  0,
-				CurrentPage: page,
-				Total:       0,
-				Stats:       *stats,
-			}, nil
-		}
-
-		filter["serviceRequest"] = bson.M{"$in": matchingSRs}
-
-	} else {
-		log.Printf("ℹ️ SERVICE - No zone restrictions (SuperAdmin or no zones defined)")
-	}
-
-	skip := int64((page - 1) * limit)
-	sort := params["sort"]
-
-	services, total, err := s.repo.FindAcceptedServices(ctx, filter, skip, int64(limit), sort)
+	bookings, err := s.buildBookingResponses(ctx, services)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(services) == 0 {
-		stats, _ := s.GetBookingStats(ctx, params)
-		return &GetAllBookingsResponse{
-			Bookings:    []BookingResponse{},
-			TotalPages:  0,
-			CurrentPage: page,
-			Total:       total,
-			Stats:       *stats,
-		}, nil
+	// Get stats
+	stats, err := s.GetBookingStats(ctx, map[string]string{
+		"status":        filters.Status,
+		"paymentStatus": filters.PaymentStatus,
+		"serviceType":   filters.ServiceType,
+		"vehicleType":   filters.VehicleType,
+		"userId":        filters.UserID,
+		"providerId":    filters.ProviderID,
+		"bookingId":     filters.BookingID,
+		"startDate":     filters.StartDate,
+		"endDate":       filters.EndDate,
+		"search":        filters.Search,
+	})
+	if err != nil {
+		stats = &dto.BookingStats{}
 	}
 
+	totalPages := int64(math.Ceil(float64(total) / float64(pagination.Limit)))
+
+	return &dto.BookingListResponse{
+		Bookings: bookings,
+		Stats: dto.BookingStats{
+			TotalBookings:      stats.TotalBookings,
+			InProgressBookings: stats.InProgressBookings,
+			PendingBookings:    stats.PendingBookings,
+			CompletedBookings:  stats.CompletedBookings,
+			CancelledBookings:  stats.CancelledBookings,
+			TotalRevenue:       stats.TotalRevenue,
+		},
+		Pagination: dto.BookingPaginationMeta{
+			CurrentPage: pagination.Page,
+			TotalPages:  totalPages,
+			Total:       total,
+			Limit:       pagination.Limit,
+			HasNext:     pagination.Page < totalPages,
+			HasPrev:     pagination.Page > 1,
+		},
+	}, nil
+}
+
+func (s *AdminBookingService) addUserFilter(ctx context.Context, userID string, filter bson.M) error {
+
+	if !primitive.IsValidObjectID(userID) {
+		return fmt.Errorf("invalid user object id")
+	}
+
+	objID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return err
+	}
+
+	filter["user"] = objID
+	return nil
+}
+
+func (s *AdminBookingService) addProviderFilter(ctx context.Context, providerID string, filter bson.M) error {
+
+	if !primitive.IsValidObjectID(providerID) {
+		return fmt.Errorf("invalid user object id")
+	}
+
+	objID, err := primitive.ObjectIDFromHex(providerID)
+	if err != nil {
+		return err
+	}
+
+	filter["user"] = objID
+	return nil
+}
+
+func (s *AdminBookingService) addBookingIDFilter(serviceNumber string, filter bson.M) {
+	if serviceNumber == "" {
+		return
+	}
+	filter["serviceNumber"] = serviceNumber
+}
+
+
+func (s *AdminBookingService) addSearchFilter(ctx context.Context, search string, filter bson.M) error {
+	searchConditions := []bson.M{}
+	cleanSearch := strings.ReplaceAll(search, "BK", "")
+
+	if bookingID, err := strconv.ParseInt(cleanSearch, 10, 64); err == nil {
+		searchConditions = append(searchConditions, bson.M{"serviceNumber": bookingID})
+	}
+
+	cleanSearch = strings.ReplaceAll(search, "VW", "")
+	if userID, err := strconv.ParseInt(cleanSearch, 10, 64); err == nil {
+		if users, err := s.repo.FindUsersByInternalID(ctx, userID); err == nil && len(users) > 0 {
+			userIDs := s.convertToObjectIDs(users)
+			searchConditions = append(searchConditions, bson.M{"user": bson.M{"$in": userIDs}})
+		}
+	}
+
+	if users, err := s.repo.FindUsersBySearch(ctx, search); err == nil && len(users) > 0 {
+		userIDs := s.convertToObjectIDs(users)
+		searchConditions = append(searchConditions, bson.M{"user": bson.M{"$in": userIDs}})
+	}
+
+	if providers, err := s.repo.FindProvidersBySearch(ctx, search); err == nil && len(providers) > 0 {
+		providerIDs := make([]primitive.ObjectID, 0, len(providers))
+		for _, provider := range providers {
+			providerIDs = append(providerIDs, provider.ID)
+		}
+		searchConditions = append(searchConditions, bson.M{"provider": bson.M{"$in": providerIDs}})
+	}
+
+	if len(searchConditions) > 0 {
+		filter["$or"] = searchConditions
+		return nil
+	}
+
+	return fmt.Errorf("no results found for search")
+}
+
+func (s *AdminBookingService) addDateFilters(filters dto.BookingFilters, filter bson.M) {
+	if filters.StartDate != "" {
+		if sd, err := time.Parse("2006-01-02", filters.StartDate); err == nil {
+			sd = time.Date(sd.Year(), sd.Month(), sd.Day(), 0, 0, 0, 0, time.UTC)
+			filter["startedAt"] = bson.M{"$gte": sd}
+		}
+	}
+	if filters.EndDate != "" {
+		if ed, err := time.Parse("2006-01-02", filters.EndDate); err == nil {
+			ed = time.Date(ed.Year(), ed.Month(), ed.Day(), 23, 59, 59, 999999999, time.UTC)
+			filter["completedAt"] = bson.M{"$lte": ed}
+		}
+	}
+}
+
+func (s *AdminBookingService) addZoneFilter(ctx context.Context, allowedZones []string, filter bson.M) error {
+	matchingSRs, err := s.repo.FindServiceRequestsByZones(ctx, allowedZones)
+	if err != nil {
+		return err
+	}
+
+	if len(matchingSRs) == 0 {
+		return fmt.Errorf("no service requests found in allowed zones")
+	}
+
+	filter["serviceRequest"] = bson.M{"$in": matchingSRs}
+	return nil
+}
+
+func (s *AdminBookingService) buildBookingResponses(ctx context.Context, services []domain.AcceptedService) ([]dto.BookingResponse, error) {
+
+	userIDs, providerIDs, serviceRequestIDs, serviceIDs := s.collectIDs(services)
+
+	userMap, providerMap, serviceRequestMap, ratingsMap, err := s.fetchRelatedData(ctx, userIDs, providerIDs, serviceRequestIDs, serviceIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	bookings := make([]dto.BookingResponse, 0, len(services))
+
+	for _, svc := range services {
+		booking := s.mapServiceToBookingResponse(svc, userMap, providerMap, serviceRequestMap, ratingsMap)
+		bookings = append(bookings, booking)
+	}
+
+	return bookings, nil
+}
+
+func (s *AdminBookingService) collectIDs(services []domain.AcceptedService) ([]string, []string, []string, []string) {
 	userIDSet := make(map[string]bool)
 	providerIDSet := make(map[string]bool)
 	serviceRequestIDSet := make(map[string]bool)
 	serviceIDs := make([]string, 0, len(services))
 
 	for _, svc := range services {
-		userIDSet[svc.UserID] = true
-		providerIDSet[svc.ProviderID.Hex()] = true
-		serviceRequestIDSet[svc.ServiceRequestID.Hex()] = true
+		userIDSet[svc.User.Hex()] = true
+		providerIDSet[svc.Provider.Hex()] = true
+		serviceRequestIDSet[svc.ServiceNumber] = true
 		serviceIDs = append(serviceIDs, svc.ID.Hex())
 	}
 
@@ -516,99 +344,163 @@ func (s *AdminBookingService) GetAllBookings(ctx context.Context, params map[str
 		serviceRequestIDs = append(serviceRequestIDs, id)
 	}
 
+	return userIDs, providerIDs, serviceRequestIDs, serviceIDs
+}
+
+func (s *AdminBookingService) fetchRelatedData(ctx context.Context, userIDs, providerIDs, serviceRequestIDs, serviceIDs []string) (
+	map[string]*domain.User,
+	map[string]*domain.Provider,
+	map[string]*domain.ServiceRequest,
+	map[string][]*domain.Rating,
+	error,
+) {
 	userMap := make(map[string]*domain.User)
-	users, _ := s.repo.FindUsersByIDs(ctx, userIDs)
-	for i := range users {
-		userMap[users[i].ID] = &users[i]
+	if len(userIDs) > 0 {
+		users, _ := s.repo.FindUsersByIDs(ctx, userIDs)
+		for i := range users {
+			userMap[users[i].ID] = &users[i]
+		}
 	}
 
 	providerMap := make(map[string]*domain.Provider)
-	providers, _ := s.repo.FindProvidersByIDs(ctx, providerIDs)
-	for i := range providers {
-		providerMap[providers[i].ID.Hex()] = &providers[i]
+	if len(providerIDs) > 0 {
+		providers, _ := s.repo.FindProvidersByIDs(ctx, providerIDs)
+		for i := range providers {
+			providerMap[providers[i].ID.Hex()] = &providers[i]
+		}
 	}
 
 	serviceRequestMap := make(map[string]*domain.ServiceRequest)
-	serviceRequests, _ := s.repo.FindServiceRequestsByIDs(ctx, serviceRequestIDs)
-	for i := range serviceRequests {
-		serviceRequestMap[serviceRequests[i].ID.Hex()] = &serviceRequests[i]
+	if len(serviceRequestIDs) > 0 {
+		serviceRequests, _ := s.repo.FindServiceRequestsByIDs(ctx, serviceRequestIDs)
+		for i := range serviceRequests {
+			serviceRequestMap[serviceRequests[i].ID.Hex()] = &serviceRequests[i]
+		}
 	}
 
 	ratingsMap := make(map[string][]*domain.Rating)
-	ratings, _ := s.repo.FindRatingsByServiceIDs(ctx, serviceIDs)
-	for i := range ratings {
-		ratingsMap[ratings[i].ServiceID] = append(ratingsMap[ratings[i].ServiceID], &ratings[i])
-	}
-
-	bookings := make([]BookingResponse, 0, len(services))
-
-	for _, svc := range services {
-		booking := BookingResponse{
-			ID:            svc.ID.Hex(),
-			BookingID:     fmt.Sprintf("BK%d", svc.InternalID),
-			ProviderID:    svc.ProviderID.Hex(),
-			Status:        s.mapStatus(svc.Status),
-			Amount:        svc.FinalPrice,
-			PaymentStatus: s.mapPaymentStatus(svc.PaymentStatus),
-			ServiceType:   svc.ServiceType,
-			BookingDate:   svc.CreatedAt,
-			CompletedAt:   svc.CompletedAt,
-		}
-
-		if user, ok := userMap[svc.UserID]; ok {
-			booking.UserID = fmt.Sprintf("VW%d", user.InternalID)
-			booking.CustomerName = user.Name
-			booking.Phone = user.Phone
-			booking.Email = user.Email
-		}
-
-		if provider, ok := providerMap[svc.ProviderID.Hex()]; ok {
-			booking.ProviderName = provider.Name
-			booking.ProviderPhone = provider.Phone
-		}
-
-		if sr, ok := serviceRequestMap[svc.ServiceRequestID.Hex()]; ok {
-			booking.VehicleType = sr.VehicleType
-			booking.ServiceBidType = sr.ServiceBidType
-			booking.Problems = sr.Problems
-			booking.Zone = extractZone(sr.Address)
-		}
-
-		if serviceRatings, ok := ratingsMap[svc.ID.Hex()]; ok {
-			for _, rating := range serviceRatings {
-				ratingInfo := &RatingInfo{
-					Stars:             rating.Stars,
-					Review:            rating.Review,
-					RecommendToFriend: rating.RecommendToFriend,
-				}
-				if rating.RaterType == "user" {
-					booking.UserRating = ratingInfo
-				} else if rating.RaterType == "provider" {
-					booking.ProviderRating = ratingInfo
-				}
+	if len(serviceIDs) > 0 {
+	
+		bookingObjectIDs := make([]primitive.ObjectID, 0, len(serviceIDs))
+		for _, id := range serviceIDs {
+			if oid, err := primitive.ObjectIDFromHex(id); err == nil {
+				bookingObjectIDs = append(bookingObjectIDs, oid)
 			}
 		}
+	
+		ratings, _ := s.ratingRepo.FindRatingsByBookingIDs(ctx, bookingObjectIDs)
+	
+		for _, rating := range ratings {
+			bookingID := rating.BookingID.Hex()
+			ratingsMap[bookingID] =
+				append(ratingsMap[bookingID], rating)
+		}
+	}
+	
+	return userMap, providerMap, serviceRequestMap, ratingsMap, nil
+}
 
-		bookings = append(bookings, booking)
+func (s *AdminBookingService) mapServiceToBookingResponse(
+	svc domain.AcceptedService,
+	userMap map[string]*domain.User,
+	providerMap map[string]*domain.Provider,
+	serviceRequestMap map[string]*domain.ServiceRequest,
+	ratingsMap map[string][]*domain.Rating,
+) dto.BookingResponse {
+	booking := dto.BookingResponse{
+		ID:            svc.ID.Hex(),
+		BookingID:     svc.ServiceNumber,
+		ProviderID:    svc.Provider.Hex(),
+		Status:        domain.ServiceStatus(s.mapStatus(svc.Status)),
+		Amount:        svc.FinalPrice,
+		PaymentStatus: s.mapPaymentStatus(svc.PaymentStatus),
+		VehicleType:   svc.VehicleType,
+		ServiceType:   svc.ServiceType,
+		BookingDate:   svc.CreatedAt,
+		CompletedAt:   svc.Timestamps.CompletedAt,
 	}
 
-	stats, _ := s.GetBookingStats(ctx, params)
-
-	totalPages := int(total) / limit
-	if int(total)%limit != 0 {
-		totalPages++
+	if user, ok := userMap[svc.User.Hex()]; ok {
+		booking.UserID = user.UserCode
+		booking.CustomerName = user.Name
+		booking.Phone = user.Phone
+		booking.Email = user.Email
 	}
 
-	return &GetAllBookingsResponse{
-		Bookings:    bookings,
-		TotalPages:  totalPages,
-		CurrentPage: page,
-		Total:       total,
-		Stats:       *stats,
+	if provider, ok := providerMap[svc.Provider.Hex()]; ok {
+		booking.ProviderName = provider.Name
+		booking.ProviderPhone = provider.Phone
+		booking.Zone = provider.City
+	}
+
+	if sr, ok := serviceRequestMap[svc.ServiceRequest.Hex()]; ok {
+		booking.VehicleType = sr.VehicleType
+		booking.ServiceBidType = sr.ServiceBidType
+	}
+
+	if bookingRatings, ok := ratingsMap[svc.ID.Hex()]; ok {
+		for _, rating := range bookingRatings {
+			ratingInfo := &dto.RatingInfo{
+				Stars:             rating.Stars,
+				Review:            rating.Review,
+				RecommendToFriend: rating.Recommended,
+			}
+		
+			if rating.RatingType == "user" {
+				booking.UserRating = ratingInfo
+			}
+		
+			if rating.RatingType == "provider" {
+				booking.ProviderRating = ratingInfo
+			}
+		}
+	}
+
+	return booking
+}
+
+func (s *AdminBookingService) buildEmptyResponse(filters dto.BookingFilters, pagination dto.BookingPagination) (*dto.BookingListResponse, error) {
+
+	stats, _ := s.GetBookingStats(context.Background(), map[string]string{
+		"status":        filters.Status,
+		"paymentStatus": filters.PaymentStatus,
+		"serviceType":   filters.ServiceType,
+		"vehicleType":   filters.VehicleType,
+		"userId":        filters.UserID,
+		"providerId":    filters.ProviderID,
+		"bookingId":     filters.BookingID,
+		"startDate":     filters.StartDate,
+		"endDate":       filters.EndDate,
+		"search":        filters.Search,
+	})
+
+	totalPages := int64(0)
+	if pagination.Limit > 0 {
+		totalPages = int64(math.Ceil(float64(0) / float64(pagination.Limit)))
+	}
+
+	return &dto.BookingListResponse{
+		Bookings: []dto.BookingResponse{},
+		Stats: dto.BookingStats{
+			TotalBookings:      stats.TotalBookings,
+			InProgressBookings: stats.InProgressBookings,
+			PendingBookings:    stats.PendingBookings,
+			CompletedBookings:  stats.CompletedBookings,
+			CancelledBookings:  stats.CancelledBookings,
+			TotalRevenue:       stats.TotalRevenue,
+		},
+		Pagination: dto.BookingPaginationMeta{
+			CurrentPage: pagination.Page,
+			TotalPages:  totalPages,
+			Total:       0,
+			Limit:       pagination.Limit,
+			HasNext:     pagination.Page < totalPages,
+			HasPrev:     pagination.Page > 1,
+		},
 	}, nil
 }
 
-func (s *AdminBookingService) GetBookingStats(ctx context.Context, params map[string]string) (*BookingStats, error) {
+func (s *AdminBookingService) GetBookingStats(ctx context.Context, params map[string]string) (*dto.BookingStats, error) {
 	baseFilter := bson.M{}
 
 	if startDate := params["startDate"]; startDate != "" {
@@ -665,15 +557,22 @@ func (s *AdminBookingService) GetBookingStats(ctx context.Context, params map[st
 	cancelledFilter["status"] = StatusCancelled
 	cancelled, _ := s.repo.CountAcceptedServices(ctx, cancelledFilter)
 
-	revenueFilter := bson.M{}
-	for k, v := range baseFilter {
-		revenueFilter[k] = v
+	completedServices, _, err := s.repo.FindAcceptedServices(ctx, completedFilter, 0, 0, "")
+	if err != nil {
+		return nil, err
 	}
-	revenueFilter["status"] = StatusCompleted
-	revenueFilter["paymentStatus"] = "success"
-	revenue, _ := s.repo.AggregateRevenue(ctx, revenueFilter)
 
-	return &BookingStats{
+	var serviceIDs []string
+	for _, svc := range completedServices {
+		serviceIDs = append(serviceIDs, svc.ID.Hex())
+	}
+
+	revenue, err := s.transactionRepo.SumAmountByServiceIDs(ctx, serviceIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.BookingStats{
 		TotalBookings:      total,
 		InProgressBookings: inProgress,
 		PendingBookings:    pending,
@@ -683,68 +582,55 @@ func (s *AdminBookingService) GetBookingStats(ctx context.Context, params map[st
 	}, nil
 }
 
-func (s *AdminBookingService) GetBookingByID(
-	ctx context.Context,
-	bookingID string,
-) (*DetailedBookingResponse, error) {
+func (s *AdminBookingService) GetBookingByID(ctx context.Context, bookingID string) (*dto.DetailedBookingResponse, error) {
 
-	svcIDStr := strings.TrimPrefix(bookingID, "BK")
-	svcInternalID, err := strconv.ParseInt(svcIDStr, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid booking id")
-	}
-
-	filter := bson.M{"id": svcInternalID}
+	filter := bson.M{"serviceNumber": bookingID}
 
 	allServices, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 100, "-createdAt")
+
 	if err != nil || len(allServices) == 0 {
 		return nil, fmt.Errorf("booking not found")
 	}
 
 	svc := allServices[0]
 
-	sr, err := s.repo.FindServiceRequestByID(ctx, svc.ServiceRequestID.Hex())
-	if err != nil {
-		sr = &domain.ServiceRequest{}
-	}
-
 	status := s.mapStatus(svc.Status)
 
-	booking := &DetailedBookingResponse{
-		ID:               svc.ID.Hex(),
-		BookingID:        fmt.Sprintf("BK%d", svc.InternalID),
-		ProviderID:       svc.ProviderID.Hex(),
-		Status:           status,
-		Amount:           svc.FinalPrice,
-		PaymentStatus:    svc.PaymentStatus,
-		ServiceType:      svc.ServiceType,
-		BookingDate:      svc.CreatedAt,
-		VehicleType:      sr.VehicleType,
-		VehicleNumber:    sr.VehicleNumber,
-		Brand:            sr.Brand,
-		Model:            sr.Model,
-		Year:             sr.Year,
-		FuelType:         sr.FuelType,
-		Problems:         sr.Problems,
-		Description:      sr.Description,
-		Location:         sr.Address,
-		SettlementStatus: SettlementStatus(svc.SettlementStatus),
+	booking := &dto.DetailedBookingResponse{
+		ID:            svc.ID.Hex(),
+		BookingID:     svc.ServiceNumber,
+		ProviderID:    svc.Provider.Hex(),
+		Status:        domain.ServiceStatus(status),
+		Amount:        svc.FinalPrice,
+		PaymentStatus: svc.PaymentStatus,
+		ServiceType:   svc.ServiceType,
+		BookingDate:   svc.CreatedAt,
+		VehicleType:   svc.VehicleType,
+		VehicleNumber: svc.VehicleNumber,
+		Brand:         svc.Brand,
+		Model:         svc.Model,
+		Year:          svc.ModelYear,
+		FuelType:      svc.FuelType,
+		Problems:      svc.Issues,
+		// Description:      sr.Description,
+		// Location:         sr.Address,
+		SettlementStatus: dto.SettlementStatus(svc.SettlementStatus),
 		Notes:            svc.Notes,
 	}
 
-	booking.Zone = extractZone(sr.Address)
-
-	if user, err := s.repo.FindUserByID(ctx, svc.UserID); err == nil {
-		booking.UserID = fmt.Sprintf("VW%06d", user.InternalID)
+	if user, err := s.repo.FindUserByID(ctx, svc.User.Hex()); err == nil {
+		booking.UserID = user.UserCode
 		booking.CustomerName = user.Name
 		booking.Phone = user.Phone
 		booking.Email = user.Email
+		booking.OTP = user.ServiceOTP
 	}
 
-	if provider, err := s.repo.FindProviderByID(ctx, svc.ProviderID.Hex()); err == nil {
+	if provider, err := s.repo.FindProviderByID(ctx, svc.Provider.Hex()); err == nil {
 		booking.ProviderName = provider.Name
 		booking.ProviderPhone = provider.Phone
 		booking.MechanicType = provider.VehicleType
+		booking.Zone = provider.City
 	}
 
 	basePrice := svc.BasePrice
@@ -753,82 +639,87 @@ func (s *AdminBookingService) GetBookingByID(
 	}
 	finalPrice := svc.FinalPrice
 	gstAmount := finalPrice * 0.18
-	subtotal := finalPrice - gstAmount
+	subtotal := finalPrice + gstAmount
 	discount := 0.0
 	if basePrice > finalPrice {
 		discount = basePrice - finalPrice
 	}
 
-	booking.PaymentDetails = &PaymentDetailsInfo{
+	booking.PaymentDetails = &dto.PaymentDetailsInfo{
 		ServiceCharge: basePrice,
 		Discount:      discount,
-		Subtotal:      round2(subtotal),
+		Subtotal:      utils.RoundTo2(subtotal),
 		GST:           gstAmount,
-		Total:         finalPrice,
+		Total:         subtotal,
 	}
 
-	booking.OTP = &OTPInfo{
-		Verified:   svc.OTP.Verified,
-		Code:       svc.OTP.Code,
-		VerifiedAt: svc.OTP.VerifiedAt,
+	timestamps := domain.ServiceTimestamps{}
+	createdAt := svc.CreatedAt
+	timestamps.CreatedAt = &createdAt
+
+	if svc.Timestamps != nil {
+		if svc.Timestamps.CreatedAt != nil {
+			timestamps.CreatedAt = svc.Timestamps.CreatedAt
+		}
+		timestamps.StartedAt = svc.Timestamps.StartedAt
+		timestamps.ReachedAt = svc.Timestamps.ReachedAt
+		timestamps.InProgressAt = svc.Timestamps.InProgressAt
+		timestamps.OtpVerified = svc.Timestamps.OtpVerified
+		timestamps.CompletedAt = svc.Timestamps.CompletedAt
+		timestamps.CancelledAt = svc.Timestamps.CancelledAt
 	}
 
-	booking.Timeline = &TimelineInfo{
-		CreatedAt:     svc.CreatedAt,
-		ReachedAt:     svc.ReachedAt,
-		StartedAt:     svc.StartedAt,
-		CompletedAt:   svc.CompletedAt,
-		CancelledAt:   svc.CancelledAt,
-		OTPVerifiedAt: svc.OTPVerifiedAt,
-		JobStartedAt:  svc.JobStartedAt,
-	}
+	booking.Timestamps = timestamps
 
 	var transaction *domain.Transaction
-	if svc.OrderID != "" {
-		if txn, err := s.repo.FindTransactionByOrderID(ctx, svc.OrderID); err == nil {
-			transaction = txn
-			paymentStatus := "failure"
-			if txn.TxnResponse != nil {
-				if respMap, ok := txn.TxnResponse.(map[string]interface{}); ok {
-					if txnStatus, ok := respMap["status"].(string); ok {
-						paymentStatus = txnStatus
-					}
-				}
-			}
+	if svc.ID.Hex() != "" {
+		txn, err := s.repo.FindTransactionByServiceID(ctx, svc.ID.Hex())
 
-			booking.TransactionDetails = &TransactionDetailsInfo{
-				TransactionID:     txn.TxnID,
-				TransactionNumber: txn.InternalID,
-				Amount:            txn.Amount,
-				Status:            txn.Status,
-				PaymentStatus:     paymentStatus,
-				PaymentMethod:     txn.PaymentSource,
+		if err == nil && txn != nil {
+			transaction = txn
+			// paymentStatus := "failure"
+			// if txn.TxnResponse != nil {
+			// 	if respMap, ok := txn.TxnResponse.(map[string]interface{}); ok {
+			// 		if txnStatus, ok := respMap["status"].(string); ok {
+			// 			paymentStatus = txnStatus
+			// 		}
+			// 	}
+			// }
+			booking.TransactionDetails = &dto.TransactionDetailsInfo{
+				TransactionID: txn.TxnID,
+				Amount:        txn.Amount,
+				Status:        txn.Status,
+				// PaymentStatus: paymentStatus,
+				PaymentMethod: txn.Method,
 			}
 		}
 	}
 
-	ratings, _ := s.repo.FindRatingsByServiceIDs(ctx, []string{svc.ID.Hex()})
+	ratings, _ := s.ratingRepo.FindRatingsByBookingID(ctx, svc.ID)
 	var userRatings []int
 	var providerRatings []int
-
+	
 	for _, rating := range ratings {
-		ratingInfo := &RatingInfo{
+		ratingInfo := &dto.RatingInfo{
 			Stars:             rating.Stars,
 			Review:            rating.Review,
-			RecommendToFriend: rating.RecommendToFriend,
+			RecommendToFriend: rating.Recommended,
 			CreatedAt:         rating.CreatedAt,
-			RatedBy:           rating.RatedBy,
-			RatedTo:           rating.RatedTo,
+			RatedBy:           rating.RaterID.Hex(),
+			RatedTo:           rating.RateeID.Hex(),
 		}
-		if rating.RaterType == "user" {
+	
+		if rating.RatingType == "user" {
 			booking.UserRating = ratingInfo
 			userRatings = append(userRatings, rating.Stars)
-		} else if rating.RaterType == "provider" {
+		}
+	
+		if rating.RatingType == "provider" {
 			booking.ProviderRating = ratingInfo
 			providerRatings = append(providerRatings, rating.Stars)
 		}
 	}
-
+	
 	userAvg := 0.0
 	if len(userRatings) > 0 {
 		sum := 0
@@ -849,79 +740,95 @@ func (s *AdminBookingService) GetBookingByID(
 		providerAvg = float64(int(providerAvg*10+0.5)) / 10
 	}
 
-	booking.Rating = &RatingsSummary{
+	booking.Rating = &dto.RatingsSummary{
 		User:     userAvg,
 		Provider: providerAvg,
 	}
 
 	if svc.ComplaintUserID != "" {
 		if complaint, err := s.repo.FindComplaintByID(ctx, svc.ComplaintUserID); err == nil {
-			booking.UserComplaint = &ComplaintInfo{
+
+			booking.UserComplaint = &dto.ComplaintInfo{
 				ID:          complaint.ID,
-				ComplaintID: fmt.Sprintf("CMP%06d", complaint.InternalID),
+				ComplaintID: complaint.ComplaintNumber,
 				RaisedBy:    complaint.RaisedBy,
-				Problem:     complaint.Problem,
-				Photos:      complaint.Photos,
 				Status:      complaint.Status,
 				CreatedAt:   complaint.CreatedAt,
+				UserComplaint: domain.ComplaintSide{
+					Problem:  complaint.UserComplaint.Problem,
+					Photos:   complaint.UserComplaint.Photos,
+					RaisedAt: complaint.UserComplaint.RaisedAt,
+				},
 			}
 		}
 	}
 
 	if svc.ComplaintProviderID != "" {
 		if complaint, err := s.repo.FindComplaintByID(ctx, svc.ComplaintProviderID); err == nil {
-			booking.ProviderComplaint = &ComplaintInfo{
+			booking.ProviderComplaint = &dto.ComplaintInfo{
 				ID:          complaint.ID,
-				ComplaintID: fmt.Sprintf("CMP%06d", complaint.InternalID),
+				ComplaintID: complaint.ComplaintNumber,
 				RaisedBy:    complaint.RaisedBy,
-				Problem:     complaint.Problem,
-				Photos:      complaint.Photos,
 				Status:      complaint.Status,
 				CreatedAt:   complaint.CreatedAt,
+				ProviderComplaint: domain.ComplaintSide{
+					Problem:  complaint.ProviderComplaint.Problem,
+					Photos:   complaint.ProviderComplaint.Photos,
+					RaisedAt: complaint.ProviderComplaint.RaisedAt,
+				},
 			}
 		}
 	}
 
-	if finalPrice > 0 && transaction != nil && transaction.Status == "paid" {
-		commissionAmount := finalPrice * 0.2
-		netPayout := finalPrice * 0.62
+	if transaction != nil && transaction.Status == "paid" {
 
-		payoutStatus := "Pending"
-		if transaction.Status == "paid" {
-			payoutStatus = "Completed"
-		} else if transaction.Status == "refunded" {
-			payoutStatus = "Refunded"
-		} else if transaction.Status == "failed" {
-			payoutStatus = "Failed"
-		}
+		userPaid := transaction.Amount
 
-		var expectedPayoutDate *time.Time
-		if transaction.Status == "paid" {
-			date := transaction.CreatedAt.Add(24 * time.Hour)
-			expectedPayoutDate = &date
-		}
+		baseAmount := userPaid / 1.18
+		gstAmount := userPaid - baseAmount
+		commissionAmount := baseAmount * 0.20
 
-		booking.ProviderEarnings = &ProviderEarningsInfo{
-			UserPaid: finalPrice,
-			Commission: CommissionInfo{
+		booking.ProviderEarnings = &dto.ProviderEarningsInfo{
+			UserPaid: utils.RoundTo2(userPaid),
+			Commission: dto.CommissionInfo{
 				Percentage: 20,
-				Amount:     commissionAmount,
+				Amount:     utils.RoundTo2(commissionAmount),
 			},
-			GST: GSTInfo{
+			GST: dto.GSTInfo{
 				Percentage: 18,
-				Amount:     gstAmount,
+				Amount:     utils.RoundTo2(gstAmount),
 			},
-			NetPayout:          netPayout,
-			PayoutStatus:       payoutStatus,
-			PaymentMode:        transaction.PaymentSource,
-			ExpectedTime:       "24 Hours",
-			ExpectedPayoutDate: expectedPayoutDate,
+			PaymentMode:  transaction.PaymentSource,
+			ExpectedTime: "24 Hours",
 		}
 	}
 
-	var allBookings []BookingSummary
+	if settlement, err := s.settlementRepo.FindLatestByServiceID(ctx, svc.ID); err == nil && settlement != nil {
+
+		booking.ProviderEarnings = &dto.ProviderEarningsInfo{
+			UserPaid: utils.RoundTo2(settlement.OriginalAmount),
+
+			Commission: dto.CommissionInfo{
+				Percentage: settlement.CommissionPercent,
+				Amount:     utils.RoundTo2(settlement.CommissionAmount),
+			},
+
+			GST: dto.GSTInfo{
+				Percentage: settlement.GSTPercent,
+				Amount:     utils.RoundTo2(settlement.GSTAmount),
+			},
+
+			NetPayout:          utils.RoundTo2(settlement.NetAmount),
+			PayoutStatus:       string(settlement.SettlementStatus),
+			PaymentMode:        transaction.PaymentSource,
+			ExpectedPayoutDate: &settlement.CreatedAt,
+			ExpectedTime:       "24 Hours",
+		}
+	}
+
+	var allBookings []dto.BookingSummary
 	for _, service := range allServices {
-		allBookings = append(allBookings, BookingSummary{
+		allBookings = append(allBookings, dto.BookingSummary{
 			ID:          service.ID.Hex(),
 			Status:      service.Status,
 			CreatedAt:   service.CreatedAt,
@@ -933,13 +840,9 @@ func (s *AdminBookingService) GetBookingByID(
 	return booking, nil
 }
 
-func (s *AdminBookingService) CancelBooking(ctx context.Context, bookingID string) (*DetailedBookingResponse, error) {
-	svcIDStr := strings.TrimPrefix(bookingID, "BK")
-	svcInternalID, err := strconv.ParseInt(svcIDStr, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid booking id")
-	}
-	filter := bson.M{"id": svcInternalID}
+func (s *AdminBookingService) CancelBooking(ctx context.Context, bookingID string) (*dto.DetailedBookingResponse, error) {
+
+	filter := bson.M{"serviceNumber": bookingID}
 	services, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 1, "-createdAt")
 	if err != nil {
 		return nil, fmt.Errorf("error finding booking: %v", err)
@@ -971,8 +874,8 @@ func (s *AdminBookingService) CancelBooking(ctx context.Context, bookingID strin
 		return nil, err
 	}
 
-	if svc.ProviderID.Hex() != "" {
-		err = s.repo.UpdateProviderIsAssigned(ctx, svc.ProviderID.Hex(), false)
+	if svc.Provider.Hex() != "" {
+		err = s.repo.UpdateProviderIsAssigned(ctx, svc.Provider.Hex(), false)
 		if err != nil {
 			log.Printf("Failed to update provider status: %v", err)
 		}
@@ -981,14 +884,9 @@ func (s *AdminBookingService) CancelBooking(ctx context.Context, bookingID strin
 	return s.GetBookingByID(ctx, bookingID)
 }
 
-func (s *AdminBookingService) MarkBookingCompleted(ctx context.Context, bookingID string) (*DetailedBookingResponse, error) {
-	svcIDStr := strings.TrimPrefix(bookingID, "BK")
-	svcInternalID, err := strconv.ParseInt(svcIDStr, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid booking id")
-	}
+func (s *AdminBookingService) MarkBookingCompleted(ctx context.Context, bookingID string) (*dto.DetailedBookingResponse, error) {
 
-	filter := bson.M{"id": svcInternalID}
+	filter := bson.M{"serviceNumber": bookingID}
 	services, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 1, "-createdAt")
 	if err != nil {
 		return nil, fmt.Errorf("error finding booking: %v", err)
@@ -1019,8 +917,8 @@ func (s *AdminBookingService) MarkBookingCompleted(ctx context.Context, bookingI
 		return nil, err
 	}
 
-	if svc.ProviderID.Hex() != "" {
-		err = s.repo.UpdateProviderIsAssigned(ctx, svc.ProviderID.Hex(), false)
+	if svc.Provider.Hex() != "" {
+		err = s.repo.UpdateProviderIsAssigned(ctx, svc.Provider.Hex(), false)
 		if err != nil {
 			log.Printf("Failed to update provider status: %v", err)
 		}
@@ -1029,7 +927,7 @@ func (s *AdminBookingService) MarkBookingCompleted(ctx context.Context, bookingI
 	return s.GetBookingByID(ctx, bookingID)
 }
 
-func (s *AdminBookingService) mapStatus(status string) string {
+func (s *AdminBookingService) mapStatus(status domain.ServiceStatus) string {
 	switch status {
 	case StatusNotStarted:
 		return "Pending"
@@ -1046,7 +944,7 @@ func (s *AdminBookingService) mapStatus(status string) string {
 	case StatusCancelled:
 		return "Cancelled"
 	default:
-		return status
+		return string(status)
 	}
 }
 
@@ -1060,7 +958,7 @@ func (s *AdminBookingService) mapPaymentStatus(status string) string {
 func (s *AdminBookingService) GetInvoiceData(
 	ctx context.Context,
 	serviceID string,
-) (*InvoiceData, error) {
+) (*dto.InvoiceData, error) {
 
 	if serviceID == "" {
 		return nil, fmt.Errorf("service ID is required")
@@ -1084,17 +982,17 @@ func (s *AdminBookingService) GetInvoiceData(
 
 	svc := services[0]
 
-	user, err := s.repo.FindUserByID(ctx, svc.UserID)
+	user, err := s.repo.FindUserByID(ctx, svc.User.Hex())
 	if err != nil {
 		return nil, fmt.Errorf("error finding user: %v", err)
 	}
 
-	provider, err := s.repo.FindProviderByID(ctx, svc.ProviderID.Hex())
+	provider, err := s.repo.FindProviderByID(ctx, svc.Provider.Hex())
 	if err != nil {
 		return nil, fmt.Errorf("error finding provider: %v", err)
 	}
 
-	sr, err := s.repo.FindServiceRequestByID(ctx, svc.ServiceRequestID.Hex())
+	sr, err := s.repo.FindServiceRequestByID(ctx, svc.ID.Hex())
 	if err != nil {
 		return nil, fmt.Errorf("error finding service request: %v", err)
 	}
@@ -1104,11 +1002,11 @@ func (s *AdminBookingService) GetInvoiceData(
 	subtotal := finalPrice - gst
 
 	var serviceDate string
-	if svc.CompletedAt != nil {
-		serviceDate = svc.CompletedAt.Format("2006-01-02")
-	} else {
-		serviceDate = svc.CreatedAt.Format("2006-01-02")
-	}
+	// if svc.CompletedAt != nil {
+	// 	serviceDate = svc.CompletedAt.Format("2006-01-02")
+	// } else {
+	// 	serviceDate = svc.CreatedAt.Format("2006-01-02")
+	// }
 
 	var gstNumber string
 	if provider.GSTNumber != "" {
@@ -1121,25 +1019,25 @@ func (s *AdminBookingService) GetInvoiceData(
 		invoiceSuffix = invoiceSuffix[len(invoiceSuffix)-8:]
 	}
 
-	invoice := &InvoiceData{
+	invoice := &dto.InvoiceData{
 		InvoiceNumber: fmt.Sprintf("INV-%s", strings.ToUpper(invoiceSuffix)),
 		InvoiceDate:   time.Now().Format("2006-01-02"),
 		ServiceDate:   serviceDate,
 
-		Provider: InvoiceProvider{
+		Provider: dto.InvoiceProvider{
 			Name:      provider.Name,
 			Phone:     provider.Phone,
 			Address:   provider.Address,
 			GSTNumber: gstNumber,
 		},
 
-		Customer: InvoiceCustomer{
+		Customer: dto.InvoiceCustomer{
 			Name:    user.Name,
 			Phone:   user.Phone,
 			Address: user.Address,
 		},
 
-		Vehicle: InvoiceVehicle{
+		Vehicle: dto.InvoiceVehicle{
 			Brand:         sr.Brand,
 			Model:         sr.Model,
 			Year:          sr.Year,
@@ -1148,14 +1046,14 @@ func (s *AdminBookingService) GetInvoiceData(
 			VehicleType:   sr.VehicleType,
 		},
 
-		Service: InvoiceService{
+		Service: dto.InvoiceService{
 			Type:          sr.ServiceType,
 			Problems:      sr.Problems,
-			Status:        s.mapStatus(svc.Status),
+			Status:        domain.ServiceStatus(s.mapStatus(svc.Status)),
 			PaymentStatus: s.mapPaymentStatus(svc.PaymentStatus),
 		},
 
-		Pricing: InvoicePricing{
+		Pricing: dto.InvoicePricing{
 			ServiceCharge: fmt.Sprintf("%.2f", finalPrice),
 			Discount:      "0.00",
 			Subtotal:      fmt.Sprintf("%.2f", subtotal),
@@ -1167,11 +1065,7 @@ func (s *AdminBookingService) GetInvoiceData(
 	return invoice, nil
 }
 
-func (s *AdminBookingService) AddNote(
-	ctx context.Context,
-	bookingID string,
-	req dto.AddNoteRequest,
-) error {
+func (s *AdminBookingService) AddNote(ctx context.Context, bookingID string, req dto.AddNoteRequest) error {
 
 	if req.Content == "" {
 		return fmt.Errorf("note content is required")
@@ -1180,15 +1074,9 @@ func (s *AdminBookingService) AddNote(
 		return fmt.Errorf("addedBy is required")
 	}
 
-	cleanID := strings.TrimPrefix(bookingID, "BK")
-	internalID, err := strconv.ParseInt(cleanID, 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid booking id")
-	}
-
 	svcs, _, err := s.repo.FindAcceptedServices(
 		ctx,
-		bson.M{"id": internalID},
+		bson.M{"serviceNumber": bookingID},
 		0, 1, "",
 	)
 	if err != nil || len(svcs) == 0 {
@@ -1203,10 +1091,6 @@ func (s *AdminBookingService) AddNote(
 	}
 
 	return s.repo.AddBookingNote(ctx, svcs[0].ID, note)
-}
-
-func round2(val float64) float64 {
-	return math.Round(val*100) / 100
 }
 
 func extractZone(address string) string {
@@ -1265,4 +1149,17 @@ func (s *AdminBookingService) extractAllowedZones(zoneFilter bson.M) []string {
 	}
 
 	return zones
+}
+
+func (s *AdminBookingService) convertToObjectIDs(users []domain.User) []primitive.ObjectID {
+	ids := make([]primitive.ObjectID, 0, len(users))
+	for _, user := range users {
+		objID, _ := primitive.ObjectIDFromHex(user.ID)
+		ids = append(ids, objID)
+	}
+	return ids
+}
+
+func (s *AdminBookingService) GetInvoice(ctx context.Context, bookingID string) (*domain.Invoice, error) {
+	return s.Invoicerepo.GetByID(ctx, bookingID)
 }

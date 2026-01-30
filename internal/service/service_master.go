@@ -234,7 +234,7 @@ func (s *ServiceService) UpdateService(
 
 	if val, ok := updateData["status"]; ok {
 		status, ok := val.(string)
-		if !ok || !domain.IsValidStatus(domain.ServiceStatus(status)) {
+		if !ok || !domain.IsValidStatus(domain.ServiceMasterStatus(status)) {
 			return fmt.Errorf("invalid status")
 		}
 		update["status"] = status

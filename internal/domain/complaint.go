@@ -6,14 +6,11 @@ import (
 
 type Complaint struct {
 	ID                string                  `bson:"_id,omitempty" json:"_id"`
-	InternalID        int64                   `bson:"id" json:"id"`
-	AcceptedServiceID string                  `bson:"acceptedService" json:"accepted_service_id"`
-	AcceptedServiceNo int64                   `bson:"acceptedServiceId" json:"accepted_service_no"`
+	ComplaintNumber    string                `bson:"complaintNumber" json:"complaintNumber"`
+	AcceptedService string                  `bson:"acceptedService" json:"acceptedService"`
 	UserID            string                  `bson:"userId,omitempty" json:"user_id,omitempty"`
 	ProviderID        string                  `bson:"providerId,omitempty" json:"provider_id,omitempty"`
 	RaisedBy          string                  `bson:"raisedBy" json:"raised_by"`
-	Problem           string                  `bson:"problem" json:"problem"`
-	Photos            []string                `bson:"photos" json:"photos"`
 	Status            ComplaintStatus                `bson:"status" json:"status"`
 	Timeline          ComplaintTimeline       `bson:"timeline" json:"timeline"`
 	UpdatedByAdmin    string                  `bson:"updatedByAdmin,omitempty" json:"updated_by_admin,omitempty"`
@@ -29,6 +26,8 @@ type Complaint struct {
 	ProviderName      string                  `bson:"providerName,omitempty" json:"provider_name,omitempty"`
 	BookingNumber     string                  `bson:"bookingNumber,omitempty" json:"booking_number,omitempty"`
 	DeductionPayout   *DeductionPayoutRequest `bson:"deductionPayout,omitempty" json:"deduction_payout,omitempty"`
+	UserComplaint     *ComplaintSide `bson:"userComplaint,omitempty" json:"userComplaint,omitempty"`
+	ProviderComplaint *ComplaintSide `bson:"providerComplaint,omitempty" json:"providerComplaint,omitempty"`
 }
 
 type ComplaintStatus string
@@ -52,7 +51,8 @@ type ComplaintAssessment struct {
 	RefundAmount     float64    `bson:"refundAmount,omitempty" json:"refund_amount,omitempty"`
 	PayoutToProvider PayoutType `bson:"payoutToProvider" json:"payout_to_provider"`
 	PayoutAmount     float64    `bson:"payoutAmount,omitempty" json:"payout_amount,omitempty"`
-	Remarks          string     `bson:"remarks,omitempty" json:"remarks,omitempty"`
+	RemarkForUser         string     `bson:"remarkForUser,omitempty" json:"remarkForUser,omitempty"`
+	RemarkForProvider  string     `bson:"remarkForProvider,omitempty" json:"remarkForProvider,omitempty"`
 	AssessedBy       string     `bson:"assessedBy" json:"assessed_by"`
 	AssessedAt       time.Time  `bson:"assessedAt" json:"assessed_at"`
 }
@@ -133,7 +133,7 @@ type ProviderDetails struct {
 
 type BookingDetails struct {
 	ID         string  `json:"id"`
-	InternalID int64   `json:"internal_id"`
+	InternalID  string  `json:"internal_id"`
 	BasePrice  float64 `json:"base_price"`
 	FinalPrice float64 `json:"final_price"`
 }
@@ -147,4 +147,11 @@ type DeductionPayoutRequest struct {
 	Reason              string
 	ComplaintID         string
 	ComplaintInternalID int64
+}
+
+
+type ComplaintSide struct {
+	Problem   string    `bson:"problem" json:"problem"`
+	Photos    []string  `bson:"photos" json:"photos"`
+	RaisedAt  time.Time `bson:"raisedAt" json:"raisedAt"`
 }

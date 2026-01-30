@@ -1,17 +1,18 @@
 package repository
 
 import (
-	"fmt"
-	"time"
-	"math"
-	"strings"
 	"context"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"provider_management/internal/dto"
+	"fmt"
+	"log"
+	"math"
 	"provider_management/internal/domain"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"provider_management/internal/dto"
+	"strings"
+	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AcceptedServiceRepo struct {
@@ -176,7 +177,7 @@ func (r *AcceptedServiceRepo) FindByProviderID(ctx context.Context, providerID s
 	for _, result := range results {
 		service := domain.Service{
 			ID:               result.ID.Hex(),
-			ServiceRequestID: result.ServiceRequestID.Hex(),
+			ServiceRequestID: result.ServiceNumber,
 			Status:           result.Status,
 			ServiceType:      result.ServiceType,
 		}
@@ -237,11 +238,18 @@ func (r *AcceptedServiceRepo) GetServiceStats(ctx context.Context, providerID st
 	return total, completed, err
 }
 
-func (r *AcceptedServiceRepo) FindCompletedPaidBetween( ctx context.Context, from, to time.Time ) ([]domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindCompletedPaidBetween( 
+	ctx context.Context, 
+	from, to time.Time,
+) ([]domain.AcceptedService, error) {
 
 	filter := bson.M{
 		"status":        "completed",
 		"paymentStatus": "paid",
+		"timestamps.CompletedAt": bson.M{
+			"$gte": from,
+			"$lte": to,
+		},
 		"$or": []bson.M{
 			{"payoutCreated": bson.M{"$exists": false}},
 			{"payoutCreated": false},
@@ -260,12 +268,9 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween( ctx context.Context, fro
 				},
 			},
 		},
-		"completedAt": bson.M{
-			"$gte": from,
-			"$lt":  to,
-		},
 	}
-
+	
+	log.Println("Fetching services between:", from, "and", to)
 	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -276,6 +281,7 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween( ctx context.Context, fro
 		return nil, err
 	}
 
+	log.Println("Found services count:", len(services))
 	return services, nil
 }
 

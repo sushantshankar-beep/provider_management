@@ -1,18 +1,20 @@
 package service
 
 import (
-	"time"
+	"context"
+	"errors"
 	"fmt"
 	"math"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"provider_management/internal/repository"
+	"provider_management/internal/utils"
 	"strconv"
 	"strings"
-	"context"
+	"time"
+
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/bson"
-	"provider_management/internal/dto"
-	"provider_management/internal/utils"
-	"provider_management/internal/domain"
-	"provider_management/internal/constants"
-	"provider_management/internal/repository"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -25,6 +27,7 @@ type ProviderAdminService struct {
 	settlementRepo *repository.ProviderSettlementRepo
 	settlementHistoryRepo *repository.SettlementHistoryRepository
 	serviceRequestRepo *repository.ServiceRequestRepo
+	kycRepo  *repository.ProviderKYCRepository
 }
 
 func NewProviderAdminService(
@@ -36,6 +39,7 @@ func NewProviderAdminService(
 	t *repository.ProviderSettlementRepo,
 	h *repository.SettlementHistoryRepository,
 	u *repository.ServiceRequestRepo,
+	k *repository.ProviderKYCRepository,
 ) *ProviderAdminService {
 	return &ProviderAdminService{
 		providers:      p,
@@ -46,6 +50,7 @@ func NewProviderAdminService(
 		settlementRepo: t,
 		settlementHistoryRepo:  h,
 		serviceRequestRepo: u,
+		kycRepo: k,
 	}
 }
 
@@ -60,17 +65,22 @@ type JobHistoryItem struct {
 }
 
 
-func (s *ProviderAdminService) GetAllProviders( ctx context.Context, filters dto.ProviderFilters, pagination dto.ProviderPagination, zoneFilter bson.M) (*dto.ProviderListResponse, error) {
+func (s *ProviderAdminService) GetAllProviders(
+	ctx context.Context,
+	filters dto.ProviderFilters,
+	pagination dto.ProviderPagination,
+	zoneFilter bson.M,
+) (*dto.ProviderListResponse, error) {
 
 	if pagination.Page < 1 {
 		pagination.Page = 1
 	}
-
 	if pagination.Limit < 1 {
 		pagination.Limit = 20
 	}
-
 	pagination.Skip = (pagination.Page - 1) * pagination.Limit
+
+	search := strings.TrimSpace(filters.Search)
 
 	var conditions []bson.M
 
@@ -78,117 +88,73 @@ func (s *ProviderAdminService) GetAllProviders( ctx context.Context, filters dto
 		conditions = append(conditions, zoneFilter)
 	}
 
-	inactiveStatuses := []string{
-		string(domain.AccountStatusSuspended),
-		string(domain.AccountStatusBlacklisted),
-		string(domain.AccountStatusDeactivated),
-	}
-
-	activeStatus := []string{
-		string(domain.AccountStatusActive),
-	}
-
-	if filters.Filter == "inactive" {
-		conditions = append(conditions, bson.M{"isActive": bson.M{"$in": inactiveStatuses}})
-	}
-
-	if filters.Filter == "active" {
-		conditions = append(conditions, bson.M{"isActive": bson.M{"$in": activeStatus}})
-	}
-
-	if filters.Filter != "" {
-		switch filters.Filter {
-		case "Pending":
-			conditions = append(conditions, bson.M{"status": domain.StatusPending})
-		case "verified":
-			conditions = append(conditions, bson.M{"status": domain.StatusActive})
-		case "rejected":
-			conditions = append(conditions, bson.M{"status": domain.StatusRejected})
-		}
-	}
-
-	if filters.StartDate != "" {
-		if t, err := time.Parse("2006-01-02", filters.StartDate); err == nil {
-			endOfDay := t.Add(24*time.Hour - time.Second)
-			conditions = append(conditions, bson.M{
-				"createdAt": bson.M{
-					"$gte": primitive.NewDateTimeFromTime(t),
-					"$lte": primitive.NewDateTimeFromTime(endOfDay),
-				},
-			})
-		}
-	}
-
-	if filters.Search != "" {
-		searchConditions := []bson.M{
-			{"name": bson.M{"$regex": filters.Search, "$options": "i"}},
-			{"phone": bson.M{"$regex": filters.Search, "$options": "i"}},
-			{"email": bson.M{"$regex": filters.Search, "$options": "i"}},
-			{"city": bson.M{"$regex": filters.Search, "$options": "i"}},
-			{"address": bson.M{"$regex": filters.Search, "$options": "i"}},
-			{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": filters.Search, "$options": "i"}}},
-		}
-
-		if strings.HasPrefix(strings.ToUpper(filters.Search), "PRO") {
-			idSearch := strings.TrimPrefix(strings.ToUpper(filters.Search), "PRO")
-			searchConditions = append(searchConditions, bson.M{
-				"$or": []bson.M{
-					{"id": bson.M{"$regex": idSearch, "$options": "i"}},
-					{"_id": bson.M{"$regex": idSearch, "$options": "i"}},
-				},
-			})
-		} else {
-			searchConditions = append(searchConditions, bson.M{
-				"$or": []bson.M{
-					{"id": bson.M{"$regex": filters.Search, "$options": "i"}},
-					{"_id": bson.M{"$regex": filters.Search, "$options": "i"}},
-				},
-			})
-		}
-
-		conditions = append(conditions, bson.M{"$or": searchConditions})
-	}
-
-	if filters.Name != "" {
-		conditions = append(conditions, bson.M{"name": bson.M{"$regex": filters.Name, "$options": "i"}})
-	}
-	if filters.Mobile != "" {
-		conditions = append(conditions, bson.M{"phone": bson.M{"$regex": filters.Mobile, "$options": "i"}})
-	}
-	if filters.ProviderID != "" {
-		idSearch := strings.TrimPrefix(strings.ToUpper(filters.ProviderID), "PRO")
+	if search != "" {
 		conditions = append(conditions, bson.M{
 			"$or": []bson.M{
-				{"id": bson.M{"$regex": idSearch, "$options": "i"}},
-				{"_id": bson.M{"$regex": idSearch, "$options": "i"}},
+				{"name": bson.M{"$regex": search, "$options": "i"}},
+				{"phone": bson.M{"$regex": search}},
+				{"providerCode": bson.M{"$regex": search, "$options": "i"}},
+				{"city": bson.M{"$regex": search, "$options": "i"}},
+				{"address": bson.M{"$regex": search, "$options": "i"}},
+				{"vehicleType": bson.M{"$regex": search, "$options": "i"}},
 			},
 		})
 	}
-	if filters.Zone != "" {
+
+	switch strings.ToLower(filters.AccountStatus) {
+	case "active":
 		conditions = append(conditions, bson.M{
-			"$or": []bson.M{
-				{"city": bson.M{"$regex": filters.Zone, "$options": "i"}},
-				{"address": bson.M{"$regex": filters.Zone, "$options": "i"}},
+			"isActive": domain.AccountStatusActive,
+		})
+	case "inactive":
+		conditions = append(conditions, bson.M{
+			"isActive": bson.M{
+				"$in": []string{
+					domain.AccountStatusSuspended,
+					domain.AccountStatusBlacklisted,
+					domain.AccountStatusDeactivated,
+				},
 			},
 		})
+	case "suspended":
+		conditions = append(conditions, bson.M{
+			"isActive": domain.AccountStatusSuspended,
+		})
+	case "blacklisted":
+		conditions = append(conditions, bson.M{
+			"isActive": domain.AccountStatusBlacklisted,
+		})
 	}
+
 	if filters.VehicleType != "" {
 		conditions = append(conditions, bson.M{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": filters.VehicleType, "$options": "i"}}})
 	}
 
-	if filters.Status != "" {
-		conditions = append(conditions, bson.M{"status": filters.Status})
-	}
-
 	if filters.KYCStatus != "" {
-		kycStatusLower := strings.ToLower(filters.KYCStatus)
-		switch kycStatusLower {
-		case "active", "verified":
-			conditions = append(conditions, bson.M{"status": domain.StatusActive})
-		case "pending":
-			conditions = append(conditions, bson.M{"status": domain.StatusPending})
-		case "rejected":
-			conditions = append(conditions, bson.M{"status": domain.StatusRejected})
+
+		kycStatus := strings.ToUpper(filters.KYCStatus)
+	
+		kycs, err := s.kycRepo.Find(ctx, bson.M{
+			"status": kycStatus,
+		})
+	
+		if err != nil {
+			return nil, fmt.Errorf("failed to filter by kyc status: %w", err)
+		}
+	
+		var kycIDs []primitive.ObjectID
+		for _, k := range kycs {
+			kycIDs = append(kycIDs, k.ID)
+		}
+	
+		if len(kycIDs) > 0 {
+			conditions = append(conditions, bson.M{
+				"kycId": bson.M{"$in": kycIDs},
+			})
+		} else {
+			conditions = append(conditions, bson.M{
+				"_id": primitive.NilObjectID,
+			})
 		}
 	}
 
@@ -209,57 +175,64 @@ func (s *ProviderAdminService) GetAllProviders( ctx context.Context, filters dto
 		}
 	}
 
+	if filters.StartDate != "" {
+		if t, err := time.Parse("2006-01-02", filters.StartDate); err == nil {
+			conditions = append(conditions, bson.M{
+				"createdAt": bson.M{
+					"$gte": primitive.NewDateTimeFromTime(t),
+					"$lte": primitive.NewDateTimeFromTime(t.Add(24*time.Hour - time.Second)),
+				},
+			})
+		}
+	}
+
 	query := bson.M{}
 	if len(conditions) > 0 {
 		query["$and"] = conditions
 	}
 
-	providers, total, err := s.providers.FindAll(ctx, query, pagination.Skip, pagination.Limit, pagination.Sort)
+	providers, total, err := s.providers.FindAll(
+		ctx,
+		query,
+		pagination.Skip,
+		pagination.Limit,
+		pagination.Sort,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch providers: %v", err)
+		return nil, fmt.Errorf("failed to fetch providers: %w", err)
 	}
 
-	countQuery := query
-	if andConditions, ok := countQuery["$and"].([]bson.M); ok && len(andConditions) == 1 {
-		for k, v := range andConditions[0] {
-			countQuery[k] = v
+	var kycIDs []primitive.ObjectID
+	for _, p := range providers {
+		if p.KYCID != primitive.NilObjectID {
+			kycIDs = append(kycIDs, p.KYCID)
 		}
-		delete(countQuery, "$and")
 	}
 
-	activeCount, _ := s.providers.CountByStatus(ctx, countQuery, "isActive", domain.AccountStatusActive)
-	inactiveCount, _ := s.providers.CountByMultipleStatuses(ctx, countQuery, "isActive", inactiveStatuses)
-	pendingKycCount, _ := s.providers.CountByStatus(ctx, countQuery, "status", domain.StatusPending)
-
-	formattedProviders := make([]dto.ProviderAllResponse, len(providers))
-	for i, p := range providers {
-		totalJobs, completedJobs, err := s.services.GetServiceStats(ctx, p.ID.Hex())
-		if err != nil {
-		    fmt.Printf("Error getting service stats for provider %s: %v", p.ID, err)
-			totalJobs = 0
-			completedJobs = 0
+	kycMap := make(map[primitive.ObjectID]domain.ProviderKYC)
+	if len(kycIDs) > 0 {
+		kycs, _ := s.kycRepo.FindByIDs(ctx, kycIDs)
+		for _, k := range kycs {
+			kycMap[k.ID] = k
 		}
+	}
 
-		kyc := "Not Submitted"
-		if len(p.IdentityProof) > 0 {
-			switch p.IdentityProof[0].Verified {
-			case domain.VerificationApproved:
-				kyc = "Verified"
-			case domain.VerificationRejected:
-				kyc = "Rejected"
-			default:
-				kyc = "Pending"
+	formatted := make([]dto.ProviderAllResponse, 0, len(providers))
+
+	for _, p := range providers {
+
+		totalJobs, completedJobs, _ := s.services.GetServiceStats(ctx, p.ID.Hex())
+
+		kycStatus := "Not Submitted"
+		if k, ok := kycMap[p.KYCID]; ok {
+			switch k.Status {
+			case domain.KYC_APPROVED:
+				kycStatus = "Verified"
+			case domain.KYC_REJECTED:
+				kycStatus = "Rejected"
+			case domain.KYC_PENDING:
+				kycStatus = "Pending"
 			}
-		}
-
-		account := "Active"
-		switch p.IsActive {
-		case domain.AccountStatusSuspended:
-			account = "Suspended"
-		case domain.AccountStatusBlacklisted:
-			account = "Blacklisted"
-		default:
-			account = "Active"
 		}
 
 		vehicle := "N/A"
@@ -267,46 +240,47 @@ func (s *ProviderAdminService) GetAllProviders( ctx context.Context, filters dto
 			vehicle = strings.Join(p.VehicleType, ", ")
 		}
 
-		providerIDStr := fmt.Sprintf("PRO%d", p.InternalID)
-		if p.InternalID == 0 {
-			if len(p.ID) >= 6 {
-				providerIDStr = fmt.Sprintf("PRO%s", p.ID[len(p.ID)-6:])
-			} else {
-				providerIDStr = fmt.Sprintf("PRO%s", p.ID)
-			}
-		}
-
-		formattedProviders[i] = dto.ProviderAllResponse{
+		formatted = append(formatted, dto.ProviderAllResponse{
 			ID:            p.ID.Hex(),
-			ProviderID:    providerIDStr,
+			ProviderID:    p.ProviderCode,
 			Name:          defaultStr(p.Name, "N/A"),
 			Mobile:        p.Phone,
 			Email:         defaultStr(p.Email, "N/A"),
-			KYC:           kyc,
-			Account:       account,
+			KYC:           kycStatus,
+			Account:       string(p.IsActive),
 			Vehicle:       vehicle,
-			Zone:          defaultStr(p.City, defaultStr(p.Address, "N/A")),
+			Zone:          p.City,
 			DOJ:           formatDate(p.CreatedAt),
 			ProfileURL:    p.ProfileURL,
 			IsServiceOn:   p.IsServiceOn,
-			IdentityProof: p.IdentityProof,
-			AddressProof:  p.AddressProof,
-			CancelCheque:  p.CancelCheque,
-			IsActive:      string(p.IsActive),
-			Status:        p.Status,
+			IsActive:      p.IsActive,
 			TotalJobs:     totalJobs,
 			CompletedJobs: completedJobs,
-		}
+		})
 	}
 
-	var totalPages int64 = 1
-    if total > 0 && pagination.Limit > 0 {
-	    totalPages = int64(math.Ceil(float64(total) / float64(pagination.Limit)))
-    }
+	activeCount, _ := s.providers.Count(ctx, bson.M{
+		"isActive": domain.AccountStatusActive,
+	})
 
+	inactiveCount, _ := s.providers.Count(ctx, bson.M{
+		"isActive": bson.M{
+			"$in": []string{
+				domain.AccountStatusSuspended,
+				domain.AccountStatusBlacklisted,
+				domain.AccountStatusDeactivated,
+			},
+		},
+	})
+
+	pendingKycCount, _ := s.kycRepo.Count(ctx, bson.M{
+		"status": domain.KYC_PENDING,
+	})
+
+	totalPages := int64(math.Ceil(float64(total) / float64(pagination.Limit)))
 
 	return &dto.ProviderListResponse{
-		Providers: formattedProviders,
+		Providers: formatted,
 		Counts: dto.ProviderCounts{
 			Total:      total,
 			Active:     activeCount,
@@ -324,6 +298,7 @@ func (s *ProviderAdminService) GetAllProviders( ctx context.Context, filters dto
 	}, nil
 }
 
+
 func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (*dto.ProviderDetailResponse, error) {
 	provider, err := s.providers.FindByID(ctx, id)
 	if err != nil {
@@ -338,21 +313,32 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		completedJobs = 0
 	}
 
-	recentServices, err := s.services.FindByProviderID(ctx, provider.ID.Hex(), 10)
+	var (
+		kycStatus   = "Not Submitted"
+		kycDocs     []domain.KYCDocument
+		bankDetails *domain.ProviderBankDetails
+		approvedAt  string
+	)
 
-	if err != nil {
-		fmt.Printf("Error fetching recent services: %v", err)
-		recentServices = []domain.Service{}
-	}
+	if provider.KYCID != primitive.NilObjectID {
 
-	kycStatus := "Not Submitted"
-	if len(provider.IdentityProof) > 0 {
-		if provider.IdentityProof[0].Verified == domain.VerificationApproved {
-			kycStatus = "Verified"
-		} else if provider.IdentityProof[0].Verified == domain.VerificationRejected {
-			kycStatus = "Rejected"
+		kyc, err := s.kycRepo.FindByID(ctx, provider.KYCID)
+		if err != nil {
+			fmt.Printf("Error fetching KYC: %v\n", err)
 		} else {
-			kycStatus = "Pending"
+
+			switch kyc.Status {
+			case domain.KYC_APPROVED:
+				kycStatus = "Verified"
+				approvedAt = formatDateDetailed(kyc.ApprovedAt)
+			case domain.KYC_REJECTED:
+				kycStatus = "Rejected" 
+			case domain.KYC_PENDING:
+				kycStatus = "Pending"
+			}
+
+			kycDocs = kyc.Documents
+			bankDetails = &kyc.Bank
 		}
 	}
 
@@ -365,21 +351,9 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		accountStatus = "Inactive"
 	}
 
-	providerIDStr := fmt.Sprintf("PRO%d", provider.InternalID)
-	if provider.InternalID == 0 {
-		if len(provider.ID) >= 6 {
-			providerIDStr = fmt.Sprintf("PRO%s", provider.ID[len(provider.ID)-6:])
-		} else {
-			providerIDStr = fmt.Sprintf("PRO%s", provider.ID)
-		}
-	}
-
-	brandNames := constants.GetBrandNamesByIDs(provider.ProviderBrands)
-	serviceNames := constants.GetServiceNamesByIDs(provider.ProviderServices)
-
 	return &dto.ProviderDetailResponse{
 		ID:                   provider.ID.Hex(),
-		ProviderID:           providerIDStr,
+		ProviderID:           provider.ProviderCode,
 		Name:                 defaultStr(provider.Name, "N/A"),
 		Phone:                provider.Phone,
 		Email:                defaultStr(provider.Email, "N/A"),
@@ -388,32 +362,26 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		Address:              provider.Address,
 		PermanentAddress:     provider.PermanentAddress,
 		City:                 provider.City,
-		Status:               provider.Status,
 		Account:              accountStatus,
-		KYC:                  kycStatus,
+		KYCID:                provider.KYCID,
+		KYCStatus:            kycStatus,
+		KYCDocuments:         kycDocs,
+		BankDetails:          bankDetails,
 		VehicleType:          provider.VehicleType,
 		VehicleNumber:        provider.VehicleNumber,
-		ProviderBrands:       brandNames,
-		ProviderServices:     serviceNames,
-		GSTNumber:            provider.GSTNumber,
+		ProviderBrands:       provider.ProviderBrands,
+		ProviderServices:     provider.ProviderServices,
 		CompanyName:          provider.CompanyName,
 		Description:          provider.Description,
 		Zone:                 defaultStr(provider.City, defaultStr(provider.Address, "N/A")),
 		DOJ:                  formatDateDetailed(provider.CreatedAt),
-		IdentityProof:        provider.IdentityProof,
-		AddressProof:         provider.AddressProof,
-		CancelCheque:         provider.CancelCheque,
-		BankDetails:          provider.BankDetails,
-		IsServiceOn:          provider.IsServiceOn,
 		IsActive:             string(provider.IsActive),
-		IsSocketConnected:    provider.IsSocketConnected,
-		Location:             &provider.Location,
 		TotalJobs:            totalJobs,
 		CompletedJobs:        completedJobs,
-		RecentServices:       recentServices,
 		CommissionPercentage: provider.CommissionPercentage,
 		Notes:                provider.Notes,
-		ApprovedAt:           formatDateDetailed(provider.ApprovedAt),
+		ApprovedAt:           approvedAt,
+		AgreementSubmittedAt:  provider.AgreementSubmittedAt,
 	}, nil
 }
 
@@ -423,7 +391,6 @@ func (s *ProviderAdminService) UpdateProviderStatus(ctx context.Context, id, sta
 		domain.StatusActive:   true,
 		domain.StatusPending:  true,
 		domain.StatusRejected: true,
-		"deactive":            true,
 	}
 
 	if !validStatuses[status] {
@@ -452,20 +419,18 @@ func (s *ProviderAdminService) UpdateProviderKYC(ctx context.Context, id, kycSta
 	return s.providers.UpdateKYCStatus(ctx, id, mappedStatus)
 }
 
-func (s *ProviderAdminService) VerifyDocument( ctx context.Context, id, documentType, documentID, action string ) (*domain.Provider, error) {
+func (s *ProviderAdminService) VerifyDocument( ctx context.Context, kycID, documentID, action string ) (*domain.ProviderKYC, error) {
 
 	if action != "approve" && action != "reject" {
 		return nil, fmt.Errorf("invalid action (approve/reject required)")
 	}
 
-	verificationStatus := domain.VerificationApproved
-
+	verificationStatus := domain.VERIFICATION_APPROVED
 	if action == "reject" {
-		verificationStatus = domain.VerificationRejected
+		verificationStatus = domain.VERIFICATION_REJECTED
 	}
 
-	provider, err := s.providers.UpdateDocumentVerification(ctx, id, documentType, documentID, verificationStatus)
-
+	kyc, err := s.kycRepo.UpdateDocumentVerification(ctx, kycID, documentID, verificationStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -473,46 +438,33 @@ func (s *ProviderAdminService) VerifyDocument( ctx context.Context, id, document
 	allApproved := true
 	hasRejected := false
 
-	for _, proof := range provider.IdentityProof {
-		if proof.Verified == domain.VerificationRejected {
+	for _, doc := range kyc.Documents {
+		if doc.Verified == domain.VERIFICATION_REJECTED {
 			hasRejected = true
 			break
 		}
-		if proof.Verified != domain.VerificationApproved {
+		if doc.Verified != domain.VERIFICATION_APPROVED {
 			allApproved = false
 		}
 	}
 
-	if !hasRejected {
-		for _, proof := range provider.AddressProof {
-			if proof.Verified == domain.VerificationRejected {
-				hasRejected = true
-				break
-			}
-			if proof.Verified != domain.VerificationApproved {
-				allApproved = false
-			}
-		}
-	}
-
-	if !hasRejected && provider.CancelCheque != nil {
-		if provider.CancelCheque.Verified == domain.VerificationRejected {
-			hasRejected = true
-		} else if provider.CancelCheque.Verified != domain.VerificationApproved {
-			allApproved = false
-		}
-	}
-
-	var newStatus string
+	var newStatus domain.KYCStatus
 	if hasRejected {
-		newStatus = domain.StatusRejected
+		newStatus = domain.KYC_REJECTED
 	} else if allApproved {
-		newStatus = domain.StatusActive
+		newStatus = domain.KYC_APPROVED
 	} else {
-		newStatus = domain.StatusPending
+		newStatus = domain.KYC_PENDING
 	}
 
-	return s.providers.UpdateKYCStatus(ctx, id, newStatus)
+	if kyc.Status != newStatus {
+		kyc, err = s.kycRepo.UpdateKYCStatus(ctx, kycID, newStatus)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return kyc, nil
 }
 
 func (s *ProviderAdminService) UpdateProviderAccountAction(ctx context.Context, id, action string) (*domain.Provider, error) {
@@ -545,6 +497,9 @@ func formatDate(t time.Time) string {
 }
 
 func formatDateDetailed(t time.Time) string {
+	if t.IsZero() {
+		return "N/A"
+	}
 	return t.Format("Jan 2, 2006")
 }
 
@@ -654,13 +609,19 @@ func (s *ProviderAdminService) AddNote( ctx context.Context, providerID string, 
 
 	return s.providers.AddProviderNote(ctx, objectID, note)
 }
-func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.CreateProviderRequest, createdBy primitive.ObjectID, role string) (*domain.Provider, error) {
+func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.CreateProviderRequest, documents []domain.KYCDocument,createdBy primitive.ObjectID, role string) (*domain.Provider, error) {
 
+	existingProvider, err := s.providers.FindByPhone(ctx, req.Phone)
+	if err == nil && existingProvider != nil {
+		return nil, errors.New("phone number already exists")
+	}
+
+	now := time.Now()
 	providerID := time.Now().UnixNano() / 1000000
 
 	provider := &domain.Provider{
 		ID:               primitive.NewObjectID(),
-		InternalID:       int64(providerID),
+		ProviderCode:     "PRVH" + strconv.FormatInt(providerID, 10),
 		Name:             req.Name,
 		CompanyName:      req.CompanyName,
 		Phone:            req.Phone,
@@ -673,128 +634,164 @@ func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.Creat
 		VehicleNumber:    req.VehicleNumber,
 		ProviderBrands:   req.ProviderBrands,
 		ProviderServices: req.ProviderServices,
-		GSTNumber:        req.GSTNumber,
 		Description:      req.Description,
 		ProfileURL:       req.ProfileURL,
-		Status:           domain.StatusPending,
 		IsActive:         domain.AccountStatusActive,
-		IsServiceOn:      false,
 		CreatedBy:        createdBy,
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
 
-	provider.Location = domain.GeoPoint{
-		Type:        "Point",
-		Coordinates: []float64{0, 0},
+	if err := s.providers.Create(ctx, provider); err != nil {
+		return nil, err
 	}
 
-	if req.AccountHolderName != "" || req.AccountNumber != "" {
-		provider.BankDetails = &domain.BankDetails{
+	kyc := &domain.ProviderKYC{
+		ID:         primitive.NewObjectID(),
+		ProviderID: provider.ID,
+		Documents:  documents,
+		Status:     domain.KYC_PENDING,
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
+	
+	if req.AccountHolderName != "" {
+		kyc.Bank = domain.ProviderBankDetails{
 			AccountHolderName: req.AccountHolderName,
 			AccountNumber:     req.AccountNumber,
-			IfscCode:          req.IfscCode,
+			IFSC:              req.IfscCode,
 			BranchName:        req.BranchName,
-			Upi:               req.Upi,
+			UPIID:             req.Upi,
+			GSTNumber:         req.GSTNumber,
 		}
 	}
 
-	provider.IdentityProof = []domain.Proof{}
-	provider.AddressProof = []domain.Proof{}
-
-	if len(req.IdentityProofs) > 0 {
-		provider.IdentityProof = req.IdentityProofs
+	if err := s.kycRepo.Create(ctx, kyc); err != nil {
+		return nil, err
 	}
 
-	if len(req.AddressProofs) > 0 {
-		provider.AddressProof = req.AddressProofs
-	}
-
-	if req.CancelCheque != nil {
-		provider.CancelCheque = req.CancelCheque
-	}
-
-	err := s.providers.Create(ctx, provider)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to create provider: %v", err)
+	if err := s.providers.UpdateKYCID(ctx, provider.ID, kyc.ID); err != nil {
+		return nil, err
 	}
 
 	return provider, nil
 }
 
-func (s *ProviderAdminService) UpdateProvider( ctx context.Context, id string, req dto.UpdateProviderRequest, updatedBy primitive.ObjectID,
+
+func (s *ProviderAdminService) UpdateProvider(
+    ctx context.Context,
+    id string,
+    req dto.UpdateProviderRequest,
+    documents []domain.KYCDocument,
+    updatedBy primitive.ObjectID,
 ) (*domain.Provider, error) {
 
-	_, err := s.providers.FindByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("provider not found")
-	}
+    provider, err := s.providers.FindByID(ctx, id)
+    if err != nil {
+        return nil, fmt.Errorf("provider not found")
+    }
 
-	update := bson.M{
-		"updatedAt": time.Now(),
-		"updatedBy": updatedBy,
-	}
+    update := bson.M{
+        "updatedAt": time.Now(),
+        "updatedBy": updatedBy,
+    }
 
-	if req.Name != "" {
-		update["name"] = req.Name
-	}
-	if req.CompanyName != "" {
-		update["companyName"] = req.CompanyName
-	}
-	if req.Phone != "" {
-		update["phone"] = req.Phone
-	}
-	if req.Email != "" {
-		update["email"] = req.Email
-	}
-	if req.City != "" {
-		update["city"] = req.City
-	}
-	if req.Address != "" {
-		update["address"] = req.Address
-	}
-	if req.ProfileURL != "" {
-		update["profileUrl"] = req.ProfileURL
-	}
-	if len(req.VehicleType) > 0 {
-		update["vehicleType"] = req.VehicleType
-	}
-	if req.GSTNumber != "" {
-		update["GSTNumber"] = req.GSTNumber
-	}
+    if req.Name != "" {
+        update["name"] = req.Name
+    }
+    if req.CompanyName != "" {
+        update["companyName"] = req.CompanyName
+    }
+    if req.Phone != "" {
+        update["phone"] = req.Phone
+    }
+    if req.Email != "" {
+        update["email"] = req.Email
+    }
+    if req.City != "" {
+        update["city"] = req.City
+    }
+    if req.Address != "" {
+        update["address"] = req.Address
+    }
+    if req.ProfileURL != "" {
+        update["profileUrl"] = req.ProfileURL
+    }
+    if len(req.VehicleType) > 0 {
+        update["vehicleType"] = req.VehicleType
+    }
+    if len(req.ProviderBrands) > 0 {
+        update["providerBrands"] = req.ProviderBrands
+    }
+    if len(req.ProviderServices) > 0 {
+        update["providerServices"] = req.ProviderServices
+    }
 
-	if len(req.ProviderBrands) > 0 {
-		update["providerBrands"] = req.ProviderBrands
-	}
+    updatedProvider, err := s.providers.Update(ctx, id, update)
+    if err != nil {
+        return nil, err
+    }
 
-	if len(req.ProviderServices) > 0 {
-		update["providerServices"] = req.ProviderServices
-	}
+    if len(documents) > 0 || req.AccountHolderName != "" {
 
-	if req.AccountHolderName != "" || req.AccountNumber != "" {
-		update["bankDetails"] = &domain.BankDetails{
-			AccountHolderName: req.AccountHolderName,
-			AccountNumber:     req.AccountNumber,
-			IfscCode:          req.IfscCode,
-			BranchName:        req.BranchName,
-			Upi:               req.Upi,
-		}
-	}
+        var existingKYC *domain.ProviderKYC
+        existingKYC, err = s.kycRepo.FindByProviderID(ctx, provider.ID)
+        if err != nil && err != mongo.ErrNoDocuments {
+            return nil, err
+        }
 
-	if len(req.IdentityProofs) > 0 {
-		update["identityProof"] = req.IdentityProofs
-	}
+        kycUpdate := bson.M{
+            "updatedAt": time.Now(),
+            "status":    domain.KYC_PENDING,
+        }
 
-	if len(req.AddressProofs) > 0 {
-		update["addressProof"] = req.AddressProofs
-	}
+        if len(documents) > 0 {
 
-	if req.CancelCheque != nil {
-		update["cancelCheque"] = req.CancelCheque
-	}
+            var existingDocs []domain.KYCDocument
+            if existingKYC != nil {
+                existingDocs = existingKYC.Documents
+            }
 
-	return s.providers.Update(ctx, id, update)
+            mergedDocs := mergeKYCDocuments(existingDocs, documents)
+            kycUpdate["documents"] = mergedDocs
+        }
+
+        if req.AccountHolderName != "" {
+            kycUpdate["bank"] = domain.ProviderBankDetails{
+                AccountHolderName: req.AccountHolderName,
+                AccountNumber:     req.AccountNumber,
+                IFSC:              req.IfscCode,
+                BranchName:        req.BranchName,
+                UPIID:             req.Upi,
+                GSTNumber:         req.GSTNumber,
+            }
+        }
+
+        if err := s.kycRepo.UpdateByProviderID(ctx, provider.ID, kycUpdate); err != nil {
+            return nil, err
+        }
+    }
+
+    return updatedProvider, nil
+}
+
+func mergeKYCDocuments(existing, incoming []domain.KYCDocument) []domain.KYCDocument {
+    docMap := make(map[domain.DocumentType]domain.KYCDocument)
+
+    for _, d := range existing {
+        docMap[d.Type] = d
+    }
+
+    for _, d := range incoming {
+        docMap[d.Type] = d
+    }
+
+    result := make([]domain.KYCDocument, 0, len(docMap))
+    for _, v := range docMap {
+        result = append(result, v)
+    }
+
+    return result
 }
 
 func (s *ProviderAdminService) GetZoneStats(ctx context.Context, adminZones map[string][]string, adminID primitive.ObjectID) (*dto.ProviderZoneStatsResponse, error) {
@@ -1119,18 +1116,9 @@ func (s *ProviderAdminService) GetActivationPersonProviders( ctx context.Context
 			vehicle = strings.Join(p.VehicleType, ", ")
 		}
 
-		providerIDStr := fmt.Sprintf("PRO%d", p.InternalID)
-		if p.InternalID == 0 {
-			if len(p.ID) >= 6 {
-				providerIDStr = fmt.Sprintf("PRO%s", p.ID[len(p.ID)-6:])
-			} else {
-				providerIDStr = fmt.Sprintf("PRO%s", p.ID)
-			}
-		}
-
 		formatted[i] =dto.ProviderAllResponse{
 			ID:            p.ID.Hex(),
-			ProviderID:    providerIDStr,
+			ProviderID:    p.ProviderCode,
 			Name:          defaultStr(p.Name, "N/A"),
 			Mobile:        p.Phone,
 			Email:         defaultStr(p.Email, "N/A"),
@@ -1141,11 +1129,7 @@ func (s *ProviderAdminService) GetActivationPersonProviders( ctx context.Context
 			DOJ:           formatDate(p.CreatedAt),
 			ProfileURL:    p.ProfileURL,
 			IsServiceOn:   p.IsServiceOn,
-			IdentityProof: p.IdentityProof,
-			AddressProof:  p.AddressProof,
-			CancelCheque:  p.CancelCheque,
 			IsActive:      string(p.IsActive),
-			Status:        p.Status,
 			TotalJobs:     totalJobs,
 			CompletedJobs: completedJobs,
 		}
@@ -1243,12 +1227,12 @@ func (s *ProviderAdminService) GetProviderEarnings(
 		service, err := s.services.FindByObjectIDs(ctx, settlement.ServiceID)
 
 		if err == nil && service != nil {
-			bookingID = "BK" + strconv.FormatInt(service.InternalID, 10)
+			bookingID = service.ServiceNumber
 			serviceTime := service.CreatedAt.Add(5*time.Hour + 30*time.Minute)
 			bookingDate = serviceTime.Format("2006-01-02 15:04:05")
 			paymentStatus = string(settlement.SettlementStatus)
            
-			serviceReq, err := s.serviceRequestRepo.FindByID(ctx, service.ServiceRequestID.Hex())
+			serviceReq, err := s.serviceRequestRepo.FindByID(ctx, service.ID.Hex())
 			if err == nil && serviceReq != nil && len(serviceReq.Problems) > 0 {
 				serviceType = serviceReq.Problems[0] 
 			}

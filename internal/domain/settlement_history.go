@@ -19,6 +19,8 @@ type SettlementRecord struct {
 	GSTPercent            float64             `bson:"gstPercent" json:"gst_percent"`
 	GSTAmount             float64             `bson:"gstAmount" json:"gst_amount"`
 	NetAmount             float64             `bson:"netAmount" json:"net_amount"`
+	TDSPercent            float64             `bson:"tdsPercent" json:"tds_percent"`
+    TDSAmount             float64             `bson:"tdsAmount" json:"tds_amount"`
 	DeductionAmount       float64             `bson:"deductionAmount" json:"deduction_amount"`
 	HasDeduction          bool                `bson:"hasDeduction" json:"has_deduction"`
 	DeductionSettlementID *primitive.ObjectID `bson:"deductionSettlementId,omitempty" json:"deduction_settlement_id,omitempty"`

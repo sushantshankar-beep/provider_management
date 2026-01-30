@@ -3,13 +3,17 @@ package handler
 import (
 	"fmt"
 	"io"
+	"log"
+
 	"net/http"
 	"strconv"
-	"github.com/gin-gonic/gin"
-	"provider_management/internal/dto"
+
 	"provider_management/internal/domain"
-	"provider_management/internal/service"
+	"provider_management/internal/dto"
 	"provider_management/internal/middleware"
+	"provider_management/internal/service"
+
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -148,13 +152,10 @@ func (h *ProviderAdminHandler) UpdateKYC(c *gin.Context) {
 }
 
 func (h *ProviderAdminHandler) VerifyDocument(c *gin.Context) {
-
-	id := c.Param("id")
-
+	kycID := c.Param("id") 
 	var body struct {
-		DocumentType string `json:"documentType"`
-		DocumentID   string `json:"documentId"`
-		Action       string `json:"action"`
+		DocumentID string `json:"documentId"` 
+		Action     string `json:"action"`   
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -165,7 +166,7 @@ func (h *ProviderAdminHandler) VerifyDocument(c *gin.Context) {
 		return
 	}
 
-	res, err := h.svc.VerifyDocument( c.Request.Context(), id, body.DocumentType, body.DocumentID, body.Action)
+	res, err := h.svc.VerifyDocument(c.Request.Context(), kycID, body.DocumentID, body.Action)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -406,38 +407,49 @@ func (h *ProviderAdminHandler) CreateProvider(c *gin.Context) {
 		req.ProfileURL = urls[0]
 	}
 
-	if identityProofURLs, exists := middleware.GetUploadedURLs(c, "identityProof"); exists {
-		req.IdentityProofs = make([]domain.Proof, len(identityProofURLs))
-		for i, url := range identityProofURLs {
-			req.IdentityProofs[i] = domain.Proof{
+	var documents []domain.KYCDocument
+
+	if urls, exists := middleware.GetUploadedURLs(c, "aadhaarFront"); exists {
+		for _, url := range urls {
+			documents = append(documents, domain.KYCDocument{
 				ID:       primitive.NewObjectID(),
-				File:     url,
-				Type:     "",
-				Verified: domain.VerificationPending,
-			}
+				Type:     domain.DOC_AADHAAR_FRONT,
+				URL:      url,
+				Verified: domain.VERIFICATION_PENDING,
+			})
 		}
 	}
-
-	if addressProofURLs, exists := middleware.GetUploadedURLs(c, "addressProof"); exists {
-		req.AddressProofs = make([]domain.Proof, len(addressProofURLs))
-		for i, url := range addressProofURLs {
-			req.AddressProofs[i] = domain.Proof{
+	
+	if urls, exists := middleware.GetUploadedURLs(c, "aadhaarBack"); exists {
+		for _, url := range urls {
+			documents = append(documents, domain.KYCDocument{
 				ID:       primitive.NewObjectID(),
-				File:     url,
-				Type:     "",
-				Verified: domain.VerificationPending,
-			}
+				Type:     domain.DOC_AADHAAR_BACK,
+				URL:      url,
+				Verified: domain.VERIFICATION_PENDING,
+			})
 		}
 	}
-
-	if urls, exists := middleware.GetUploadedURLs(c, "cancelCheque"); exists && len(urls) > 0 {
-		req.CancelCheque = &domain.CancelCheque{
-			File:     urls[0],
-			Verified: domain.VerificationPending,
+	
+	if urls, exists := middleware.GetUploadedURLs(c, "pan"); exists {
+		for _, url := range urls {
+			documents = append(documents, domain.KYCDocument{
+				ID:       primitive.NewObjectID(),
+				Type:     domain.DOC_PAN,
+				URL:      url,
+				Verified: domain.VERIFICATION_PENDING,
+			})
 		}
-	}
+	}	
 
-	if _, err := h.svc.CreateProvider( c.Request.Context(), req, admin.ID, admin.Role ); err != nil {
+	if _, err := h.svc.CreateProvider(c.Request.Context(), req, documents, admin.ID, admin.Role); err != nil {
+		if err.Error() == "phone number already exists" {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":   true,
+				"message": "Provider with this phone number already exists",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": "Failed to create provider: " + err.Error(),
@@ -451,11 +463,11 @@ func (h *ProviderAdminHandler) CreateProvider(c *gin.Context) {
 	})
 }
 
+
 func (h *ProviderAdminHandler) UpdateProvider(c *gin.Context) {
 	id := c.Param("id")
 
 	var req dto.UpdateProviderRequest
-
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
@@ -466,71 +478,64 @@ func (h *ProviderAdminHandler) UpdateProvider(c *gin.Context) {
 
 	admin := middleware.GetAdminFromContext(c)
 	if admin == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": true,
-		})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": true})
 		return
 	}
 
 	if urls, exists := middleware.GetUploadedURLs(c, "profileUrl"); exists && len(urls) > 0 {
 		req.ProfileURL = urls[0]
 	}
+	log.Println("kcdjnsckdsj",req.ProfileURL)
 
-	identityTypes := c.PostFormArray("identityProofTypes[]")
-	addressTypes := c.PostFormArray("addressProofTypes[]")
+	var documents []domain.KYCDocument
 
-	if urls, exists := middleware.GetUploadedURLs(c, "identityProof"); exists && len(urls) > 0 {
-		req.IdentityProofs = make([]domain.Proof, len(urls))
-		for i, url := range urls {
-			pt := ""
-			if i < len(identityTypes) {
-				pt = identityTypes[i]
-			}
-			req.IdentityProofs[i] = domain.Proof{
+	if urls, exists := middleware.GetUploadedURLs(c, "aadhaarFront"); exists {
+		for _, url := range urls {
+			documents = append(documents, domain.KYCDocument{
 				ID:       primitive.NewObjectID(),
-				File:     url,
-				Type:     pt,
-				Verified: domain.VerificationPending,
-			}
+				Type:     domain.DOC_AADHAAR_FRONT,
+				URL:      url,
+				Verified: domain.VERIFICATION_PENDING,
+			})
 		}
 	}
 
-	if urls, exists := middleware.GetUploadedURLs(c, "addressProof"); exists && len(urls) > 0 {
-		req.AddressProofs = make([]domain.Proof, len(urls))
-		for i, url := range urls {
-			pt := ""
-			if i < len(addressTypes) {
-				pt = addressTypes[i]
-			}
-			req.AddressProofs[i] = domain.Proof{
+	if urls, exists := middleware.GetUploadedURLs(c, "aadhaarBack"); exists {
+		for _, url := range urls {
+			documents = append(documents, domain.KYCDocument{
 				ID:       primitive.NewObjectID(),
-				File:     url,
-				Type:     pt,
-				Verified: domain.VerificationPending,
-			}
+				Type:     domain.DOC_AADHAAR_BACK,
+				URL:      url,
+				Verified: domain.VERIFICATION_PENDING,
+			})
 		}
 	}
 
-	if urls, exists := middleware.GetUploadedURLs(c, "cancelCheque"); exists && len(urls) > 0 {
-		req.CancelCheque = &domain.CancelCheque{
-			File:     urls[0],
-			Verified: domain.VerificationPending,
+	if urls, exists := middleware.GetUploadedURLs(c, "pan"); exists {
+		for _, url := range urls {
+			documents = append(documents, domain.KYCDocument{
+				ID:       primitive.NewObjectID(),
+				Type:     domain.DOC_PAN,
+				URL:      url,
+				Verified: domain.VERIFICATION_PENDING,
+			})
 		}
 	}
 
-	if _, err := h.svc.UpdateProvider( c.Request.Context(), id, req, admin.ID ); err != nil {
+	if _, err := h.svc.UpdateProvider(c.Request.Context(),id, req, documents,admin.ID,); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": err.Error(),
 		})
 		return
 	}
-
+	
 	c.JSON(http.StatusOK, gin.H{
 		"error":   false,
 		"message": "Provider updated successfully",
 	})
 }
+
 
 func (h *ProviderAdminHandler) GetZoneStats(c *gin.Context) {
 	adminZones := middleware.GetAdminZones(c)

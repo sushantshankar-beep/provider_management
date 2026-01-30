@@ -3,12 +3,6 @@ package domain
 import "time"
 import "go.mongodb.org/mongo-driver/bson/primitive"
 
-type OTPInfo struct {
-	Code       string     `bson:"code,omitempty" json:"code,omitempty"`
-	Verified   bool       `bson:"verified" json:"verified"`
-	VerifiedAt *time.Time `bson:"verifiedAt,omitempty" json:"verified_at,omitempty"`
-}
-
 type ProviderLocation struct {
 	Lat       float64    `bson:"lat" json:"lat"`
 	Lon       float64    `bson:"lon" json:"lon"`
@@ -31,22 +25,26 @@ const (
 
 type AcceptedService struct {
 	ID                      primitive.ObjectID  `bson:"_id,omitempty"`
-	InternalID              int64               `bson:"id" json:"id"`
-	ServiceRequestID        primitive.ObjectID  `bson:"serviceRequest" json:"-"`
+	// InternalID              int64               `bson:"id" json:"id"`
+	ServiceRequest       primitive.ObjectID   `bson:"serviceRequest" json:"serviceRequest"`
+	ServiceNumber     	 string                `bson:"serviceNumber" json:"serviceNumber"`
+	NumericID            int64                `bson:"id" json:"numericId"`
+	// ServiceRequestID        primitive.ObjectID  `bson:"serviceRequest" json:"-"`
+	// ServiceNumber     	 string                `bson:"serviceNumber" json:"serviceNumber"`
+	User                 primitive.ObjectID   `bson:"user" json:"user"`
+	NotToSendProviders   []primitive.ObjectID `bson:"notToSendProviders,omitempty" json:"notToSendProviders,omitempty"`
+	Provider             primitive.ObjectID   `bson:"provider" json:"provider"`
+	AcceptedBid          primitive.ObjectID   `bson:"acceptedBid" json:"acceptedBid"`
+	// OTP                  string            `bson:"otp" json:"otp"`
 	ServiceRequestNo        int64               `bson:"serviceRequestId,omitempty" json:"service_request_no,omitempty"`
-	UserID                  string              `bson:"user" json:"user_id"`
-	ProviderID              primitive.ObjectID  `bson:"provider" json:"provider_id"`
-	AcceptedBidID           string              `bson:"acceptedBid" json:"accepted_bid_id"`
-	NotToSendProviders      []string            `bson:"notToSendProviders,omitempty" json:"not_to_send_providers,omitempty"`
-	OTP                     OTPInfo             `bson:"otp,omitempty" json:"otp,omitempty"`
-	Status                  string              `bson:"status" json:"status"`
-	ReachedAt               *time.Time          `bson:"reachedAt,omitempty" json:"reached_at,omitempty"`
-	StartedAt               *time.Time          `bson:"startedAt,omitempty" json:"started_at,omitempty"`
-	CompletedAt             *time.Time          `bson:"completedAt,omitempty" json:"completed_at,omitempty"`
-	CancelledAt             *time.Time          `bson:"cancelledAt,omitempty" json:"cancelled_at,omitempty"`
-	ExpiresAt               *time.Time          `bson:"expiresAt,omitempty" json:"expires_at,omitempty"`
-	OTPVerifiedAt           *time.Time          `bson:"otpVerifiedAt,omitempty" json:"otp_verified_at,omitempty"`
-	JobStartedAt            *time.Time          `bson:"jobStartedAt,omitempty" json:"job_started_at,omitempty"`
+	// UserID                  string              `bson:"user" json:"user_id"`
+	// ProviderID              primitive.ObjectID  `bson:"provider" json:"provider_id"`
+	// AcceptedBidID           string              `bson:"acceptedBid" json:"accepted_bid_id"`
+	// NotToSendProviders      []string            `bson:"notToSendProviders,omitempty" json:"not_to_send_providers,omitempty"`
+	// OTP                     OTPInfo             `bson:"otp,omitempty" json:"otp,omitempty"`
+	Status                ServiceStatus      `bson:"status" json:"status"`
+
+	Timestamps *ServiceTimestamps `bson:"timestamps,omitempty"`
 	CancelledBy             string              `bson:"cancelledBy,omitempty" json:"cancelled_by,omitempty"`
 	BasePrice               float64             `bson:"basePrice" json:"base_price"`
 	FinalPrice              float64             `bson:"finalPrice" json:"final_price"`
@@ -76,6 +74,12 @@ type AcceptedService struct {
 	ComplaintResolvedAt     *time.Time          `bson:"complaintResolvedAt,omitempty"`
 	CreatedAt               time.Time           `bson:"createdAt" json:"created_at"`
 	UpdatedAt               time.Time           `bson:"updatedAt" json:"updated_at"`
+	FuelType   string    `bson:"fuelType" json:"fuelType"`
+	VehicleType string    `bson:"vehicleType" json:"vehicleType"`
+	VehicleNumber string   `bson:"vehicleNumber" json:"vehicleNumber"`
+	Brand       string    	`bson:"brand" json:"brand"`
+	ModelYear   int        	`bson:"modelYear" json:"modelYear"`
+	Model      string      `bson:"model" json:"model"`
 }
 
 type BookingNote struct {
@@ -84,3 +88,33 @@ type BookingNote struct {
 	AddedBy   string    `bson:"addedBy" json:"added_by"`
 	CreatedAt time.Time `bson:"createdAt" json:"created_at"`
 }
+
+
+type ServiceTimestamps struct {
+    CreatedAt    *time.Time `bson:"createdAt,omitempty" json:"created_at,omitempty"`
+    StartedAt    *time.Time `bson:"startedAt,omitempty" json:"started_at,omitempty"`
+    ReachedAt    *time.Time `bson:"reachedAt,omitempty" json:"reached_at,omitempty"`
+    InProgressAt *time.Time `bson:"inProgressAt,omitempty" json:"in_progress,omitempty"`
+    CompletedAt  *time.Time `bson:"CompletedAt,omitempty" json:"completed,omitempty"`
+    CancelledAt  *time.Time `bson:"cancelledAt,omitempty" json:"cancelled,omitempty"`
+    OtpVerified  *time.Time `bson:"OtpVerified,omitempty" json:"otp_verified,omitempty"`
+}
+
+type ServiceStatus string
+
+const (
+    StatusCreated   ServiceStatus = "created"
+    StatusAssigned  ServiceStatus = "assigned"
+    StatusStarted   ServiceStatus = "started"
+    StatusCompleted ServiceStatus = "completed"
+    StatusCancelled ServiceStatus = "cancelled"
+	StatusSearching        ServiceStatus = "searching"
+	StatusProviderAssigned ServiceStatus = "provider_assigned"
+	StatusNotStarted      ServiceStatus = "not_started"
+	StatusReachedLocation ServiceStatus = "reached_location"
+	StatusOTPVerified     ServiceStatus = "otp_verified"
+
+	StatusInProgress ServiceStatus = "in_progress"
+	StatusConfirmed ServiceStatus = "confirmed"
+
+)

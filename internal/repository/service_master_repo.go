@@ -113,3 +113,27 @@ func (r *ServiceMasterRepo) UpdateStatus(ctx context.Context, id string, status 
 	)
 	return err
 }
+
+func (r *ServiceMasterRepo) FindByVehicle(
+	ctx context.Context,
+	vehicle string,
+) ([]domain.ProviderService, error) {
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	cur, err := r.col.Find(ctx, bson.M{
+		"vehicleType": vehicle,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var services []domain.ProviderService
+	if err := cur.All(ctx, &services); err != nil {
+		return nil, err
+	}
+
+	return services, nil
+}

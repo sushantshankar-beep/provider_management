@@ -1,17 +1,18 @@
 package repository
 
 import (
-	"fmt"
-	"time"
 	"context"
-	"strings"
-	"strconv"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"fmt"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"strconv"
+	"strings"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type PaymentPayoutRepo struct {
@@ -57,9 +58,14 @@ func (r *PaymentPayoutRepo) GetProviderPayouts(ctx context.Context, filters dto.
 
 	return payouts, total, nil
 }
-
 func (r *PaymentPayoutRepo) buildFilter(filters dto.PayoutFilters) bson.M {
 	filter := bson.M{}
+
+	// ← ADD THIS: Handle PayoutIDInt filter (highest priority)
+	if filters.PayoutIDInt != 0 {
+		filter["payoutId"] = filters.PayoutIDInt
+		return filter  // Return early - when searching by specific payout ID, ignore other filters
+	}
 
 	if filters.ProviderID != "" {
 		if objID, err := primitive.ObjectIDFromHex(filters.ProviderID); err == nil {
@@ -115,7 +121,6 @@ func (r *PaymentPayoutRepo) buildFilter(filters dto.PayoutFilters) bson.M {
 
 	return filter
 }
-
 func (r *PaymentPayoutRepo) buildSort(sort dto.PayoutSort) (string, int) {
 	order := -1
 	if sort.SortOrder == "asc" {
@@ -375,4 +380,71 @@ func (r *PaymentPayoutRepo) UpdateFields(ctx context.Context, payoutID string, u
 	)
 
 	return err
+}
+
+type PayoutStats struct {
+	TotalPayAmount   float64
+	NetPayable       float64
+	CommissionAmount float64
+	GSTAmount        float64
+	TDSAmount        float64
+	ServiceAmount    float64 // For calculating Partner GST
+}
+
+func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.M) (*PayoutStats, error) {
+	pipeline := []bson.M{
+		{
+			"$match": filter,
+		},
+		{
+			"$group": bson.M{
+				"_id": nil,
+				"totalPayAmount":   bson.M{"$sum": "$totalPayAmount"},
+				"netPayable":       bson.M{"$sum": "$netPayable"},
+				"commissionAmount": bson.M{"$sum": "$commissionAmount"},
+				"gstAmount":        bson.M{"$sum": "$gstAmount"},
+				"tdsAmount":        bson.M{"$sum": "$tdsAmount"},
+				"serviceAmount":    bson.M{"$sum": "$baseAmount"}, // Assuming baseAmount is service amount
+			},
+		},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate payout stats: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		TotalPayAmount   float64 `bson:"totalPayAmount"`
+		NetPayable       float64 `bson:"netPayable"`
+		CommissionAmount float64 `bson:"commissionAmount"`
+		GSTAmount        float64 `bson:"gstAmount"`
+		TDSAmount        float64 `bson:"tdsAmount"`
+		ServiceAmount    float64 `bson:"serviceAmount"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode aggregation result: %v", err)
+	}
+
+	if len(result) == 0 {
+		return &PayoutStats{
+			TotalPayAmount:   0,
+			NetPayable:       0,
+			CommissionAmount: 0,
+			GSTAmount:        0,
+			TDSAmount:        0,
+			ServiceAmount:    0,
+		}, nil
+	}
+
+	return &PayoutStats{
+		TotalPayAmount:   result[0].TotalPayAmount,
+		NetPayable:       result[0].NetPayable,
+		CommissionAmount: result[0].CommissionAmount,
+		GSTAmount:        result[0].GSTAmount,
+		TDSAmount:        result[0].TDSAmount,
+		ServiceAmount:    result[0].ServiceAmount,
+	}, nil
 }

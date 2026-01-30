@@ -29,6 +29,8 @@ type SettlementService struct {
 	payoutRepo            *repository.PaymentPayoutRepo
 	providerRepo          *repository.ProviderRepo
 	settlementHistoryRepo *repository.SettlementHistoryRepository
+	kycRepo *repository.ProviderKYCRepository
+	transactionRepo *repository.TransactionRepo
 }
 
 type GetSettlementsRequest struct {
@@ -64,7 +66,7 @@ type ProviderSettlementResponse struct {
 	PaymentMode    string                  `json:"paymentMode"`
 	PaymentMethod  string                  `json:"paymentMethod"`
 	Justification  string                  `json:"justification"`
-	Status         domain.SettlementStatus `json:"status"`
+	Status         domain.SettlementStatus `json:"stransactionRetatus"`
 	PayoutIdNumber string                  `json:"payoutId"`
 	SettledAt      *time.Time              `json:"settledAt"`
 	CreatedAt      time.Time               `json:"createdAt"`
@@ -94,6 +96,8 @@ func NewSettlementService(
 	payoutRepo *repository.PaymentPayoutRepo,
 	providerRepo *repository.ProviderRepo,
 	settlementHistoryRepo *repository.SettlementHistoryRepository,
+	kycRepo *repository.ProviderKYCRepository,
+	transactionRepo * repository.TransactionRepo,
 ) *SettlementService {
 	return &SettlementService{
 		serviceRepo:           serviceRepo,
@@ -101,6 +105,8 @@ func NewSettlementService(
 		payoutRepo:            payoutRepo,
 		providerRepo:          providerRepo,
 		settlementHistoryRepo: settlementHistoryRepo,
+		kycRepo: kycRepo,
+		transactionRepo: transactionRepo,
 	}
 }
 
@@ -108,6 +114,7 @@ func parsePayoutID(payoutIDStr string) (int64, error) {
 	numStr := strings.TrimPrefix(payoutIDStr, "PAY")
 	return strconv.ParseInt(numStr, 10, 64)
 }
+
 
 func (s *SettlementService) CreateSettlement(
 	ctx context.Context,
@@ -129,8 +136,17 @@ func (s *SettlementService) CreateSettlement(
 		return nil, fmt.Errorf("provider not found")
 	}
 
-	if provider.BankDetails == nil {
-		return nil, fmt.Errorf("provider bank details missing")
+	kyc, _ := s.kycRepo.FindByProviderID(ctx, payout.ProviderID)
+	hasGSTNumber := false
+	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
+		hasGSTNumber = true
+	}
+
+	tdsPercent := 0.0
+	gstPercent := payout.GSTPercent
+	if hasGSTNumber {
+		tdsPercent = 10.0
+		gstPercent = 0.0
 	}
 
 	serviceObjIDs := make([]primitive.ObjectID, 0, len(req.ServiceIDs))
@@ -179,6 +195,20 @@ func (s *SettlementService) CreateSettlement(
 		}
 	}
 
+	transactions, err := s.transactionRepo.FindByServiceIDs(ctx, serviceObjIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch transactions")
+	}
+
+	if len(transactions) == 0 {
+		return nil, fmt.Errorf("no transactions found for services")
+	}
+
+	transactionMap := make(map[string]domain.Transaction)
+	for _, txn := range transactions {
+		transactionMap[txn.ServiceID] = txn
+	}
+
 	var settlementAmount float64
 
 	for _, service := range services {
@@ -196,18 +226,22 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		baseAmount := service.FinalPrice
+		transaction, exists := transactionMap[serviceKey]
+		if !exists {
+			return nil, fmt.Errorf("transaction not found for service %s", serviceKey)
+		}
+
+		baseAmount := transaction.Amount
 
 		if payout.ServicePartialAmounts != nil {
 			if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt > 0 {
 				baseAmount = partialAmt
 				log.Printf("Service %s using partial amount: %.2f (original: %.2f)",
-					serviceKey, partialAmt, service.FinalPrice)
+					serviceKey, partialAmt, transaction.Amount)
 			}
 		}
 
 		if service.HasComplaintAdjustment {
-
 			settlementAmount -= service.PendingDeductionAmount
 			log.Printf("Service %s complaint adjustment: deducting %.2f",
 				serviceKey, service.PendingDeductionAmount)
@@ -216,11 +250,12 @@ func (s *SettlementService) CreateSettlement(
 
 		commission := baseAmount * (payout.CommissionPercent / 100)
 		afterCommission := baseAmount - commission
-		gst := afterCommission * (payout.GSTPercent / 100)
-		net := afterCommission - gst
+		tds := afterCommission * (tdsPercent / 100)
+		gst := afterCommission * (gstPercent / 100)
+		net := afterCommission - tds - gst
 
-		log.Printf("Service %s: Base=%.2f Commission=%.2f GST=%.2f Net=%.2f",
-			serviceKey, baseAmount, commission, gst, net)
+		log.Printf("Service %s: Base=%.2f Commission=%.2f TDS=%.2f GST=%.2f Net=%.2f",
+			serviceKey, baseAmount, commission, tds, gst, net)
 
 		settlementAmount += net
 	}
@@ -244,12 +279,13 @@ func (s *SettlementService) CreateSettlement(
 			}
 		}
 
+		transaction := transactionMap[serviceKey]
 		var netAmount float64
 
 		if service.HasComplaintAdjustment {
 			netAmount = -service.PendingDeductionAmount
 		} else {
-			baseAmount := service.FinalPrice
+			baseAmount := transaction.Amount
 			if payout.ServicePartialAmounts != nil {
 				if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt > 0 {
 					baseAmount = partialAmt
@@ -258,8 +294,9 @@ func (s *SettlementService) CreateSettlement(
 
 			commission := baseAmount * (payout.CommissionPercent / 100)
 			afterCommission := baseAmount - commission
-			gst := afterCommission * (payout.GSTPercent / 100)
-			netAmount = afterCommission - gst
+			tds := afterCommission * (tdsPercent / 100)
+			gst := afterCommission * (gstPercent / 100)
+			netAmount = afterCommission - tds - gst
 		}
 
 		settlementType := "regular"
@@ -272,20 +309,21 @@ func (s *SettlementService) CreateSettlement(
 		settledBooking := domain.SettledBooking{
 			ServiceID:        service.ID,
 			ServiceRequestNo: service.ServiceRequestNo,
-			OriginalAmount:   utils.RoundTo2(service.FinalPrice),
+			OriginalAmount:   utils.RoundTo2(transaction.Amount),
 			SettledAmount:    utils.RoundTo2(netAmount),
 			SettlementType:   settlementType,
 		}
 
 		settledBookings = append(settledBookings, settledBooking)
 	}
+
 	settlement := &domain.ProviderSettlement{
 		SettlementID:    time.Now().UnixMilli(),
 		PayoutID:        payout.ID,
 		ProviderID:      provider.ID,
 		ProviderName:    provider.Name,
-		AccountNo:       provider.BankDetails.AccountNumber,
-		IfscCode:        provider.BankDetails.IfscCode,
+		AccountNo:       kyc.Bank.AccountHolderName,
+		IfscCode:        kyc.Bank.IFSC,
 		TotalAmount:     utils.RoundTo2(settlementAmount),
 		PaymentMode:     req.PaymentMode,
 		PaymentMethod:   req.PaymentMethod,
@@ -313,6 +351,8 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
+		transaction := transactionMap[serviceKey]
+
 		existingRecord, _ := s.settlementHistoryRepo.FindByServiceID(ctx, service.ID)
 
 		if service.HasComplaintAdjustment && existingRecord != nil {
@@ -338,7 +378,7 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		originalAmount := service.FinalPrice
+		originalAmount := transaction.Amount
 
 		var partialAmount float64
 		if payout.ServicePartialAmounts != nil {
@@ -354,8 +394,9 @@ func (s *SettlementService) CreateSettlement(
 
 		commission := calculationAmount * (payout.CommissionPercent / 100)
 		afterCommission := calculationAmount - commission
-		gst := afterCommission * (payout.GSTPercent / 100)
-		netAmount := afterCommission - gst
+		tds := afterCommission * (tdsPercent / 100)
+		gst := afterCommission * (gstPercent / 100)
+		netAmount := afterCommission - tds - gst
 
 		settlementType := "regular"
 		if payout.PayoutType == domain.PayoutTypeComplaint {
@@ -372,7 +413,9 @@ func (s *SettlementService) CreateSettlement(
 			SettlementAmount:      utils.RoundTo2(calculationAmount),
 			CommissionPercent:     payout.CommissionPercent,
 			CommissionAmount:      utils.RoundTo2(commission),
-			GSTPercent:            payout.GSTPercent,
+			TDSPercent:            tdsPercent,
+			TDSAmount:             utils.RoundTo2(tds),
+			GSTPercent:            gstPercent,
 			GSTAmount:             utils.RoundTo2(gst),
 			NetAmount:             utils.RoundTo2(netAmount),
 			DeductionAmount:       0,
@@ -456,6 +499,7 @@ func (s *SettlementService) CreateSettlement(
 
 	return settlement, nil
 }
+
 
 func (s *SettlementService) GetSettlements(
 	ctx context.Context,
