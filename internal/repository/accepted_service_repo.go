@@ -3,14 +3,16 @@ package repository
 import (
 	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
+	"log"
 	"math"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"strings"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AcceptedServiceRepo struct {
@@ -175,7 +177,7 @@ func (r *AcceptedServiceRepo) FindByProviderID(ctx context.Context, providerID s
 	for _, result := range results {
 		service := domain.Service{
 			ID:               result.ID.Hex(),
-			ServiceRequestID: result.ServiceRequestID.Hex(),
+			ServiceRequestID: result.ServiceNumber,
 			Status:           result.Status,
 			ServiceType:      result.ServiceType,
 		}
@@ -236,40 +238,18 @@ func (r *AcceptedServiceRepo) GetServiceStats(ctx context.Context, providerID st
 	return total, completed, err
 }
 
-func (r *AcceptedServiceRepo) FindWithServiceRequest(ctx context.Context, id string) (*domain.AcceptedService, *domain.ServiceRequest, error) {
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var acceptedService domain.AcceptedService
-	err = r.col.FindOne(ctx, bson.M{"_id": objID}).Decode(&acceptedService)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var serviceRequest domain.ServiceRequest
-	srObjID, err := primitive.ObjectIDFromHex(acceptedService.ServiceRequestID.Hex())
-	if err != nil {
-		return &acceptedService, nil, nil
-	}
-
-	err = r.serviceRequestCol.FindOne(ctx, bson.M{"_id": srObjID}).Decode(&serviceRequest)
-	if err != nil {
-		return &acceptedService, nil, nil
-	}
-
-	return &acceptedService, &serviceRequest, nil
-}
-
-func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
-	ctx context.Context,
+func (r *AcceptedServiceRepo) FindCompletedPaidBetween( 
+	ctx context.Context, 
 	from, to time.Time,
 ) ([]domain.AcceptedService, error) {
 
 	filter := bson.M{
 		"status":        "completed",
 		"paymentStatus": "paid",
+		"timestamps.CompletedAt": bson.M{
+			"$gte": from,
+			"$lte": to,
+		},
 		"$or": []bson.M{
 			{"payoutCreated": bson.M{"$exists": false}},
 			{"payoutCreated": false},
@@ -288,12 +268,9 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 				},
 			},
 		},
-		"completedAt": bson.M{
-			"$gte": from,
-			"$lt":  to,
-		},
 	}
-
+	
+	log.Println("Fetching services between:", from, "and", to)
 	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -304,6 +281,7 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 		return nil, err
 	}
 
+	log.Println("Found services count:", len(services))
 	return services, nil
 }
 
@@ -382,10 +360,7 @@ func (r *AcceptedServiceRepo) FindCompletedPaidByProvider(ctx context.Context, p
 	return services, nil
 }
 
-func (r *AcceptedServiceRepo) FindUnsettledByProvider(
-	ctx context.Context,
-	providerID primitive.ObjectID,
-) ([]*domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindUnsettledByProvider( ctx context.Context, providerID primitive.ObjectID) ([]*domain.AcceptedService, error) {
 	filter := bson.M{
 		"provider":      providerID,
 		"status":        "completed",
@@ -409,10 +384,7 @@ func (r *AcceptedServiceRepo) FindUnsettledByProvider(
 	return services, nil
 }
 
-func (r *AcceptedServiceRepo) CountUnsettledByIDs(
-	ctx context.Context,
-	serviceIDs []primitive.ObjectID,
-) (int64, error) {
+func (r *AcceptedServiceRepo) CountUnsettledByIDs( ctx context.Context, serviceIDs []primitive.ObjectID) (int64, error) {
 
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
@@ -442,10 +414,7 @@ func (r *AcceptedServiceRepo) CountUnsettledByIDs(
 	return r.col.CountDocuments(ctx, filter)
 }
 
-func (r *AcceptedServiceRepo) CountSettledByIDs(
-	ctx context.Context,
-	serviceIDs []primitive.ObjectID,
-) (int64, error) {
+func (r *AcceptedServiceRepo) CountSettledByIDs( ctx context.Context, serviceIDs []primitive.ObjectID ) (int64, error) {
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
 		"settlementStatus": bson.M{
@@ -459,15 +428,11 @@ func (r *AcceptedServiceRepo) CountSettledByIDs(
 	return r.col.CountDocuments(ctx, filter)
 }
 
-func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(
-	ctx context.Context,
-	serviceID primitive.ObjectID,
-	settledAt *time.Time,
-) error {
+func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(ctx context.Context, serviceID primitive.ObjectID, settledAt *time.Time ) error {
 	filter := bson.M{"_id": serviceID}
 	update := bson.M{
 		"$set": bson.M{
-			"settlementStatus":        domain.SettleStatusPending, // Will be in new settlement
+			"settlementStatus":        domain.SettleStatusPending, 
 			"isSettledAfterComplaint": true,
 			"settledAfterComplaintAt": settledAt,
 			"updatedAt":               time.Now(),
@@ -477,10 +442,8 @@ func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(
 	_, err := r.col.UpdateOne(ctx, filter, update)
 	return err
 }
-func (r *AcceptedServiceRepo) MarkPayoutCreated(
-	ctx context.Context,
-	serviceIDs []primitive.ObjectID,
-) error {
+
+func (r *AcceptedServiceRepo) MarkPayoutCreated( ctx context.Context, serviceIDs []primitive.ObjectID ) error {
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
 	}
@@ -497,10 +460,7 @@ func (r *AcceptedServiceRepo) MarkPayoutCreated(
 	return err
 }
 
-func (r *AcceptedServiceRepo) FindByInternalID(
-	ctx context.Context,
-	internalID int64,
-) (*domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindByInternalID( ctx context.Context, internalID int64 ) (*domain.AcceptedService, error) {
 
 	var svc domain.AcceptedService
 	err := r.col.FindOne(ctx, bson.M{
@@ -701,10 +661,7 @@ func (r *AcceptedServiceRepo) UpdatePayoutCancellation(ctx context.Context, serv
 	return err
 }
 
-func (r *AcceptedServiceRepo) FindAll(
-	ctx context.Context,
-	filter bson.M,
-) ([]domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindAll( ctx context.Context, filter bson.M ) ([]domain.AcceptedService, error) {
 	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -719,11 +676,7 @@ func (r *AcceptedServiceRepo) FindAll(
 	return services, nil
 }
 
-func (r *AcceptedServiceRepo) MarkServicesAsSettled(
-	ctx context.Context,
-	serviceIDs []primitive.ObjectID,
-	settlementID primitive.ObjectID,
-	settledAt *time.Time,
+func (r *AcceptedServiceRepo) MarkServicesAsSettled( ctx context.Context, serviceIDs []primitive.ObjectID, settlementID primitive.ObjectID, settledAt *time.Time,
 ) error {
 	filter := bson.M{"_id": bson.M{"$in": serviceIDs}}
 	update := bson.M{

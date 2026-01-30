@@ -1,13 +1,13 @@
 package repository
 
 import (
-	"context"
-	"time"
 	"log"
+	"time"
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"provider_management/internal/domain"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type AMCTransactionRepo struct {
@@ -18,11 +18,7 @@ func NewAMCTransactionRepo(db *mongo.Database) *AMCTransactionRepo {
 	return &AMCTransactionRepo{col: db.Collection("transactions")}
 }
 
-func (r *AMCTransactionRepo) FindAMCTransactions(
-	ctx context.Context,
-	skip, limit int64,
-	status, method, createdAt string,
-) ([]domain.Transaction, int64, error) {
+func (r *AMCTransactionRepo) FindAMCTransactions(ctx context.Context, skip, limit int64, status, method, createdAt string) ([]domain.Transaction, int64, error) {
 
 	filter := bson.M{
 		"AMCPurchaseId": bson.M{"$exists": true, "$ne": nil},
@@ -40,12 +36,12 @@ func (r *AMCTransactionRepo) FindAMCTransactions(
 	if createdAt != "" {
 		var parsedDate time.Time
 		var err error
-		
+
 		parsedDate, err = time.Parse("2006-01-02", createdAt)
 		if err != nil {
 			parsedDate, err = time.Parse("02-01-2006", createdAt)
 		}
-		
+
 		if err == nil {
 			startOfDay := time.Date(
 				parsedDate.Year(),
@@ -54,7 +50,7 @@ func (r *AMCTransactionRepo) FindAMCTransactions(
 				0, 0, 0, 0,
 				time.UTC,
 			)
-			
+
 			endOfDay := time.Date(
 				parsedDate.Year(),
 				parsedDate.Month(),
@@ -62,12 +58,11 @@ func (r *AMCTransactionRepo) FindAMCTransactions(
 				23, 59, 59, 999999999,
 				time.UTC,
 			)
-			
+
 			filter["createdAt"] = bson.M{
 				"$gte": startOfDay,
 				"$lte": endOfDay,
 			}
-			log.Printf("Searching for date range: %s to %s\n", startOfDay.Format(time.RFC3339), endOfDay.Format(time.RFC3339))
 		} else {
 			log.Printf("Error parsing date %s: %v\n", createdAt, err)
 		}

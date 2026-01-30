@@ -5,11 +5,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+
 	"os/signal"
 	"provider_management/internal/config"
 	"provider_management/internal/db"
 	"provider_management/internal/handler"
-	"provider_management/internal/logger"
 	"provider_management/internal/middleware"
 	"provider_management/internal/repository"
 	"provider_management/internal/routes"
@@ -26,7 +26,6 @@ func main() {
 		log.Println("⚠️ .env not loaded:", err)
 	}
 	cfg := config.Load()
-	logg := logger.NewLogger()
 
 	awsSession, err := config.InitAWSSession()
 	if err != nil {
@@ -39,6 +38,8 @@ func main() {
 
 	client := db.ConnectMongo(cfg.MongoURI)
 	mongoDB := client.Database(cfg.MongoDBName)
+
+
 
 	complaintRepo := repository.NewComplaintRepository(mongoDB)
 	transactionRepo := repository.NewTransactionRepo(mongoDB)
@@ -72,15 +73,20 @@ func main() {
 	permissionRepo := repository. NewPermissionRepo(mongoDB)
 	settlementHistoryRepo := repository.NewSettlementHistoryRepository(mongoDB)
     serviceR := repository.NewServiceRequestRepo(mongoDB)
+	providerAgreementRepo := repository.NewAgreementRepo(mongoDB)
+	kycRepo := repository.NewProviderKYCRepo(mongoDB)
+	providerVehicleBrandRepo := repository.NewProviderVehicleBrandRepo(mongoDB)
+    invoiceRepo := repository.NewInvoiceRepo(mongoDB)
+	ratingRepo := repository.NewRatingRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
-	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo,adminRepo,zoneRepo,roleRepo, settlementRepo, settlementHistoryRepo, serviceR)
-	adminBookingService := service.NewAdminBookingService(adminBookingRepo)
-	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo)
-	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo,settlementHistoryRepo)
+	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo,adminRepo,zoneRepo,roleRepo, settlementRepo, settlementHistoryRepo, serviceR,kycRepo)
+	adminBookingService := service.NewAdminBookingService(adminBookingRepo,invoiceRepo,transactionRepo,settlementHistoryRepo,ratingRepo)
+	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo,kycRepo,transactionRepo)
+	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo,settlementHistoryRepo,kycRepo,transactionRepo)
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo)
-	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService)
+	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService,transactionRepo,kycRepo)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo, roleRepo)
 	activityLogService := service.NewActivityLogService(activityLogRepo)
@@ -93,11 +99,13 @@ func main() {
 	dashboardService := service.NewDashboardService(providerRepo, userRepo, acceptedServiceRepo, settlementRepo, complaintRepo,transactionRepo, amcPurchaseRepo, bidRepo)   
 	permissionService := service.NewPermissionService(permissionRepo)
     zoneMapService := service.NewZoneMapService(providerRepo,adminRepo,roleRepo,acceptedServiceRepo)
+	providerAgreementService := service.NewAgreementService(providerAgreementRepo)
+	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo,serviceMasterRepo)
 	 
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
 	vehicleBrandService := service.NewVehicleBrandService(vehicleBrandRepo)
-	transactionHandler := handler.NewTransactionHandler(transactionService, logg)
+	transactionHandler := handler.NewTransactionHandler(transactionService)
 	userAdminHandler := handler.NewUserAdminHandler(userAdminService)
 	providerAdminHandler := handler.NewProviderAdminHandler(providerAdminService)
 	adminBookingHandler := handler.NewAdminBookingHandler(adminBookingService)
@@ -117,7 +125,9 @@ func main() {
     dashboardHandler := handler.NewDashboardHandler(dashboardService)
 	permissionHandler := handler.NewPermissionHandler(permissionService)
     zoneMapHandler := handler.NewZoneMapHandler(zoneMapService)
-	vehicleHandler := handler.NewVehicleHandler(logg)
+	providerAgreementHandler := handler.NewAgreementHandler(providerAgreementService)
+    providerBrandServiceHandler := handler.NewProviderBrandServiceHandler(providerBrandService)
+
 	r := gin.Default() 
 	r.SetTrustedProxies(nil)
 	r.Use(middleware.CORSMiddleware(cfg.AllowedOrigins))
@@ -150,7 +160,8 @@ func main() {
 		zoneFilterMiddleware,
 		permissionHandler,
 		zoneMapHandler,
-		vehicleHandler,
+		providerBrandServiceHandler,
+		providerAgreementHandler,
 	)
 
 	srv := &http.Server{

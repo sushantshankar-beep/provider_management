@@ -18,7 +18,6 @@ const (
 	PayoutStatusPending          PaymentPayoutStatus = "pending"
 	PayoutStatusPartiallySettled PaymentPayoutStatus = "partially settled"
 	PayoutStatusSettled          PaymentPayoutStatus = "settled"
-	PayoutStatusComplaint        PaymentPayoutStatus = "complaint raised"
 )
 
 type PaymentPayout struct {
@@ -27,9 +26,12 @@ type PaymentPayout struct {
 	ProviderID            primitive.ObjectID    `bson:"providerId" json:"provider_id"`
 	ServiceIDs            []primitive.ObjectID  `bson:"serviceIds" json:"service_ids"`
 	ComplaintID           *primitive.ObjectID   `bson:"complaintId,omitempty" json:"complaint_id,omitempty"`
-	ComplaintInternalID   *int64                `bson:"complaintInternalId,omitempty" json:"complaint_internal_id,omitempty"`
+	ComplaintInternalID   string                `bson:"complaintInternalId,omitempty" json:"complaint_internal_id,omitempty"`
 	ServicePartialAmounts map[string]float64    `bson:"servicePartialAmounts,omitempty"`
+	TotalPayAmount        float64               `bson:"totalPayAmount" json:"total_pay_amount"`
 	BaseAmount            float64               `bson:"baseAmount" json:"base_amount"`
+	TDSPercent     float64               `bson:"tdsPercent" json:"tds_percent"`
+	TDSAmount             float64               `bson:"tdsAmount" json:"tds_amount"`
 	PartialAmount         float64               `bson:"partialAmount" json:"partial_amount"`
 	CommissionPercent     float64               `bson:"commissionPercent" json:"commission_percent"`
 	CommissionAmount      float64               `bson:"commissionAmount" json:"commission_amount"`

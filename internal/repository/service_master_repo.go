@@ -1,14 +1,13 @@
 package repository
 
 import (
-	"context"
-	"provider_management/internal/domain"
 	"time"
-
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type ServiceMasterRepo struct {
@@ -26,13 +25,7 @@ func (r *ServiceMasterRepo) Create(ctx context.Context, service *domain.ServiceM
 	return err
 }
 
-func (r *ServiceMasterRepo) GetServices(
-	ctx context.Context,
-	filter bson.M,
-	skip, limit int64,
-	sortField string,
-	sortOrder int,
-) ([]domain.ServiceMaster, int64, error) {
+func (r *ServiceMasterRepo) GetServices( ctx context.Context, filter bson.M, skip, limit int64, sortField string, sortOrder int ) ([]domain.ServiceMaster, int64, error) {
 	if sortField == "" {
 		sortField = "updatedAt"
 	}
@@ -121,14 +114,26 @@ func (r *ServiceMasterRepo) UpdateStatus(ctx context.Context, id string, status 
 	return err
 }
 
-type CategoryRepo struct {
-	col *mongo.Collection
-}
+func (r *ServiceMasterRepo) FindByVehicle(
+	ctx context.Context,
+	vehicle string,
+) ([]domain.ProviderService, error) {
 
-func NewCategoryRepo(db *mongo.Database) *CategoryRepo {
-	return &CategoryRepo{col: db.Collection("categories")}
-}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
-func (r *CategoryRepo) CountActive(ctx context.Context) (int64, error) {
-	return r.col.CountDocuments(ctx, bson.M{"status": "active"})
+	cur, err := r.col.Find(ctx, bson.M{
+		"vehicleType": vehicle,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	var services []domain.ProviderService
+	if err := cur.All(ctx, &services); err != nil {
+		return nil, err
+	}
+
+	return services, nil
 }

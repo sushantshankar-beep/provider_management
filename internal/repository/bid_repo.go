@@ -2,12 +2,10 @@ package repository
 
 import (
 	"context"
-	"log"
-
 	"go.mongodb.org/mongo-driver/bson"
+	"provider_management/internal/dto"
 	"go.mongodb.org/mongo-driver/mongo"
 	"provider_management/internal/domain"
-	"provider_management/internal/dto"
 )
 
 type BidRepo struct {
@@ -61,7 +59,6 @@ func (r *BidRepo) GetBiddingStats(ctx context.Context) (dto.BiddingStats, error)
 
 	cursor, err := r.col.Aggregate(ctx, pipeline)
 	if err != nil {
-		log.Printf("Error aggregating bidding stats: %v", err)
 		return dto.BiddingStats{}, err
 	}
 	defer cursor.Close(ctx)
@@ -74,7 +71,6 @@ func (r *BidRepo) GetBiddingStats(ctx context.Context) (dto.BiddingStats, error)
 	}
 
 	if err := cursor.All(ctx, &results); err != nil {
-		log.Printf("Error decoding bidding stats: %v", err)
 		return dto.BiddingStats{}, err
 	}
 
@@ -94,9 +90,6 @@ func (r *BidRepo) GetBiddingStats(ctx context.Context) (dto.BiddingStats, error)
 			stats.Others = results[0].Others[0].Count
 		}
 	}
-
-	log.Printf("Bidding Stats - Total: %d, Accepted: %d, Rejected: %d, Others: %d",
-		stats.Total, stats.AcceptedBidding, stats.RejectedBidding, stats.Others)
 
 	return stats, nil
 }

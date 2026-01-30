@@ -1,17 +1,15 @@
 package service
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"math"
-	"strconv"
+	"context"
+	"errors"
 	"strings"
-
+	"go.mongodb.org/mongo-driver/bson"
+	"provider_management/internal/dto"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
-
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -36,11 +34,10 @@ func NewZoneMapService(
 	}
 }
 
-
 type ActivationTeamMember struct {
-	ActivationPersonName      string `json:"activationPersonName"`
-	AssignZone                string `json:"assignZone"`
-	TotalActivatedProviders   int64  `json:"totalActivatedProviders"`
+	ActivationPersonName    string `json:"activationPersonName"`
+	AssignZone              string `json:"assignZone"`
+	TotalActivatedProviders int64  `json:"totalActivatedProviders"`
 }
 
 type AdminWithRole struct {
@@ -74,10 +71,7 @@ func (s *ZoneMapService) ValidateAdminAccess(ctx context.Context, adminID string
 	}, nil
 }
 
-func (s *ZoneMapService) GetZoneStats(
-	ctx context.Context,
-	adminID string,
-) ([]domain.ZoneStats, error) {
+func (s *ZoneMapService) GetZoneStats(ctx context.Context, adminID string ) ([]dto.ProviderZoneStats, error) {
 
 	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
 	if err != nil {
@@ -88,7 +82,6 @@ func (s *ZoneMapService) GetZoneStats(
 		return nil, errors.New("only admin can access zone statistics")
 	}
 
-	// 2️⃣ Zone scope filtering
 	matchStage := bson.M{}
 	if len(adminWithRole.Role.ZoneName) > 0 {
 		matchStage["zoneName"] = bson.M{
@@ -120,53 +113,41 @@ func (s *ZoneMapService) GetZoneStats(
 	return s.providers.AggregateZoneStats(ctx, pipeline)
 }
 
-func (s *ZoneMapService) GetActivationTeam(
-    ctx context.Context,
-    adminID string,
-    zoneName string,
-) ([]domain.ActivationTeamMember, error) {
+func (s *ZoneMapService) GetActivationTeam( ctx context.Context, adminID string, zoneName string ) ([]dto.ProviderActivationTeamMember, error) {
 
-    adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
-    if err != nil {
-        return nil, err
-    }
+	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
+	if err != nil {
+		return nil, err
+	}
 
-    if adminWithRole.Role.RoleType != "admin" {
-        return nil, errors.New("only admin can access activation team")
-    }
+	if adminWithRole.Role.RoleType != "admin" {
+		return nil, errors.New("only admin can access activation team")
+	}
 
-    if len(adminWithRole.Role.ZoneScope) > 0 &&
-        !contains(adminWithRole.Role.ZoneScope, zoneName) {
-        return nil, errors.New("access denied for this zone")
-    }
+	if len(adminWithRole.Role.ZoneScope) > 0 &&
+		!contains(adminWithRole.Role.ZoneScope, zoneName) {
+		return nil, errors.New("access denied for this zone")
+	}
 
-    pipeline := []bson.M{
-        {"$match": bson.M{"city": zoneName}},
-        {"$group": bson.M{
-            "_id":            "$createdBy",
-            "totalActivated": bson.M{"$sum": 1},
-        }},
-        {"$project": bson.M{
-            "activationPersonName":    "$_id",
-            "assignZone":              zoneName,
-            "totalActivatedProviders": "$totalActivated",
-            "_id":                     0,
-        }},
-    }
+	pipeline := []bson.M{
+		{"$match": bson.M{"city": zoneName}},
+		{"$group": bson.M{
+			"_id":            "$createdBy",
+			"totalActivated": bson.M{"$sum": 1},
+		}},
+		{"$project": bson.M{
+			"activationPersonName":    "$_id",
+			"assignZone":              zoneName,
+			"totalActivatedProviders": "$totalActivated",
+			"_id":                     0,
+		}},
+	}
 
-    return s.providers.AggregateActivationTeam(ctx, pipeline)
+	return s.providers.AggregateActivationTeam(ctx, pipeline)
 }
 
+func (s *ZoneMapService) GetProvidersByActivator( ctx context.Context, adminID string, zoneName string, activatorName string, pagination dto.ProviderZonePagination ) (*dto.ProviderListResponse, error) {
 
-func (s *ZoneMapService) GetProvidersByActivator(
-	ctx context.Context,
-	adminID string,
-	zoneName string,
-	activatorName string,
-	pageStr string,
-	limitStr string,
-	sort string,
-) (*ProviderListResponse, error) {
 	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
 	if err != nil {
 		return nil, err
@@ -180,20 +161,18 @@ func (s *ZoneMapService) GetProvidersByActivator(
 		return nil, errors.New("access denied for this zone")
 	}
 
-	page, _ := strconv.Atoi(pageStr)
-	if page < 1 {
-		page = 1
+	if pagination.Page < 1 {
+		pagination.Page = 1
 	}
 
-	limit, _ := strconv.Atoi(limitStr)
-	if limit < 1 {
-		limit = 10
+	if pagination.Limit < 1 {
+		pagination.Limit = 20
 	}
-	if limit > 100 {
-		limit = 100
+	if pagination.Limit < 100 {
+		pagination.Limit = 100
 	}
 
-	skip := int64((page - 1) * limit)
+	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
 	query := bson.M{
 		"createdBy": activatorName,
@@ -204,12 +183,14 @@ func (s *ZoneMapService) GetProvidersByActivator(
 		query["city"] = bson.M{"$in": adminWithRole.Role.ZoneScope}
 	}
 
-	providers, total, err := s.providers.FindAll(ctx, query, skip, int64(limit), sort)
+	providers, total, err := s.providers.FindAll(ctx, query, pagination.Skip, pagination.Limit, pagination.Sort)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch providers: %v", err)
 	}
 
-	formattedProviders := make([]ProviderResponse, len(providers))
+	formattedProviders := make([]dto.ProviderAllResponse, len(providers))
+
 	for i, p := range providers {
 		totalJobs, completedJobs, _ := s.services.GetServiceStats(ctx, p.ID.Hex())
 
@@ -249,7 +230,7 @@ func (s *ZoneMapService) GetProvidersByActivator(
 			}
 		}
 
-		formattedProviders[i] = ProviderResponse{
+		formattedProviders[i] = dto.ProviderAllResponse{
 			ID:            p.ID.Hex(),
 			ProviderID:    providerIDStr,
 			Name:          defaultStr(p.Name, "N/A"),
@@ -262,60 +243,50 @@ func (s *ZoneMapService) GetProvidersByActivator(
 			DOJ:           formatDate(p.CreatedAt),
 			ProfileURL:    p.ProfileURL,
 			IsServiceOn:   p.IsServiceOn,
-			IdentityProof: p.IdentityProof,
-			AddressProof:  p.AddressProof,
-			CancelCheque:  p.CancelCheque,
 			IsActive:      string(p.IsActive),
-			Status:        p.Status,
 			TotalJobs:     totalJobs,
 			CompletedJobs: completedJobs,
 		}
 	}
 
-	totalPages := 1
-	if total > 0 && limit > 0 {
-		totalPages = int(math.Ceil(float64(total) / float64(limit)))
+	var totalPages int64 = 1
+	if total > 0 && pagination.Limit > 0 {
+		totalPages = int64(math.Ceil(float64(total) / float64(pagination.Limit)))
 	}
 
-	return &ProviderListResponse{
+	return &dto.ProviderListResponse{
 		Providers: formattedProviders,
-		Pagination: Pagination{
-			CurrentPage: page,
+		Pagination: dto.ProviderMetaPagination{
+			CurrentPage: pagination.Page,
 			TotalPages:  totalPages,
 			Total:       total,
-			Limit:       limit,
-			HasNext:     page < totalPages,
-			HasPrev:     page > 1,
+			Limit:       pagination.Limit,
+			HasNext:     pagination.Page < totalPages,
+			HasPrev:     pagination.Page > 1,
 		},
 	}, nil
 }
 
-func (s *ZoneMapService) GetMyProviders(
-	ctx context.Context,
-	adminID string,
-	pageStr string,
-	limitStr string,
-	sort string,
-) (*ProviderListResponse, error) {
+func (s *ZoneMapService) GetMyProviders( ctx context.Context, adminID string, pagination dto.ProviderZonePagination ) (*dto.ProviderListResponse, error) {
+
 	adminWithRole, err := s.ValidateAdminAccess(ctx, adminID)
 	if err != nil {
 		return nil, err
 	}
 
-	page, _ := strconv.Atoi(pageStr)
-	if page < 1 {
-		page = 1
+	if pagination.Page < 1 {
+		pagination.Page = 1
 	}
 
-	limit, _ := strconv.Atoi(limitStr)
-	if limit < 1 {
-		limit = 10
+	
+	if pagination.Limit < 1 {
+		pagination.Limit = 20
 	}
-	if limit > 100 {
-		limit = 100
+	if pagination.Limit < 100 {
+		pagination.Limit = 100
 	}
 
-	skip := int64((page - 1) * limit)
+	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
 	query := bson.M{"createdBy": adminWithRole.Admin.Name}
 
@@ -323,12 +294,12 @@ func (s *ZoneMapService) GetMyProviders(
 		query["city"] = bson.M{"$in": adminWithRole.Role.ZoneScope}
 	}
 
-	providers, total, err := s.providers.FindAll(ctx, query, skip, int64(limit), sort)
+	providers, total, err := s.providers.FindAll(ctx, query, pagination.Skip, pagination.Limit, pagination.Sort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch providers: %v", err)
 	}
 
-	formattedProviders := make([]ProviderResponse, len(providers))
+	formattedProviders := make([]dto.ProviderAllResponse, len(providers))
 	for i, p := range providers {
 		totalJobs, completedJobs, _ := s.services.GetServiceStats(ctx, p.ID.Hex())
 
@@ -368,7 +339,7 @@ func (s *ZoneMapService) GetMyProviders(
 			}
 		}
 
-		formattedProviders[i] = ProviderResponse{
+		formattedProviders[i] = dto.ProviderAllResponse{
 			ID:            p.ID.Hex(),
 			ProviderID:    providerIDStr,
 			Name:          defaultStr(p.Name, "N/A"),
@@ -381,30 +352,26 @@ func (s *ZoneMapService) GetMyProviders(
 			DOJ:           formatDate(p.CreatedAt),
 			ProfileURL:    p.ProfileURL,
 			IsServiceOn:   p.IsServiceOn,
-			IdentityProof: p.IdentityProof,
-			AddressProof:  p.AddressProof,
-			CancelCheque:  p.CancelCheque,
 			IsActive:      string(p.IsActive),
-			Status:        p.Status,
 			TotalJobs:     totalJobs,
 			CompletedJobs: completedJobs,
 		}
 	}
 
-	totalPages := 1
-	if total > 0 && limit > 0 {
-		totalPages = int(math.Ceil(float64(total) / float64(limit)))
+	var totalPages int64 = 1
+	if total > 0 && pagination.Limit > 0 {
+		totalPages = int64(math.Ceil(float64(total) / float64(pagination.Limit)))
 	}
 
-	return &ProviderListResponse{
+	return &dto.ProviderListResponse{
 		Providers: formattedProviders,
-		Pagination: Pagination{
-			CurrentPage: page,
+		Pagination: dto.ProviderMetaPagination{
+			CurrentPage: pagination.Page,
 			TotalPages:  totalPages,
 			Total:       total,
-			Limit:       limit,
-			HasNext:     page < totalPages,
-			HasPrev:     page > 1,
+			Limit:       pagination.Limit,
+			HasNext:     pagination.Page < totalPages,
+			HasPrev:     pagination.Page > 1,
 		},
 	}, nil
 }

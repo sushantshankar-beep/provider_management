@@ -76,5 +76,5 @@ type BiddingStats struct {
 	Total            int64 `json:"total"`
 	AcceptedBidding  int64 `json:"acceptedBidding"`
 	RejectedBidding  int64 `json:"rejectedBidding"`
-	Others           int64 `json:"others"` // pending, expired, withdrawn
+	Others           int64 `json:"others"`
 }

@@ -1,12 +1,12 @@
 package service
 
 import (
+	"time"
 	"context"
 	"errors"
+	"strconv"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
-	"strconv"
-	"time"
 )
 
 type ZoneService struct {
@@ -20,9 +20,9 @@ func NewZoneService(z *repository.ZoneRepo) *ZoneService {
 }
 
 type ZoneStats struct {
-	TotalZones       int64 `json:"totalZones"`
-	ActiveZones      int64 `json:"activeZones"`
-	DeactivateZones  int64 `json:"deactivateZones"`
+	TotalZones      int64 `json:"totalZones"`
+	ActiveZones     int64 `json:"activeZones"`
+	DeactivateZones int64 `json:"deactivateZones"`
 }
 
 func (s *ZoneService) CreateZone(ctx context.Context, zoneName, stateName string, isActive *bool) (*domain.Zone, error) {
@@ -52,7 +52,7 @@ func (s *ZoneService) CreateZone(ctx context.Context, zoneName, stateName string
 	return zone, nil
 }
 
-func (s *ZoneService) ListZones(ctx context.Context, pageStr, limitStr, search, isActiveStr,state, createdAtStr, updatedAtStr string) ([]domain.Zone, ZoneStats, int64, error) {
+func (s *ZoneService) ListZones(ctx context.Context, pageStr, limitStr, search, isActiveStr, state, createdAtStr, updatedAtStr string) ([]domain.Zone, ZoneStats, int64, error) {
 	page, _ := strconv.ParseInt(pageStr, 10, 64)
 	limit, _ := strconv.ParseInt(limitStr, 10, 64)
 
@@ -85,9 +85,8 @@ func (s *ZoneService) ListZones(ctx context.Context, pageStr, limitStr, search, 
 		}
 	}
 
-
-	zones, total, err := s.zones.FindWithFilter(ctx, skip, limit, search, isActivePtr, state ,createdAtPtr,
-		updatedAtPtr,)
+	zones, total, err := s.zones.FindWithFilter(ctx, skip, limit, search, isActivePtr, state, createdAtPtr,
+		updatedAtPtr)
 	if err != nil {
 		return nil, ZoneStats{}, 0, err
 	}
@@ -188,4 +187,3 @@ func (s *ZoneService) GetActiveStates(ctx context.Context) ([]map[string]interfa
 
 	return result, nil
 }
-

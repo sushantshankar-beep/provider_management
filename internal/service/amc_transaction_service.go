@@ -100,8 +100,8 @@ func (s *AMCTransactionService) ListAMCTransactions(
 			resp.PaymentMethod = txn.Method
 		}
 
-		if txn.UserID != primitive.NilObjectID {
-			if user, err := s.users.FindByID(ctx, txn.UserID.Hex()); err == nil {
+		if txn.UserID != "" {
+			if user, err := s.users.FindByID(ctx, txn.UserID); err == nil {
 				resp.Name = user.Name
 				resp.Contact = user.Phone
 				resp.Email = user.Email
@@ -173,8 +173,8 @@ func (s *AMCTransactionService) GetAMCTransaction(ctx context.Context, id string
 		resp.PaymentID = txn.MihPayID
 	}
 
-	if txn.UserID != primitive.NilObjectID {
-		if user, err := s.users.FindByID(ctx, txn.UserID.Hex()); err == nil {
+	if txn.UserID != "" {
+		if user, err := s.users.FindByID(ctx, txn.UserID); err == nil {
 			resp.User = user.Name
 			resp.Email = user.Email
 			resp.Contact = user.Phone

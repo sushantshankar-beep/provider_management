@@ -2,71 +2,52 @@ package handler
 
 import (
 	"net/http"
-	"provider_management/internal/logger"
-	"provider_management/internal/service"
 	"strconv"
-
 	"github.com/gin-gonic/gin"
+	"provider_management/internal/dto"
+	"provider_management/internal/service"
 )
 
 type TransactionHandler struct {
 	svc *service.TransactionService
-	log *logger.Logger
 }
 
-func NewTransactionHandler(svc *service.TransactionService, log *logger.Logger) *TransactionHandler {
+func NewTransactionHandler(svc *service.TransactionService) *TransactionHandler {
 	return &TransactionHandler{
 		svc: svc,
-		log: log,
 	}
 }
 
 func (h *TransactionHandler) GetAll(c *gin.Context) {
-	page := c.DefaultQuery("page", "1")
-	limit := c.DefaultQuery("limit", "10")
-	search := c.Query("search")
-	status := c.Query("status")
-	method := c.Query("method")
-	createdAt := c.Query("createdAt")
- 
+	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
+	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
 
-	res, total, err := h.svc.ListTransactions(c, page, limit, search, status, method, createdAt)
+	filters := dto.TransactionFilters{
+		Search:    c.Query("search"),
+		Status:    c.Query("status"),
+		Method:    c.Query("method"),
+		CreatedAt: c.Query("createdAt"),
+	}
+ 
+	pagination := dto.PaginationParams{
+		Page:  page,
+		Limit: limit,
+	}
+
+	res, err := h.svc.GetTransactions(c, filters, pagination)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
 		return
 	}
 
-	pageInt, _ := strconv.ParseInt(page, 10, 64)
-	limitInt, _ := strconv.ParseInt(limit, 10, 64)
+	c.JSON(http.StatusOK, res)
 
-	if pageInt < 1 {
-		pageInt = 1
-	}
-	if limitInt < 1 {
-		limitInt = 10
-	}
-
-	totalPages := int64(0)
-	if total > 0 {
-		totalPages = (total + limitInt - 1) / limitInt
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"data": res,
-		"pagination": gin.H{
-			"has_next":     pageInt < totalPages,
-			"has_previous": pageInt > 1,
-			"limit":        limitInt,
-			"page":         pageInt,
-			"total_items":  total,
-			"total_pages":  totalPages,
-		},
-	})
 }
 
 func (h *TransactionHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
-	res, err := h.svc.GetTransaction(c, id)
+	res, err := h.svc.GetTransactionById(c, id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return

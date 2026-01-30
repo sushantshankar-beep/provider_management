@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"provider_management/internal/dto"
 	"provider_management/internal/service"
 	"strconv"
 )
@@ -19,18 +20,23 @@ func (h *UserAdminHandler) GetAllUsers(c *gin.Context) {
 	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
 	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "10"), 10, 64)
 
-	res, err := h.svc.GetAllUsers(
-		c,
-		c.Query("search"),
-		c.Query("status"),
-		c.Query("zone"),
-		c.Query("amcStatus"),
-		c.Query("platformUsed"),
-		c.Query("vehicleType"),
-		c.Query("startDate"),
-		page,
-		limit,
-	)
+
+	filters := dto.UserFilters{
+		Search:        c.Query("search"),
+		Status:        c.Query("status"),
+		AMCStatus:     c.Query("amcStatus"),
+		PlatformUsed:  c.Query("platformUsed"),
+		VehicleType:   c.Query("vehicleType"),
+		Zone:          c.Query("zone"),
+		StartDate:     c.Query("startDate"),
+	}
+
+	pagination := dto.UserPagination{
+		Page:  page,
+		Limit: limit,
+	}
+
+	res, err := h.svc.GetAllUsers( c, filters , pagination)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
@@ -72,7 +78,7 @@ func (h *UserAdminHandler) UpdateStatus(c *gin.Context) {
 func (h *UserAdminHandler) AddNote(c *gin.Context) {
 	userID := c.Param("id")
 
-	var req service.AddNoteRequest
+	var req dto.AddNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,

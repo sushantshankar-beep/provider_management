@@ -1,17 +1,15 @@
 package service
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"math"
-	"strings"
 	"time"
-    "strconv"
-	"provider_management/internal/domain"
-	"provider_management/internal/repository"
-
+	"strings"
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"provider_management/internal/repository"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -36,97 +34,33 @@ func NewUserAdminService(
 	}
 }
 
-type UserAdminListResponse struct {
-	Users      []UserAdminResponse `json:"users"`
-	Pagination Pagination          `json:"pagination"`
-	Stats      *UserStatsResponse  `json:"stats"`
-}
 
-type UserStatsResponse struct {
-	TotalRegisteredUsers int64 `json:"total_registered_users"`
-	TotalActiveUsers     int64 `json:"total_active_users"`
-	TotalInactiveUsers   int64 `json:"total_inactive_users"`
-	ActiveAMCUsers       int64 `json:"active_amc_users"`
-	UsersWithBookings    int64 `json:"users_with_bookings"`
-}
+func (s *UserAdminService) GetAllUsers( ctx context.Context, filter dto.UserFilters, pagination dto.UserPagination) (*dto.UserAdminListResponse, error) {
 
-type UserAdminResponse struct {
-	ID            int64  `json:"id"`
-	MongoID       string `json:"_id"`
-	Name          string `json:"name"`
-	Phone         string `json:"phone"`
-	Email         string `json:"email"`
-	UserID        string `json:"userId"`
-	Zone          string `json:"zone"`
-	Status        string `json:"status"`
-	CreatedDate   string `json:"createdDate"`
-	PlatformUsed  string `json:"platformUsed"`
-	VehicleType   string `json:"vehicleType"`
-	VehicleCount  int    `json:"vehicleCount"`
-	TotalBookings int    `json:"totalBookings"`
-	AMCStatus     string `json:"amcStatus"`
-	Notes         []domain.UserNote  `json:"notes"`
-	ProfileURL    string `json:"profileUrl,omitempty"`
-	Address       string `json:"address,omitempty"`
-}
+	if pagination.Page < 1 {
+		pagination.Page = 1
+	}
 
-type UserDetailResponse struct {
-	UserAdminResponse
-	TotalExpenses int64         `json:"totalExpenses"`
-	Vehicles      []VehicleInfo `json:"vehicles"`
-	AMCInfo       AMCInfo       `json:"amcInfo"`
-	PreferredLang string        `json:"preferredLanguage"`
-}
+	if pagination.Limit < 1 {
+		pagination.Limit = 20
+	}
 
-type VehicleInfo struct {
-	ID            string `json:"_id"`
-	VehicleNumber string `json:"vehicleNumber"`
-	Brand         string `json:"brand"`
-	Model         string `json:"model"`
-	Year          string `json:"year"`
-	FuelType      string `json:"fuelType"`
-	VehicleType   string `json:"vehicleType"`
-}
+	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
-type AMCInfo struct {
-	AMCID        string    `json:"amcId"`
-	AMCStatus          string    `json:"amcStatus"`
-	CurrentPlanName    string    `json:"currentPlanName"`
-	StartDate          time.Time `json:"startDate,omitempty"`
-	EndDate            time.Time `json:"endDate,omitempty"`
-	ActivationDate     time.Time `json:"activationDate,omitempty"`
-	BoundVehicleNumber string    `json:"boundVehicleNumber"`
-	TotalServices      int       `json:"totalServices"`
-	ServicesUsed       int       `json:"servicesUsed"`
-	ServicesRemaining  int       `json:"servicesRemaining"`
-	PaymentStatus      string    `json:"paymentStatus"`
-}
-
-type UserAdminStatusResponse struct {
-	UserID  string `json:"user_id"`
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
-
-
-func (s *UserAdminService) GetAllUsers(
-	ctx context.Context,
-	search, status, zone,amcStatus,platformUsed,vehicleType,startDate string,
-	page, limit int64,
-) (*UserAdminListResponse, error) {
 	query := bson.M{}
 
-	if search != "" {
+	if filter.Search != "" {
 		orConditions := []bson.M{
-			{"name": bson.M{"$regex": search, "$options": "i"}},
-			{"email": bson.M{"$regex": search, "$options": "i"}},
-			{"phone": bson.M{"$regex": search, "$options": "i"}},
+			{"name": bson.M{"$regex": filter.Search, "$options": "i"}},
+			{"email": bson.M{"$regex":  filter.Search, "$options": "i"}},
+			{"phone": bson.M{"$regex":  filter.Search, "$options": "i"}},
+			{"userCode": bson.M{"$regex": filter.Search, "$options": "i"}},
 		}
 		query["$or"] = orConditions
 	}
 
-	if status != "" {
-		switch status {
+	if filter.Status != "" {
+		switch filter.Status {
 		case "active":
 			query["isActive"] = domain.AccountStatusActive
 	
@@ -146,12 +80,12 @@ func (s *UserAdminService) GetAllUsers(
 		}
 	}
 	
-	if zone != "" {
-		query["selectedCityName"] = zone
+	if filter.Zone != "" {
+		query["selectedCityName"] = filter.Zone
 	}
 
-	if startDate != "" {
-		if t, err := time.Parse("2006-01-02", startDate); err == nil {
+	if filter.StartDate != "" {
+		if t, err := time.Parse("2006-01-02", filter.StartDate); err == nil {
 			endOfDay := t.Add(24*time.Hour - time.Second)
 			query["createdAt"] = bson.M{
 				"$gte": primitive.NewDateTimeFromTime(t),
@@ -160,8 +94,7 @@ func (s *UserAdminService) GetAllUsers(
 		}
 	}
 
-	skip := (page - 1) * limit
-	users, total, err := s.users.FindAll(ctx, query, skip, limit)
+	users, total, err := s.users.FindAll(ctx, query, pagination.Skip, pagination.Limit)
 
 	if err != nil {
 		return nil, err
@@ -169,15 +102,15 @@ func (s *UserAdminService) GetAllUsers(
 
 	stats, err := s.getUserStatistics(ctx, 14)
 	if err != nil {
-		log.Printf("Error getting user stats: %v", err)
-		stats = &UserStatsResponse{}
+		fmt.Printf("Error getting user stats: %v", err)
+		stats = &dto.UserStatsResponse{}
 	}
 
 	if len(users) == 0 {
-		return &UserAdminListResponse{
-			Users: []UserAdminResponse{},
-			Pagination: Pagination{
-				CurrentPage: int(page),
+		return &dto.UserAdminListResponse{
+			Users: []dto.UserAdminResponse{},
+			Pagination: dto.UserMetaPagination{
+				CurrentPage: pagination.Page,
 				TotalPages:  0,
 				TotalUsers:  0,
 				HasNext:     false,
@@ -207,7 +140,7 @@ func (s *UserAdminService) GetAllUsers(
 		return nil, err
 	}
 
-	result := make([]UserAdminResponse, 0, len(users))
+	result := make([]dto.UserAdminResponse, 0, len(users))
 	for _, u := range users {
 		vehicleInfo := vehicleMap[u.ID]
 		userAMCStatus := "No"
@@ -227,25 +160,24 @@ func (s *UserAdminService) GetAllUsers(
 		userVehicleType := defaultStr(vehicleInfo.Type, "N/A")
 		userPlatformUsed := "Android"
 
-		if amcStatus != "" && strings.ToLower(amcStatus) != strings.ToLower(userAMCStatus) {
+		if filter.AMCStatus != "" && strings.ToLower(filter.AMCStatus) != strings.ToLower(userAMCStatus) {
 			continue
 		}
 
-		if platformUsed != "" && strings.ToLower(platformUsed) != strings.ToLower(userPlatformUsed) {
+		if filter.PlatformUsed != "" && strings.ToLower(filter.PlatformUsed) != strings.ToLower(userPlatformUsed) {
 			continue
 		}
 
-		if vehicleType != "" && strings.ToLower(vehicleType) != strings.ToLower(userVehicleType) {
+		if filter.VehicleType != "" && strings.ToLower(filter.VehicleType) != strings.ToLower(userVehicleType) {
 			continue
 		}
 
-		result = append(result, UserAdminResponse{
-			ID:            u.InternalID,
-			MongoID:       u.ID,
+		result = append(result, dto.UserAdminResponse{
+			ID:        u.ID,
 			Name:          defaultStr(u.Name, "N/A"),
 			Phone:         u.Phone,
 			Email:         defaultStr(u.Email, "—"),
-			UserID:        fmt.Sprintf("VW%06d", u.InternalID),
+			UserID:        u.UserCode,
 			Zone:          defaultStr(u.SelectedCityName, "N/A"),
 			Status:        userStatus,
 			CreatedDate:   u.CreatedAt.Format("2006-01-02"),
@@ -254,38 +186,30 @@ func (s *UserAdminService) GetAllUsers(
 			VehicleCount:  vehicleInfo.Count,
 			TotalBookings: bookingMap[u.ID],
 			AMCStatus:     userAMCStatus,
-			ProfileURL:    u.ProfileURL,
+			ProfileURL:    u.ImageUrl,
 			Address:       u.Address,
 		})
 	}
 
-	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+	totalPages := int64(math.Ceil(float64(total) / float64(pagination.Limit)))
 
-	return &UserAdminListResponse{
+	return &dto.UserAdminListResponse{
 		Users: result,
-		Pagination: Pagination{
-			CurrentPage: int(page),
+		Pagination: dto.UserMetaPagination{
+			CurrentPage: pagination.Page,
 			TotalPages:  totalPages,
 			TotalUsers:  total,
-			HasNext:     page < int64(totalPages),
-			HasPrev:     page > 1,
+			HasNext:     pagination.Page < int64(totalPages),
+			HasPrev:     pagination.Page > 1,
 		},
 		Stats: stats,
 	}, nil
 }
 
-func (s *UserAdminService) GetUserByID(
-	ctx context.Context,
-	userID string,
-) (*UserDetailResponse, error) {
-	query := bson.M{}
+func (s *UserAdminService) GetUserByID(ctx context.Context, userCode string) (*dto.UserDetailResponse, error) {
 
-	if strings.HasPrefix(userID, "VW") {
-		var id int64
-		fmt.Sscanf(userID, "VW%d", &id)
-		query["id"] = id
-	} else {
-		query["_id"] = userID
+	query := bson.M{
+		"userCode": userCode,
 	}
 
 	u, err := s.users.FindOne(ctx, query)
@@ -298,7 +222,11 @@ func (s *UserAdminService) GetUserByID(
 		return nil, err
 	}
 
-	totalBookings, err := s.bookings.CountByUserID(ctx, u.ID, bson.M{"paymentStatus": "paid"})
+	totalBookings, err := s.bookings.CountByUserID(
+		ctx,
+		u.ID,
+		bson.M{"paymentStatus": "paid"},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -313,9 +241,9 @@ func (s *UserAdminService) GetUserByID(
 		return nil, err
 	}
 
-	vehicleInfos := make([]VehicleInfo, len(vehicles))
+	vehicleInfos := make([]dto.VehicleInfo, len(vehicles))
 	for i, v := range vehicles {
-		vehicleInfos[i] = VehicleInfo{
+		vehicleInfos[i] = dto.VehicleInfo{
 			ID:            v.ID.Hex(),
 			VehicleNumber: v.VehicleNumber,
 			Brand:         v.Brand,
@@ -331,22 +259,22 @@ func (s *UserAdminService) GetUserByID(
 		status = "active"
 	}
 
-	return &UserDetailResponse{
-		UserAdminResponse: UserAdminResponse{
-			ID:            u.InternalID,
-			MongoID:       u.ID,
+	return &dto.UserDetailResponse{
+		UserAdminResponse: dto.UserAdminResponse{
+			ID:            u.ID,
 			Name:          defaultStr(u.Name, "N/A"),
 			Phone:         u.Phone,
 			Email:         defaultStr(u.Email, "—"),
-			UserID:        fmt.Sprintf("VW%06d", u.InternalID),
+			UserID:        u.UserCode,
 			Zone:          defaultStr(u.SelectedCityName, "N/A"),
 			Status:        status,
 			CreatedDate:   u.CreatedAt.Format(time.RFC3339),
 			VehicleCount:  len(vehicles),
 			TotalBookings: int(totalBookings),
-			Notes:  u.Notes,
-			ProfileURL:    u.ProfileURL,
+			Notes:         u.Notes,
+			ProfileURL:    u.ImageUrl,
 			Address:       u.Address,
+			ISActive:      u.IsActive,
 		},
 		TotalExpenses: totalExpenses,
 		Vehicles:      vehicleInfos,
@@ -355,18 +283,9 @@ func (s *UserAdminService) GetUserByID(
 	}, nil
 }
 
-func (s *UserAdminService) UpdateUserStatus(
-	ctx context.Context,
-	userID, status string,
-) (*UserAdminStatusResponse, error) {
-	query := bson.M{}
-
-	if strings.HasPrefix(userID, "VW") {
-		var id int64
-		fmt.Sscanf(userID, "VW%d", &id)
-		query["id"] = id
-	} else {
-		query["_id"] = userID
+func (s *UserAdminService) UpdateUserStatus( ctx context.Context, userID, status string ) (*dto.UserAdminStatusResponse, error) {
+	query := bson.M{
+		"userCode": userID,
 	}
 
 	u, err := s.users.UpdateStatus(ctx, query, status)
@@ -375,23 +294,21 @@ func (s *UserAdminService) UpdateUserStatus(
 	}
 
 	updatedStatus := u.IsActive
-	if u.IsActive == "true" {
-		updatedStatus = "active"
-	}
 
-	return &UserAdminStatusResponse{
-		UserID:  fmt.Sprintf("VW%06d", u.InternalID),
+	return &dto.UserAdminStatusResponse{
+		UserID:  u.UserCode,
 		Status:  updatedStatus,
 		Message: "Status updated successfully",
 	}, nil
 }
 
-func (s *UserAdminService) getUserStatistics(ctx context.Context, days int) (*UserStatsResponse, error) {
-	stats := &UserStatsResponse{}
+func (s *UserAdminService) getUserStatistics(ctx context.Context, days int) (*dto.UserStatsResponse, error) {
+
+	stats := &dto.UserStatsResponse{}
 
 	userStats, err := s.users.GetStatistics(ctx, days)
 	if err != nil {
-		log.Printf("Error getting user stats: %v", err)
+		fmt.Printf("Error getting user stats: %v", err)
 		return stats, nil
 	}
 
@@ -401,7 +318,7 @@ func (s *UserAdminService) getUserStatistics(ctx context.Context, days int) (*Us
 
 	activeAMCUsers, err := s.getActiveAMCUsersCount(ctx)
 	if err != nil {
-		log.Printf("Error counting active AMC users: %v", err)
+		fmt.Printf("Error counting active AMC users: %v", err)
 		stats.ActiveAMCUsers = 0
 	} else {
 		stats.ActiveAMCUsers = activeAMCUsers
@@ -409,7 +326,7 @@ func (s *UserAdminService) getUserStatistics(ctx context.Context, days int) (*Us
 
 	usersWithBookings, err := s.getUsersWithBookingsCount(ctx)
 	if err != nil {
-		log.Printf("Error counting users with bookings: %v", err)
+		fmt.Printf("Error counting users with bookings: %v", err)
 		stats.UsersWithBookings = 0
 	} else {
 		stats.UsersWithBookings = usersWithBookings
@@ -580,10 +497,10 @@ func (s *UserAdminService) getAMCStatus(ctx context.Context, userIDs []string) (
 	return result, nil
 }
 
-func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string) (*AMCInfo, error) {
+func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string) (*dto.AMCInfo, error) {
 	userObjID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
-		return &AMCInfo{
+		return &dto.AMCInfo{
 			AMCStatus:          "No",
 			CurrentPlanName:    "—",
 			BoundVehicleNumber: "—",
@@ -593,7 +510,7 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 
 	amc, err := s.amc.FindActiveByUserID(ctx, userObjID)
 	if err != nil || amc == nil {
-		return &AMCInfo{
+		return &dto.AMCInfo{
 			AMCStatus:          "No",
 			CurrentPlanName:    "—",
 			BoundVehicleNumber: "—",
@@ -617,7 +534,7 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 	// 	servicesRemaining = 0
 	// }
 
-	return &AMCInfo{
+	return &dto.AMCInfo{
 		AMCID:        amc.ID.Hex(),
 		AMCStatus:          amcStatus,
 		CurrentPlanName:    defaultStr(amc.PlanName, "—"),
@@ -632,11 +549,7 @@ func (s *UserAdminService) getDetailedAMCInfo(ctx context.Context, userID string
 	}, nil
 }
 
-func (s *UserAdminService) AddNote(
-	ctx context.Context,
-	userID string,
-	req AddNoteRequest,
-) error {
+func (s *UserAdminService) AddNote( ctx context.Context, userID string, req dto.AddNoteRequest ) error {
 
 	if req.Content == "" {
 		return fmt.Errorf("note content is required")
@@ -645,15 +558,12 @@ func (s *UserAdminService) AddNote(
 		return fmt.Errorf("addedBy is required")
 	}
 
-	cleanID := strings.TrimPrefix(userID, "VW")
-	internalID, err := strconv.ParseInt(cleanID, 10, 64)
-	log.Println(internalID)
-	if err != nil {
-		return fmt.Errorf("invalid user id")
+	query := bson.M{
+		"userCode": userID,
 	}
 
-	user, err := s.users.FindByInternalID(ctx, internalID)
-	log.Println("cskabcjab",user)
+	user, err := s.users.FindOne(ctx, query)
+
 	if err != nil {
 		return fmt.Errorf("user not found")
 	}
@@ -665,7 +575,5 @@ func (s *UserAdminService) AddNote(
 		CreatedAt: time.Now(),
 	}
 
-	log.Println("jdsbhjsb",note)
-	log.Println("hdvw",user.ID)
-	return s.users.AddUserNote(ctx, user.InternalID, note)
+	return s.users.AddUserNote(ctx, user.UserCode, note)
 }

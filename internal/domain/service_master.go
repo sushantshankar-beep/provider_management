@@ -23,11 +23,11 @@ const (
 	VehicleBoth VehicleType = "Both Car & Bike"
 )
 
-type ServiceStatus string
+type ServiceMasterStatus string
 
 const (
-	ServiceStatusActive   ServiceStatus = "active"
-	ServiceStatusInactive ServiceStatus = "inactive"
+	ServiceStatusActive   ServiceMasterStatus = "active"
+	ServiceStatusInactive ServiceMasterStatus = "inactive"
 )
   
 type ServiceMaster struct {
@@ -40,7 +40,7 @@ type ServiceMaster struct {
 	FuelTypeScope   []string           `bson:"fuelTypeScope,omitempty" json:"fuel_type_scope,omitempty"`
 	Location        string             `bson:"location" json:"location"`
 	RequiresOTP     bool               `bson:"requiresOtp" json:"requires_otp"`
-	Status          ServiceStatus         `bson:"status" json:"status"`
+	Status          ServiceMasterStatus         `bson:"status" json:"status"`
 	DisplayOrder    int                `bson:"displayOrder" json:"display_order"`
 	Tag             string             `bson:"tag" json:"tag"`
 	MinCost         float64            `bson:"minCost" json:"min_cost"`
@@ -67,6 +67,6 @@ func IsValidVehicleType(v VehicleType) bool {
 	}
 }
 
-func IsValidStatus(s ServiceStatus) bool {
+func IsValidStatus(s ServiceMasterStatus) bool {
 	return s == ServiceStatusActive  || s == ServiceStatusInactive
 }

@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
-	"log"
 	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -26,21 +28,16 @@ func (r *PaymentPayoutRepo) Create(ctx context.Context, payout *domain.PaymentPa
 	return err
 }
 
-func (r *PaymentPayoutRepo) GetPayouts(
-	ctx context.Context,
-	filter bson.M,
-	skip, limit int64,
-	sortField string,
-	sortOrder int,
-) ([]domain.PaymentPayout, int64, error) {
+func (r *PaymentPayoutRepo) GetProviderPayouts(ctx context.Context, filters dto.PayoutFilters, sort dto.PayoutSort, pagination dto.PaginationParams) ([]domain.PaymentPayout, int64, error) {
 
-	if sortField == "" {
-		sortField = "updatedAt"
-	}
+	filter := r.buildFilter(filters)
+	sortField, sortOrder := r.buildSort(sort)
+
+	skip := (pagination.Page - 1) * pagination.Limit
 
 	opts := options.Find().
 		SetSkip(skip).
-		SetLimit(limit).
+		SetLimit(pagination.Limit).
 		SetSort(bson.M{sortField: sortOrder})
 
 	cursor, err := r.col.Find(ctx, filter, opts)
@@ -61,18 +58,107 @@ func (r *PaymentPayoutRepo) GetPayouts(
 
 	return payouts, total, nil
 }
+func (r *PaymentPayoutRepo) buildFilter(filters dto.PayoutFilters) bson.M {
+	filter := bson.M{}
 
-func (r *PaymentPayoutRepo) FindByID(
-	ctx context.Context,
-	id primitive.ObjectID,
-) (*domain.PaymentPayout, error) {
+	// ← ADD THIS: Handle PayoutIDInt filter (highest priority)
+	if filters.PayoutIDInt != 0 {
+		filter["payoutId"] = filters.PayoutIDInt
+		return filter  // Return early - when searching by specific payout ID, ignore other filters
+	}
+
+	if filters.ProviderID != "" {
+		if objID, err := primitive.ObjectIDFromHex(filters.ProviderID); err == nil {
+			filter["providerId"] = objID
+		}
+	}
+
+	if filters.Status != "" {
+		switch strings.ToLower(filters.Status) {
+		case "pending_settlement":
+			filter["status"] = bson.M{
+				"$in": []string{
+					string(domain.PayoutStatusPending),
+					string(domain.PayoutStatusPartiallySettled),
+				},
+			}
+		default:
+			filter["status"] = filters.Status
+		}
+	}
+
+	if filters.PeriodFrom != "" && filters.PeriodTo != "" {
+		from, err1 := time.Parse(time.RFC3339, filters.PeriodFrom)
+		to, err2 := time.Parse(time.RFC3339, filters.PeriodTo)
+		if err1 == nil && err2 == nil {
+			filter["createdAt"] = bson.M{"$gte": from, "$lte": to}
+		}
+	}
+
+	if filters.Search != "" {
+		orFilters := []bson.M{}
+
+		if objID, err := primitive.ObjectIDFromHex(filters.Search); err == nil {
+			orFilters = append(orFilters, bson.M{"providerId": objID})
+		}
+
+		if len(filters.Search) > 3 && strings.ToUpper(filters.Search[:3]) == "PAY" {
+			if payoutID, err := strconv.ParseInt(filters.Search[3:], 10, 64); err == nil {
+				orFilters = append(orFilters, bson.M{"payoutId": payoutID})
+			}
+		}
+
+		if payoutID, err := strconv.ParseInt(filters.Search, 10, 64); err == nil {
+			orFilters = append(orFilters, bson.M{"payoutId": payoutID})
+		}
+
+		orFilters = append(orFilters, bson.M{"status": bson.M{"$regex": filters.Search, "$options": "i"}})
+
+		if len(orFilters) > 0 {
+			filter["$or"] = orFilters
+		}
+	}
+
+	return filter
+}
+func (r *PaymentPayoutRepo) buildSort(sort dto.PayoutSort) (string, int) {
+	order := -1
+	if sort.SortOrder == "asc" {
+		order = 1
+	}
+
+	if sort.SortBy == "" {
+		return "createdAt", order
+	}
+
+	switch sort.SortBy {
+	case "payout_id":
+		return "payoutId", order
+	case "provider_id":
+		return "providerId", order
+	case "base_amount":
+		return "baseAmount", order
+	case "net_payable":
+		return "netPayable", order
+	case "status":
+		return "status", order
+	case "created_at":
+		return "createdAt", order
+	case "updated_at":
+		return "updatedAt", order
+	default:
+		return sort.SortBy, order
+	}
+}
+
+func (r *PaymentPayoutRepo) FindByID( ctx context.Context, id primitive.ObjectID ) (*domain.PaymentPayout, error) {
 
 	if r == nil || r.col == nil {
 		return nil, fmt.Errorf("payment payout repository not initialized")
 	}
 
 	var payout domain.PaymentPayout
-	log.Println("IDVSKDJBJK", id)
+
 	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&payout)
 	if err != nil {
 		return nil, err
@@ -81,11 +167,7 @@ func (r *PaymentPayoutRepo) FindByID(
 	return &payout, nil
 }
 
-func (r *PaymentPayoutRepo) MarkSettled(
-	ctx context.Context,
-	payoutID primitive.ObjectID,
-	settlementID primitive.ObjectID,
-) error {
+func (r *PaymentPayoutRepo) MarkSettled( ctx context.Context, payoutID primitive.ObjectID, settlementID primitive.ObjectID ) error {
 
 	update := bson.M{
 		"$set": bson.M{
@@ -103,10 +185,7 @@ func (r *PaymentPayoutRepo) MarkSettled(
 	return err
 }
 
-func (r *PaymentPayoutRepo) FindByPayoutID(
-	ctx context.Context,
-	payoutID int64,
-) (*domain.PaymentPayout, error) {
+func (r *PaymentPayoutRepo) FindByPayoutID( ctx context.Context, payoutID int64 ) (*domain.PaymentPayout, error) {
 
 	if r == nil || r.col == nil {
 		return nil, fmt.Errorf("payment payout repository not initialized")
@@ -124,11 +203,8 @@ func (r *PaymentPayoutRepo) FindByPayoutID(
 	return &payout, nil
 }
 
-func (r *PaymentPayoutRepo) UpdateStatus(
-	ctx context.Context,
-	payoutID primitive.ObjectID,
-	status domain.PaymentPayoutStatus,
-	settlementID *primitive.ObjectID,
+func (r *PaymentPayoutRepo) UpdateStatus( ctx context.Context, payoutID primitive.ObjectID, status domain.PaymentPayoutStatus,
+settlementID *primitive.ObjectID,
 ) error {
 
 	update := bson.M{
@@ -158,15 +234,12 @@ func (r *PaymentPayoutRepo) FindByInternalID(ctx context.Context, id primitive.O
 	return &payout, nil
 }
 
-func (r *PaymentPayoutRepo) GetProviderDeductions(
-	ctx context.Context,
-	providerID primitive.ObjectID,
-) ([]domain.PaymentPayout, error) {
-	// Filter for deduction payouts that are not yet settled
+func (r *PaymentPayoutRepo) GetProviderDeductions( ctx context.Context, providerID primitive.ObjectID ) ([]domain.PaymentPayout, error) {
+	
 	filter := bson.M{
 		"providerId":   providerID,
-		"isDeduction":  true,                                              // NEW: Only deduction payouts
-		"status":       bson.M{"$in": []string{"pending", "complaint"}},  // NEW: Only pending ones
+		"isDeduction":  true,                                             
+		"status":       bson.M{"$in": []string{"pending", "complaint"}},
 	}
 
 	cursor, err := r.col.Find(ctx, filter)
@@ -183,10 +256,7 @@ func (r *PaymentPayoutRepo) GetProviderDeductions(
 	return payouts, nil
 }
 
-func (r *PaymentPayoutRepo) GetPayoutsForSettlement(
-	ctx context.Context,
-	payoutIDs []primitive.ObjectID,
-) ([]domain.PaymentPayout, error) {
+func (r *PaymentPayoutRepo) GetPayoutsForSettlement( ctx context.Context, payoutIDs []primitive.ObjectID ) ([]domain.PaymentPayout, error) {
 	filter := bson.M{
 		"_id": bson.M{"$in": payoutIDs},
 	}
@@ -206,12 +276,7 @@ func (r *PaymentPayoutRepo) GetPayoutsForSettlement(
 }
 
 
-func (r *PaymentPayoutRepo) UpdateMultipleStatus(
-	ctx context.Context,
-	payoutIDs []primitive.ObjectID,
-	status domain.PaymentPayoutStatus,
-	settlementID *primitive.ObjectID,
-) error {
+func (r *PaymentPayoutRepo) UpdateMultipleStatus( ctx context.Context, payoutIDs []primitive.ObjectID, status domain.PaymentPayoutStatus, settlementID *primitive.ObjectID ) error {
 	update := bson.M{
 		"$set": bson.M{
 			"status":    status,
@@ -231,10 +296,7 @@ func (r *PaymentPayoutRepo) UpdateMultipleStatus(
 	return err
 }
 
-func (r *PaymentPayoutRepo) FindPendingByProvider(
-	ctx context.Context,
-	providerID primitive.ObjectID,
-) (*domain.PaymentPayout, error) {
+func (r *PaymentPayoutRepo) FindPendingByProvider( ctx context.Context, providerID primitive.ObjectID ) (*domain.PaymentPayout, error) {
 
 	filter := bson.M{
 		"providerId": providerID,
@@ -242,11 +304,9 @@ func (r *PaymentPayoutRepo) FindPendingByProvider(
 			"$in": []domain.PaymentPayoutStatus{
 				domain.PayoutStatusPending,
 				domain.PayoutStatusPartiallySettled,
-				domain.PayoutStatusComplaint,
 			},
 		},
 	}
-	
 	
 	var payout domain.PaymentPayout
 	err := r.col.FindOne(ctx, filter).Decode(&payout)
@@ -269,10 +329,7 @@ func (r *PaymentPayoutRepo) Update(ctx context.Context, payout *domain.PaymentPa
 	return err
 }
 
-func (r *PaymentPayoutRepo) FindLatestByProvider(
-	ctx context.Context,
-	providerID primitive.ObjectID,
-) (*domain.PaymentPayout, error) {
+func (r *PaymentPayoutRepo) FindLatestByProvider(ctx context.Context, providerID primitive.ObjectID ) (*domain.PaymentPayout, error) {
 
 	filter := bson.M{"providerId": providerID}
 	opts := options.FindOne().
@@ -290,22 +347,6 @@ func (r *PaymentPayoutRepo) FindLatestByProvider(
 	return &payout, nil
 }
 
-
-func (r *PaymentPayoutRepo) AddServiceToPayout(
-	ctx context.Context,
-	payoutID primitive.ObjectID,
-	serviceID primitive.ObjectID,
-) error {
-
-	update := bson.M{
-		"$addToSet": bson.M{
-			"serviceIds": serviceID,
-		},
-	}
-
-	_, err := r.col.UpdateByID(ctx, payoutID, update)
-	return err
-}
 
 func (r *PaymentPayoutRepo) FindPendingByProviderAndService(ctx context.Context, providerID, serviceID primitive.ObjectID) (*domain.PaymentPayout, error) {
 	filter := bson.M{
@@ -339,4 +380,71 @@ func (r *PaymentPayoutRepo) UpdateFields(ctx context.Context, payoutID string, u
 	)
 
 	return err
+}
+
+type PayoutStats struct {
+	TotalPayAmount   float64
+	NetPayable       float64
+	CommissionAmount float64
+	GSTAmount        float64
+	TDSAmount        float64
+	ServiceAmount    float64 // For calculating Partner GST
+}
+
+func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.M) (*PayoutStats, error) {
+	pipeline := []bson.M{
+		{
+			"$match": filter,
+		},
+		{
+			"$group": bson.M{
+				"_id": nil,
+				"totalPayAmount":   bson.M{"$sum": "$totalPayAmount"},
+				"netPayable":       bson.M{"$sum": "$netPayable"},
+				"commissionAmount": bson.M{"$sum": "$commissionAmount"},
+				"gstAmount":        bson.M{"$sum": "$gstAmount"},
+				"tdsAmount":        bson.M{"$sum": "$tdsAmount"},
+				"serviceAmount":    bson.M{"$sum": "$baseAmount"}, // Assuming baseAmount is service amount
+			},
+		},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate payout stats: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	var result []struct {
+		TotalPayAmount   float64 `bson:"totalPayAmount"`
+		NetPayable       float64 `bson:"netPayable"`
+		CommissionAmount float64 `bson:"commissionAmount"`
+		GSTAmount        float64 `bson:"gstAmount"`
+		TDSAmount        float64 `bson:"tdsAmount"`
+		ServiceAmount    float64 `bson:"serviceAmount"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return nil, fmt.Errorf("failed to decode aggregation result: %v", err)
+	}
+
+	if len(result) == 0 {
+		return &PayoutStats{
+			TotalPayAmount:   0,
+			NetPayable:       0,
+			CommissionAmount: 0,
+			GSTAmount:        0,
+			TDSAmount:        0,
+			ServiceAmount:    0,
+		}, nil
+	}
+
+	return &PayoutStats{
+		TotalPayAmount:   result[0].TotalPayAmount,
+		NetPayable:       result[0].NetPayable,
+		CommissionAmount: result[0].CommissionAmount,
+		GSTAmount:        result[0].GSTAmount,
+		TDSAmount:        result[0].TDSAmount,
+		ServiceAmount:    result[0].ServiceAmount,
+	}, nil
 }

@@ -1,14 +1,13 @@
 package repository
 
 import (
-	"context"
-	"provider_management/internal/domain"
 	"time"
-
+	"context"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type AMCPlanRepo struct {
@@ -39,13 +38,7 @@ func (r *AMCPlanRepo) FindBySlug(ctx context.Context, slug string) (*domain.AMCP
 	return &plan, nil
 }
 
-func (r *AMCPlanRepo) GetPlans(
-	ctx context.Context,
-	filter bson.M,
-	skip, limit int64,
-	sortField string,
-	sortOrder int,
-) ([]domain.AMCPlan, int64, error) {
+func (r *AMCPlanRepo) GetPlans( ctx context.Context, filter bson.M, skip, limit int64, sortField string, sortOrder int ) ([]domain.AMCPlan, int64, error) {
 	if sortField == "" {
 		sortField = "createdAt"
 	}

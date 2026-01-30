@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
+	"provider_management/internal/dto"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
      "provider_management/internal/utils"
@@ -66,7 +68,7 @@ type RefundListResponse struct {
 	TotalPages int64            `json:"total_pages"`
 }
 
-func (s *RefundService) ProcessRefund(ctx context.Context, req RefundRequest) error {
+func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest) error {
 	log.Printf("ProcessRefund - Starting refund for user %s, amount: %.2f", req.UserID, req.Amount)
 	log.Println("request", req)
 
@@ -76,10 +78,10 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req RefundRequest) er
 	}
 
 	log.Printf("Found transaction: ID=%s, TxnID=%s, Amount=%.2f, Method=%s",
-		transaction.ID.Hex(), transaction.TxnID, transaction.Amount, transaction.Method)
+		transaction.ID, transaction.TxnID, transaction.Amount, transaction.Method)
 
 	var complaintID *primitive.ObjectID
-	var complaintNo *int64
+	var complaintNo string
 	if req.ComplaintID != "" {
 		objID, err := primitive.ObjectIDFromHex(req.ComplaintID)
 		if err != nil {
@@ -88,8 +90,8 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req RefundRequest) er
 			complaintID = &objID
 		}
 	}
-	if req.ComplaintInternalID != 0 {
-		complaintNo = &req.ComplaintInternalID
+	if req.ComplaintInternalID != "" {
+		complaintNo = req.ComplaintInternalID
 	}
 
 	var bookingID *primitive.ObjectID
@@ -181,7 +183,7 @@ func (s *RefundService) GetAllRefunds(
 			RefundID:      r.RefundID,
 			UserID:        formattedUserID,
 			BookingNo:     formatWithPrefix("BK", r.BookingNo),
-			ComplaintNo:   formatWithPrefix("CMP", r.ComplaintNo),
+			ComplaintNo:    r.ComplaintNo,
 			TransactionID: r.TransactionID,
 			GST:           utils.RoundTo2(r.GST),
 			Mode:          r.Mode,
@@ -223,7 +225,7 @@ func (s *RefundService) GetRefundByID(
 		UserID:        vwUserID,
 		Amount:        utils.RoundTo2(r.Amount),
 		BookingNo:     formatWithPrefix("BK", r.BookingNo),
-		ComplaintNo:   formatWithPrefix("CMP", r.ComplaintNo),
+		ComplaintNo:    r.ComplaintNo,
 		ComplaintID:   r.ComplaintID,
 		TransactionID: r.TransactionID,
 		GST:           utils.RoundTo2(r.GST),

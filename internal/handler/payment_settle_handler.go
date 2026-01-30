@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"provider_management/internal/service"
 
@@ -167,42 +166,4 @@ func (h *SettlementHandler) GetSettlementByID(c *gin.Context) {
 		"message": "Settlement fetched successfully",
 		"data":    settlement,
 	})
-}
-
-func (h *SettlementHandler) ExportSettlements(c *gin.Context) {
-	var req ExportRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"message": err.Error()})
-		return
-	}
-
-	if len(req.IDs) == 0 {
-		c.JSON(400, gin.H{"message": "No settlements selected"})
-		return
-	}
-
-	format := req.Format
-	if format == "" {
-		format = "csv"
-	}
-
-	settlements, err := h.svc.GetSettlementsByIDs(
-		c.Request.Context(),
-		req.IDs,
-	)
-	log.Println("settlementssss", settlements)
-	if err != nil {
-		c.JSON(500, gin.H{"message": err.Error()})
-		return
-	}
-
-	switch format {
-	case "excel":
-		h.exportExcel(c, settlements)
-	case "pdf":
-		h.exportPDF(c, settlements)
-	default:
-		h.exportCSV(c, settlements)
-	}
 }

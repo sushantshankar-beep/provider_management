@@ -33,7 +33,7 @@ type Refund struct {
 	BookingID     *primitive.ObjectID `bson:"bookingId,omitempty" json:"booking_id,omitempty"`
 	BookingNo     *int64              `bson:"bookingNo,omitempty" json:"booking_no,omitempty"`
 	ComplaintID   *primitive.ObjectID `bson:"complaintId,omitempty" json:"complaint_id,omitempty"`
-	ComplaintNo   *int64              `bson:"complaintNo,omitempty" json:"complaint_no,omitempty"`
+	ComplaintNo    string        `bson:"complaintNo,omitempty" json:"complaint_no,omitempty"`
 	Reason        string              `bson:"reason" json:"reason"`
 	Amount        float64             `bson:"amount" json:"amount"`
 	GST           float64             `bson:"gst" json:"gst"`

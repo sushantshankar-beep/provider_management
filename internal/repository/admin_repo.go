@@ -1,14 +1,14 @@
 package repository
 
 import (
-	"context"     
-	"provider_management/internal/domain"
 	"time"
-
+	"context"     
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"provider_management/internal/dto"
+	"provider_management/internal/domain"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type AdminRepository struct {
@@ -144,14 +144,14 @@ func (a *AdminRepository) FindAdminIDsByRoleIDs(ctx context.Context, roleIDs []p
 	return adminIDs, nil
 }
 
-func (r *AdminRepository) AggregateActivationTeam(ctx context.Context, pipeline []bson.M) ([]domain.ActivationTeamMember, error) {
+func (r *AdminRepository) AggregateActivationTeam(ctx context.Context, pipeline []bson.M) ([]dto.ProviderActivationTeamMember, error) {
 	cursor, err := r.collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
-	var team []domain.ActivationTeamMember
+	var team []dto.ProviderActivationTeamMember
 	if err := cursor.All(ctx, &team); err != nil {
 		return nil, err
 	}

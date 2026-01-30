@@ -2,12 +2,11 @@ package repository
 
 import (
 	"context"
-
-	"time"
-
 	"fmt"
+	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -23,9 +22,16 @@ func NewUserRepo(db *mongo.Database) *UserRepo {
 	return &UserRepo{col: db.Collection("users")}
 }
 
+type UserStatistics struct {
+	TotalUsers        int64 `json:"total_users"`
+	ActiveUsers       int64 `json:"active_users"`
+	InactiveUsers     int64 `json:"inactive_users"`
+	NewUsersLastNDays int64 `json:"new_users_last_n_days"`
+}
+
 func (r *UserRepo) FindByID(ctx context.Context, id string) (*domain.User, error) {
 	var res domain.User
-
+    log.Println("kjqbejdksbnkjbasjkba",id)
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err == nil {
 		err = r.col.FindOne(ctx, bson.M{"_id": objID}).Decode(&res)
@@ -38,14 +44,11 @@ func (r *UserRepo) FindByID(ctx context.Context, id string) (*domain.User, error
 	if err != nil {
 		return nil, err
 	}
+
 	return &res, nil
 }
 
-func (r *UserRepo) FindAll(
-	ctx context.Context,
-	query bson.M,
-	skip, limit int64,
-) ([]domain.User, int64, error) {
+func (r *UserRepo) FindAll(ctx context.Context, query bson.M, skip, limit int64) ([]domain.User, int64, error) {
 
 	opts := options.Find().
 		SetSkip(skip).
@@ -73,19 +76,18 @@ func (r *UserRepo) FindAll(
 
 func (r *UserRepo) FindOne(ctx context.Context, query bson.M) (*domain.User, error) {
 	var user domain.User
+
 	if err := r.col.FindOne(ctx, query).Decode(&user); err != nil {
 		return nil, err
 	}
+
 	return &user, nil
 }
 
-func (r *UserRepo) UpdateStatus(
-	ctx context.Context,
-	query bson.M,
-	status string,
-) (*domain.User, error) {
+func (r *UserRepo) UpdateStatus( ctx context.Context, query bson.M, status string) (*domain.User, error) {
 
 	var user domain.User
+
 	err := r.col.FindOneAndUpdate(
 		ctx,
 		query,
@@ -96,6 +98,7 @@ func (r *UserRepo) UpdateStatus(
 	if err != nil {
 		return nil, err
 	}
+
 	return &user, nil
 }
 
@@ -104,6 +107,7 @@ func (r *UserRepo) Count(ctx context.Context, query bson.M) (int64, error) {
 }
 
 func (r *UserRepo) GetStatistics(ctx context.Context, days int) (*UserStatistics, error) {
+
 	endDate := time.Now()
 	startDate := endDate.AddDate(0, 0, -days)
 	pipeline := []bson.M{
@@ -116,7 +120,7 @@ func (r *UserRepo) GetStatistics(ctx context.Context, days int) (*UserStatistics
 					{"$match": bson.M{"isActive": domain.AccountStatusActive}},
 					{"$count": "count"},
 				},
-			"inactive_users": []bson.M{
+				"inactive_users": []bson.M{
 					{"$match": bson.M{
 						"isActive": bson.M{
 							"$in": []string{
@@ -177,34 +181,9 @@ func (r *UserRepo) GetStatistics(ctx context.Context, days int) (*UserStatistics
 	return stats, nil
 }
 
-type UserStatistics struct {
-	TotalUsers        int64 `json:"total_users"`
-	ActiveUsers       int64 `json:"active_users"`
-	InactiveUsers     int64 `json:"inactive_users"`
-	NewUsersLastNDays int64 `json:"new_users_last_n_days"`
-}
-
-func (r *UserRepo) UpdateWallet(ctx context.Context, userID string, newBalance float64) error {
-	update := bson.M{
-		"$set": bson.M{
-			"walletBalance": newBalance,
-		},
-	}
-
-	result, err := r.col.UpdateOne(ctx, bson.M{"_id": userID}, update)
-	if err != nil {
-		return fmt.Errorf("failed to update wallet: %w", err)
-	}
-
-	if result.MatchedCount == 0 {
-		return fmt.Errorf("user not found")
-	}
-
-	return nil
-}
-
 func (r *UserRepo) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	var user domain.User
+
 	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -212,11 +191,13 @@ func (r *UserRepo) GetByID(ctx context.Context, id string) (*domain.User, error)
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
+
 	return &user, nil
 }
 
 func (r *UserRepo) FindByFilter(ctx context.Context, filter bson.M) ([]domain.User, error) {
 	cursor, err := r.col.Find(ctx, filter)
+
 	if err != nil {
 		return nil, err
 	}
@@ -226,15 +207,14 @@ func (r *UserRepo) FindByFilter(ctx context.Context, filter bson.M) ([]domain.Us
 	if err := cursor.All(ctx, &users); err != nil {
 		return nil, err
 	}
+
 	return users, nil
 }
 
-func (r *UserRepo) FindByInternalID(
-	ctx context.Context,
-	internalID int64,
-) (*domain.User, error) {
+func (r *UserRepo) FindByInternalID(ctx context.Context, internalID int64 ) (*domain.User, error) {
 
 	var user domain.User
+
 	err := r.col.FindOne(ctx, bson.M{
 		"id": internalID,
 	}).Decode(&user)
@@ -244,31 +224,6 @@ func (r *UserRepo) FindByInternalID(
 	}
 
 	return &user, nil
-}
-
-
-func (r *UserRepo) SearchByName(
-	ctx context.Context,
-	name string,
-) ([]domain.User, error) {
-
-	cursor, err := r.col.Find(ctx, bson.M{
-		"name": bson.M{
-			"$regex":   name,
-			"$options": "i",
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
-	var users []domain.User
-	if err := cursor.All(ctx, &users); err != nil {
-		return nil, err
-	}
-
-	return users, nil
 }
 
 func (r *UserRepo) FindByIDs(ctx context.Context, userIDs []string) ([]*domain.User, error) {
@@ -356,14 +311,10 @@ func (r *UserRepo) GetStats(ctx context.Context) (dto.UsersStats, error) {
 	return stats, nil
 }
 
-func (r *UserRepo)  AddUserNote(
-	ctx context.Context,
-	userID int64,
-	note domain.UserNote,
-) error {
+func (r *UserRepo) AddUserNote(ctx context.Context, userID string, note domain.UserNote) error {
 	_, err := r.col.UpdateOne(
 		ctx,
-		bson.M{"id": userID}, 
+		bson.M{"userCode": userID},
 		bson.M{
 			"$push": bson.M{
 				"notes": note,
