@@ -382,6 +382,7 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		Notes:                provider.Notes,
 		ApprovedAt:           approvedAt,
 		AgreementSubmittedAt:  provider.AgreementSubmittedAt,
+		IsAgreementSubmitted: provider.IsAgreementSubmitted,
 	}, nil
 }
 
