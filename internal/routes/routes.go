@@ -304,6 +304,8 @@ func SetupRoutes(
 	{
 		userRefund.GET("", rbac.Check("paymentandtransactions", "view_user_refund"), refundHandler.GetAllRefunds)
 		userRefund.GET("/:id", rbac.Check("paymentandtransactions", "view_user_refund_details"), refundHandler.GetRefundByID)
+		userRefund.POST("/:id/initiate", refundHandler.InitiateRefund)
+		userRefund.POST("/:id/check-status", refundHandler.CheckRefundStatus)
 	}
 
 	amcRefund := admin.Group("/amc-refund")

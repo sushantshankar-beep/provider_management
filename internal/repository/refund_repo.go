@@ -21,7 +21,7 @@ type RefundRepository struct {
 
 func NewRefundRepository(db *mongo.Database) *RefundRepository {
 	return &RefundRepository{
-		collection: db.Collection("Refunds"),
+		collection: db.Collection("refund_transactions"),
 		counterCol: db.Collection("counters"),
 		userCollection: db.Collection("users"),
 	}
@@ -65,36 +65,40 @@ func (r *RefundRepository) GenerateRefundID(ctx context.Context) (string, error)
 	return fmt.Sprintf("RF%d%d", timestamp, result.SequenceValue), nil
 }
 
-func (r *RefundRepository) UpdateStatus(ctx context.Context, refundID string, status domain.RefundStatus, failureReason string) error {
-	update := bson.M{
+func (r *RefundRepository) UpdateStatus(
+	ctx context.Context,
+	id primitive.ObjectID,
+	status domain.RefundStatus,
+	additionalData map[string]interface{},
+) error {
+	updateData := map[string]interface{}{
 		"status":    status,
 		"updatedAt": time.Now(),
 	}
 
-	if status == domain.RefundStatusSuccess || status == domain.RefundStatusFailed {
-		update["processedAt"] = time.Now()
+	for key, value := range additionalData {
+		updateData[key] = value
 	}
 
-	if failureReason != "" {
-		update["failureReason"] = failureReason
-	}
+	update := bson.M{"$set": updateData}
 
 	result, err := r.collection.UpdateOne(
 		ctx,
-		bson.M{"refundId": refundID},
-		bson.M{"$set": update},
+		bson.M{"_id": id},
+		update,
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to update refund status: %w", err)
+		return err
 	}
 
 	if result.MatchedCount == 0 {
-		return fmt.Errorf("refund not found with ID: %s", refundID)
+		return fmt.Errorf("refund not found")
 	}
 
 	return nil
 }
+
 
 func (r *RefundRepository) FindAll(
 	ctx context.Context,
@@ -205,9 +209,46 @@ func (r *RefundRepository) FindAll(
 
 func (r *RefundRepository) FindByRefundID(ctx context.Context, refundID string) (*domain.Refund, error) {
 	var refund domain.Refund
-	err := r.collection.FindOne(ctx, bson.M{"refundId": refundID}).Decode(&refund)
+	err := r.collection.FindOne(ctx, bson.M{"_id": refundID}).Decode(&refund)
 	if err != nil {
 		return nil, err
 	}
 	return &refund, nil
 }
+
+func (r *RefundRepository) Update(
+	ctx context.Context,
+	id primitive.ObjectID,
+	update bson.M,
+) error {
+
+	_, err := r.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": id},
+		update,
+	)
+
+	return err
+}
+
+func (r *RefundRepository) FindByID(ctx context.Context, id string) (*domain.Refund, error) {
+	var refund domain.Refund
+
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		filter := bson.M{"id": id}
+		err = r.collection.FindOne(ctx, filter).Decode(&refund)
+		if err != nil {
+			return nil, err
+		}
+		return &refund, nil
+	}
+
+	err = r.collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&refund)
+	if err != nil {
+		return nil, err
+	}
+	return &refund, nil
+}
+
+

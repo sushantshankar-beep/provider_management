@@ -446,7 +446,7 @@ func (s *ComplaintService) processPaymentActions(ctx context.Context, complaint 
 }
 
 func (s *ComplaintService) processRefund(ctx context.Context, complaint *domain.Complaint, acceptedService *domain.AcceptedService, req dto.AssessComplaintRequest) string {
-
+    
 	userObjID, err := primitive.ObjectIDFromHex(complaint.UserID)
 
 	if err != nil {
@@ -471,13 +471,17 @@ func (s *ComplaintService) processRefund(ctx context.Context, complaint *domain.
 		}
 	}
 
+	complaintObjID, err := primitive.ObjectIDFromHex(complaint.ID)
+   if err != nil {
+     	log.Println("Invalid complaint ID:", complaint.ID)
+	    return ""
+    }
+
 	if err := s.refundService.ProcessRefund(ctx, dto.RefundRequest{
 		UserID:              userObjID.Hex(),
 		TxnID:               transaction.TxnID,
 		BookingID:           complaint.AcceptedService,
-		// BookingInternalID:   complaint.A,
-		ComplaintID:         complaint.ID,
-		ComplaintInternalID: complaint.ComplaintNumber,
+		ComplaintID:         complaintObjID.Hex(),
 		Amount:              req.RefundAmount,
 		Reason:              refundReason,
 	}); err != nil {

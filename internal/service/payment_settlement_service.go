@@ -136,6 +136,11 @@ func (s *SettlementService) CreateSettlement(
 		return nil, fmt.Errorf("provider not found")
 	}
 
+	providerCommissionPercent := payout.CommissionPercent
+	if provider.CommissionPercentage > 0 {
+		providerCommissionPercent = provider.CommissionPercentage
+	}
+
 	kyc, _ := s.kycRepo.FindByProviderID(ctx, payout.ProviderID)
 	hasGSTNumber := false
 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
@@ -143,10 +148,10 @@ func (s *SettlementService) CreateSettlement(
 	}
 
 	tdsPercent := 0.0
-	gstPercent := payout.GSTPercent
+	gstPercent := 0.0  
 	if hasGSTNumber {
 		tdsPercent = 10.0
-		gstPercent = 0.0
+		gstPercent = 18.0  
 	}
 
 	serviceObjIDs := make([]primitive.ObjectID, 0, len(req.ServiceIDs))
@@ -231,7 +236,7 @@ func (s *SettlementService) CreateSettlement(
 			return nil, fmt.Errorf("transaction not found for service %s", serviceKey)
 		}
 
-		baseAmount := transaction.Amount
+		baseAmount := service.FinalPrice
 
 		if payout.ServicePartialAmounts != nil {
 			if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt > 0 {
@@ -248,11 +253,21 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		commission := baseAmount * (payout.CommissionPercent / 100)
+		commission := baseAmount * (providerCommissionPercent / 100)  // ← CHANGED: Always charge commission
 		afterCommission := baseAmount - commission
-		tds := afterCommission * (tdsPercent / 100)
-		gst := afterCommission * (gstPercent / 100)
-		net := afterCommission - tds - gst
+		
+		var tds, gst, net float64
+		if hasGSTNumber {
+			// Provider has GST: Commission + 10% TDS + 18% GST
+			tds = afterCommission * 0.10  // ← CHANGED: 10% TDS on (FinalPrice - Commission)
+			gst = afterCommission * 0.18  // ← CHANGED: 18% GST on (FinalPrice - Commission)
+			net = afterCommission - tds - gst
+		} else {
+			// Provider doesn't have GST: Only Commission
+			tds = 0
+			gst = 0
+			net = afterCommission  // ← Net = FinalPrice - Commission
+		}
 
 		log.Printf("Service %s: Base=%.2f Commission=%.2f TDS=%.2f GST=%.2f Net=%.2f",
 			serviceKey, baseAmount, commission, tds, gst, net)
@@ -285,18 +300,23 @@ func (s *SettlementService) CreateSettlement(
 		if service.HasComplaintAdjustment {
 			netAmount = -service.PendingDeductionAmount
 		} else {
-			baseAmount := transaction.Amount
+			baseAmount := service.FinalPrice 
 			if payout.ServicePartialAmounts != nil {
 				if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt > 0 {
 					baseAmount = partialAmt
 				}
 			}
 
-			commission := baseAmount * (payout.CommissionPercent / 100)
+			commission := baseAmount * (providerCommissionPercent / 100)
 			afterCommission := baseAmount - commission
-			tds := afterCommission * (tdsPercent / 100)
-			gst := afterCommission * (gstPercent / 100)
-			netAmount = afterCommission - tds - gst
+			
+			if hasGSTNumber {
+				tds := afterCommission * 0.10
+				gst := afterCommission * 0.18
+				netAmount = afterCommission - tds - gst
+			} else {
+				netAmount = afterCommission
+			}
 		}
 
 		settlementType := "regular"
@@ -351,7 +371,7 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		transaction := transactionMap[serviceKey]
+		// transaction := transactionMap[serviceKey]
 
 		existingRecord, _ := s.settlementHistoryRepo.FindByServiceID(ctx, service.ID)
 
@@ -378,7 +398,7 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		originalAmount := transaction.Amount
+		originalAmount := service.FinalPrice 
 
 		var partialAmount float64
 		if payout.ServicePartialAmounts != nil {
@@ -392,11 +412,19 @@ func (s *SettlementService) CreateSettlement(
 			calculationAmount = partialAmount
 		}
 
-		commission := calculationAmount * (payout.CommissionPercent / 100)
+		commission := calculationAmount * (providerCommissionPercent / 100)  // ← CHANGED: Always charge
 		afterCommission := calculationAmount - commission
-		tds := afterCommission * (tdsPercent / 100)
-		gst := afterCommission * (gstPercent / 100)
-		netAmount := afterCommission - tds - gst
+
+		var tds, gst, netAmount float64
+		if hasGSTNumber {
+			tds = afterCommission * 0.10
+			gst = afterCommission * 0.18
+			netAmount = afterCommission - tds - gst
+		} else {
+			tds = 0
+			gst = 0
+			netAmount = afterCommission
+		}
 
 		settlementType := "regular"
 		if payout.PayoutType == domain.PayoutTypeComplaint {
@@ -411,7 +439,7 @@ func (s *SettlementService) CreateSettlement(
 			OriginalAmount:        utils.RoundTo2(originalAmount),
 			PartialAmount:         utils.RoundTo2(partialAmount),
 			SettlementAmount:      utils.RoundTo2(calculationAmount),
-			CommissionPercent:     payout.CommissionPercent,
+			CommissionPercent:     providerCommissionPercent,
 			CommissionAmount:      utils.RoundTo2(commission),
 			TDSPercent:            tdsPercent,
 			TDSAmount:             utils.RoundTo2(tds),
