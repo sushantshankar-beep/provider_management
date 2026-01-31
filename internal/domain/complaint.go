@@ -17,6 +17,7 @@ type Complaint struct {
 	AdminUpdatedAt    *time.Time              `bson:"adminUpdatedAt,omitempty" json:"admin_updated_at,omitempty"`
 	CreatedAt         time.Time               `bson:"createdAt" json:"created_at"`
 	UpdatedAt         time.Time               `bson:"updatedAt" json:"updated_at"`
+	  ServiceNumber string `bson:"serviceNumber" json:"serviceNumber"`
 	Category          string                  `bson:"category,omitempty" json:"category,omitempty"`
 	Assessment        *ComplaintAssessment    `bson:"assessment,omitempty" json:"assessment,omitempty"`
 	Notes             []ComplaintNote         `bson:"notes,omitempty" json:"notes,omitempty"`

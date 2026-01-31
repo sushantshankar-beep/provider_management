@@ -208,3 +208,107 @@ func (s *PayUService) CheckRefundStatus(ctx context.Context, requestID string) (
 
 	return result, nil
 }
+
+func (s *PayUService) InitiateRefundByParams(ctx context.Context, payuTransactionID, refundID string, amount float64) (*InitiateRefundResult, error) {
+	if payuTransactionID == "" {
+		return nil, fmt.Errorf("Missing PayU Transaction ID")
+	}
+
+	command := "cancel_refund_transaction"
+	var1 := payuTransactionID
+	var2 := refundID
+	var3 := fmt.Sprintf("%.2f", amount)
+
+	hash := s.generateHash(fmt.Sprintf("%s|%s|%s|%s", s.key, command, var1, s.salt))
+
+	formData := url.Values{}
+	formData.Set("key", s.key)
+	formData.Set("command", command)
+	formData.Set("var1", var1)
+	formData.Set("var2", var2)
+	formData.Set("var3", var3)
+	formData.Set("hash", hash)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "POST", s.baseURL+"/merchant/postservice.php?form=2", strings.NewReader(formData.Encode()))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return nil, err
+	}
+
+	status, _ := data["status"].(float64)
+	if status != 1 {
+		msg, _ := data["msg"].(string)
+		if msg == "" {
+			msg = "Refund failed"
+		}
+		return nil, fmt.Errorf(msg)
+	}
+
+	requestID, _ := data["request_id"].(string)
+	if requestID == "" {
+		requestID = var2
+	}
+
+	refundTransactionID, _ := data["mihpayid"].(string)
+	if refundTransactionID == "" {
+		refundTransactionID = var1
+	}
+
+	return &InitiateRefundResult{
+		Success:             true,
+		RequestID:           requestID,
+		RefundTransactionID: refundTransactionID,
+		PayUResponse:        data,
+	}, nil
+}
+
+// func (s *PayUService) CheckRefundStatus(ctx context.Context, requestID string) (*CheckRefundStatusResult, error) {
+
+// 	rand.Seed(time.Now().UnixNano())
+// 	random := rand.Intn(2) // 0 or 1
+
+// 	// ❌ FAILED
+// 	if random == 0 {
+// 		return &CheckRefundStatusResult{
+// 			RefundStatus: "failed",
+// 			Amount:       250,
+// 			ErrorMsg:     "Insufficient balance at bank",
+// 			RawResponse: map[string]interface{}{
+// 				"mock":   true,
+// 				"status": "failed",
+// 			},
+// 		}, nil
+// 	}
+
+// 	// ✅ SUCCESS
+// 	return &CheckRefundStatusResult{
+// 		RefundStatus: "success",
+// 		Amount:       250,
+// 		BankRefNum:   fmt.Sprintf("TEST_REF_%d", rand.Intn(999999)),
+// 		Mode:         "original",
+// 		SettlementID: fmt.Sprintf("SETT_%d", rand.Intn(999999)),
+// 		BankArn:      fmt.Sprintf("ARN_%d", rand.Intn(999999)),
+// 		RawResponse: map[string]interface{}{
+// 			"mock":   true,
+// 			"status": "success",
+// 		},
+// 	}, nil
+// }

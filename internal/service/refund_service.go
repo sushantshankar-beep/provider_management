@@ -3,74 +3,45 @@ package service
 import (
 	"context"
 	"fmt"
-	
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
-	"provider_management/internal/dto"
-	"provider_management/internal/domain"
-	"provider_management/internal/repository"
-     "provider_management/internal/utils"
-
-	"strconv"
 	"time"
+	"provider_management/internal/domain"
+	"provider_management/internal/dto"
+	"provider_management/internal/repository"
+	"provider_management/internal/utils"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 type RefundService struct {
 	refundRepo      *repository.RefundRepository
 	transactionRepo *repository.TransactionRepo
-	userRepo   *repository.UserRepo
+	userRepo        *repository.UserRepo
+	complaintRepo   *repository.ComplaintRepository
+	acceptedService *repository.AcceptedServiceRepo
+	payuService     *PayUService
 }
 
-func NewRefundService(refundRepo *repository.RefundRepository, transactionRepo *repository.TransactionRepo,userRepo   *repository.UserRepo) *RefundService {
+func NewRefundService(
+	refundRepo *repository.RefundRepository,
+	transactionRepo *repository.TransactionRepo,
+	userRepo *repository.UserRepo,
+	complaintRepo *repository.ComplaintRepository,
+	acceptedService *repository.AcceptedServiceRepo,
+	payuService     *PayUService,
+) *RefundService {
 	return &RefundService{
 		refundRepo:      refundRepo,
 		transactionRepo: transactionRepo,
-		userRepo: userRepo,
+		userRepo:        userRepo,
+		complaintRepo:   complaintRepo,
+		acceptedService: acceptedService,
+		payuService: payuService,
 	}
 }
 
-type RefundListItem struct {
-	ID            primitive.ObjectID  `json:"id"`
-	RefundID      string              `json:"refund_id"`
-	UserID        string              `json:"user_id"`
-	BookingNo     string              `json:"booking_no"`
-	ComplaintNo   string              `json:"complaint_no"`
-	TransactionID string              `json:"transaction_id`
-	GST           float64             `json:"gst"`
-	Mode          string              `json:"mode"`
-	Amount        float64             `json:"amount"`
-	Reason        string              `json:"reason"`
-	Status        domain.RefundStatus `json:"status"`
-	CreatedAt     time.Time           `json:"created_at"`
-}
-
-type RefundDetail struct {
-	ID            primitive.ObjectID  `json:"id"`
-	RefundID      string              `json:"refund_id"`
-	UserID        string              `json:"user_id"`
-	Amount        float64             `json:"amount"`
-	BookingNo     string              `json:"booking_no"`
-	ComplaintNo   string              `json:"complaint_no"`
-	ComplaintID   *primitive.ObjectID `json:"complaint_id"`
-	TransactionID string              `json:"transaction_id`
-	GST           float64             `json:"gst"`
-	Mode          string              `json:"mode"`
-	Reason        string              `json:"reason"`
-	Status        domain.RefundStatus `json:"status"`
-	CreatedAt     time.Time           `json:"created_at"`
-}
-
-type RefundListResponse struct {
-	Refunds    []RefundListItem `json:"refunds"`
-	Total      int64            `json:"total"`
-	Page       int              `json:"page"`
-	Limit      int              `json:"limit"`
-	TotalPages int64            `json:"total_pages"`
-}
-
 func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest) error {
-	log.Printf("ProcessRefund - Starting refund for user %s, amount: %.2f", req.UserID, req.Amount)
-	log.Println("request", req)
+
+	now := time.Now()
 
 	transaction, err := s.transactionRepo.FindByTxnID(ctx, req.TxnID)
 	if err != nil {
@@ -80,47 +51,23 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest
 	log.Printf("Found transaction: ID=%s, TxnID=%s, Amount=%.2f, Method=%s",
 		transaction.ID, transaction.TxnID, transaction.Amount, transaction.Method)
 
-	var complaintID *primitive.ObjectID
-	var complaintNo string
-	if req.ComplaintID != "" {
-		objID, err := primitive.ObjectIDFromHex(req.ComplaintID)
-		if err != nil {
-			log.Printf("Warning: Invalid complaint ID format: %v", err)
-		} else {
-			complaintID = &objID
-		}
-	}
-	if req.ComplaintInternalID != "" {
-		complaintNo = req.ComplaintInternalID
-	}
-
-	var bookingID *primitive.ObjectID
-	var bookingNo *int64
-	if req.BookingID != "" {
-		objID, err := primitive.ObjectIDFromHex(req.BookingID)
-		if err != nil {
-			log.Printf("Warning: Invalid booking ID format: %v", err)
-		} else {
-			bookingID = &objID
-		}
-	}
-	if req.BookingInternalID != 0 {
-		bookingNo = &req.BookingInternalID
-	}
-
+	
 	gstAmount := req.Amount * 0.18
+	netRefund := req.Amount - gstAmount
 	refund := &domain.Refund{
 		UserID:        req.UserID,
-		BookingID:     bookingID,
-		BookingNo:     bookingNo,
-		ComplaintID:   complaintID,
-		ComplaintNo:   complaintNo,
-		TransactionID: transaction.TxnID,
+		TxnID:         transaction.TxnID,
+		ServiceID:     req.BookingID,      
+	    ComplaintID:   req.ComplaintID,   
 		Reason:        req.Reason,
 		Amount:        utils.RoundTo2(req.Amount),
 		GST:           utils.RoundTo2(gstAmount),
+		NetRefund:     utils.RoundTo2(netRefund),
 		Mode:          transaction.Method,
 		Status:        domain.RefundStatusPending,
+		Timeline: domain.RefundTimeline{
+			Initiated: now,
+		},
 	}
 
 	if err := s.refundRepo.Create(ctx, refund); err != nil {
@@ -140,8 +87,7 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest
 func (s *RefundService) GetAllRefunds(
 	ctx context.Context,
 	filter domain.RefundFilter,
-) (*RefundListResponse, error) {
-
+) (*dto.RefundListResponse, error) {
 	if filter.Page <= 0 {
 		filter.Page = 1
 	}
@@ -157,57 +103,96 @@ func (s *RefundService) GetAllRefunds(
 	}
 
 	userIDs := make([]string, 0, len(refunds))
+	serviceIDs := make([]string, 0, len(refunds))
+
 	for _, r := range refunds {
 		userIDs = append(userIDs, r.UserID)
+		if r.ServiceID != "" {
+			serviceIDs = append(serviceIDs, r.ServiceID)
+		}
 	}
 
 	users, err := s.userRepo.FindByIDs(ctx, userIDs)
 	if err != nil {
-		log.Printf("GetAllRefunds - Failed to fetch users: %v", err)
+		log.Printf("Failed to fetch users: %v", err)
 	}
 
 	userMap := make(map[string]*domain.User)
-	for _, user := range users {
-		userMap[user.ID] = user
+	for _, u := range users {
+		userMap[u.ID] = u
 	}
 
-	items := make([]RefundListItem, 0, len(refunds))
-	for _, r := range refunds {
-		formattedUserID := r.UserID
-		if user, ok := userMap[r.UserID]; ok && user.InternalID > 0 {
-			formattedUserID = fmt.Sprintf("VW%d", user.InternalID)
+	acceptedServices := make(map[string]*domain.AcceptedService)
+	for _, serviceID := range serviceIDs {
+		service, err := s.acceptedService.FindByServiceRequestID(ctx, serviceID)
+		if err == nil && service != nil {
+			acceptedServices[serviceID] = service
+		}
+	}
+
+	acceptedServiceIDs := make([]string, 0, len(acceptedServices))
+	for _, service := range acceptedServices {
+		acceptedServiceIDs = append(acceptedServiceIDs, service.ID.Hex())
+	}
+
+	complaints := make(map[string]*domain.Complaint)
+	for _, acceptedServiceID := range acceptedServiceIDs {
+		complaint, err := s.complaintRepo.FindComplaintByAcceptedServiceId(ctx, acceptedServiceID)
+		if err == nil && complaint != nil {
+			complaints[acceptedServiceID] = complaint
+		}
+	}
+
+	items := make([]dto.RefundListItemDTO, 0, len(refunds))
+
+	for _, refund := range refunds {
+		userCode := refund.UserID
+		log.Println("djcsnjds")
+		if u, ok := userMap[refund.UserID]; ok {
+			userCode = u.UserCode
 		}
 
-		items = append(items, RefundListItem{
-			ID:            r.ID,
-			RefundID:      r.RefundID,
-			UserID:        formattedUserID,
-			BookingNo:     formatWithPrefix("BK", r.BookingNo),
-			ComplaintNo:    r.ComplaintNo,
-			TransactionID: r.TransactionID,
-			GST:           utils.RoundTo2(r.GST),
-			Mode:          r.Mode,
-			Amount:        utils.RoundTo2(r.Amount),
-			Status:        r.Status,
-			Reason:        r.Reason,
-			CreatedAt:     r.CreatedAt,
+		var serviceNumber string
+		var complaintNumber string
+        log.Println("dscnjksdnbckjds",refund.ServiceID)
+		if service, ok := acceptedServices[refund.ServiceID]; ok {
+			serviceNumber = service.ServiceNumber
+			if complaint, exists := complaints[service.ID.Hex()]; exists {
+				complaintNumber = complaint.ComplaintNumber
+			}
+		}
+
+		items = append(items, dto.RefundListItemDTO{
+			ID:              refund.ID,
+			RefundID:        refund.RefundID,
+			UserCode:        userCode,
+			NetRefund: refund.NetRefund,
+			ServiceNumber:   serviceNumber,
+			ComplaintNumber: complaintNumber,
+			TxnID:   refund.TxnID,
+			GST:             utils.RoundTo2(refund.GST),
+			Mode:            refund.Mode,
+			Amount:          utils.RoundTo2(refund.Amount),
+			Status:          refund.Status,
+			Reason:          refund.Reason,
+			SubmittedAt:     refund.CreatedAt,
 		})
 	}
 
-	return &RefundListResponse{
-		Refunds: items,
-		Total:   total,
-		Page:    filter.Page,
-		Limit:   filter.Limit,
+	return &dto.RefundListResponse{
+		Refunds:    items,
+		Total:      total,
+		Page:       filter.Page,
+		Limit:      filter.Limit,
 		TotalPages: (total + int64(filter.Limit) - 1) / int64(filter.Limit),
 	}, nil
 }
+
 func (s *RefundService) GetRefundByID(
 	ctx context.Context,
 	refundID string,
-) (*RefundDetail, error) {
-
-	r, err := s.refundRepo.FindByRefundID(ctx, refundID)
+) (*dto.RefundDetailDTO, error) {
+	r, err := s.refundRepo.FindByID(ctx, refundID)
 	if err != nil {
 		return nil, fmt.Errorf("refund not found: %w", err)
 	}
@@ -217,28 +202,187 @@ func (s *RefundService) GetRefundByID(
 		return nil, fmt.Errorf("user not found for refund: %w", err)
 	}
 
-	vwUserID := fmt.Sprintf("VW%d", user.InternalID)
+	var serviceNumber string
+	var complaintNumber string
+	var complaintId string
 
-	return &RefundDetail{
-		ID:            r.ID,
-		RefundID:      r.RefundID,
-		UserID:        vwUserID,
-		Amount:        utils.RoundTo2(r.Amount),
-		BookingNo:     formatWithPrefix("BK", r.BookingNo),
-		ComplaintNo:    r.ComplaintNo,
-		ComplaintID:   r.ComplaintID,
-		TransactionID: r.TransactionID,
-		GST:           utils.RoundTo2(r.GST),
-		Mode:          r.Mode,
-		Reason:        r.Reason,
-		Status:        r.Status,
-		CreatedAt:     r.CreatedAt,
+	if r.ServiceID != "" {
+		service, err := s.acceptedService.FindByServiceRequestID(ctx, r.ServiceID)
+		if err == nil && service != nil {
+			serviceNumber = service.ServiceNumber
+
+			complaint, err := s.complaintRepo.FindComplaintByAcceptedServiceId(ctx, service.ID.Hex())
+			if err == nil && complaint != nil {
+				complaintNumber = complaint.ComplaintNumber
+				complaintId = complaint.ID
+			}
+		}
+	}
+
+	return &dto.RefundDetailDTO{
+		ID:              r.ID,
+		RefundID:        r.RefundID,
+		UserCode:        user.UserCode,
+		Amount:          utils.RoundTo2(r.Amount),
+		ServiceNumber:   serviceNumber,
+		NetRefund: r.NetRefund,
+		ComplaintNumber: complaintNumber,
+		ComplaintID: complaintId,
+		TransactionID:   r.TxnID,
+		GST:             utils.RoundTo2(r.GST),
+		Mode:            r.Mode,
+		Reason:          r.Reason,
+		Status:          r.Status,
+		Timeline: r.Timeline,
+		CreatedAt:       r.CreatedAt,
 	}, nil
 }
 
-func formatWithPrefix(prefix string, v *int64) string {
-	if v == nil {
-		return ""
+func (s *RefundService) InitiateRefund(ctx context.Context, refundID string) error {
+
+	refund, err := s.refundRepo.FindByID(ctx, refundID)
+	if err != nil {
+		return fmt.Errorf("refund not found: %w", err)
 	}
-	return prefix + strconv.FormatInt(*v, 10)
+
+	if refund.Status != domain.RefundStatusPending {
+		return fmt.Errorf("refund cannot be initiated, current status: %s", refund.Status)
+	}
+
+	transaction, err := s.transactionRepo.FindByTxnID(ctx, refund.TxnID)
+	if err != nil {
+		return fmt.Errorf("transaction not found: %w", err)
+	}
+
+	if transaction.MihPayID == "" {
+		return fmt.Errorf("missing PayU transaction ID")
+	}
+
+	payuRefundID := fmt.Sprintf(
+		"REF%s%d",
+		refund.ID.Hex()[len(refund.ID.Hex())-6:],
+		time.Now().Unix()%1000000,
+	)
+
+	totalAmount := refund.NetRefund
+
+	payuResp, err := s.payuService.InitiateRefundByParams(
+		ctx,
+		transaction.MihPayID,
+		payuRefundID,
+		totalAmount,
+	)
+
+	// ---------------- FAILED CASE ----------------
+	if err != nil {
+		log.Printf("PayU refund initiation failed: %v", err)
+
+		update := bson.M{
+			"$set": bson.M{
+				"status":        domain.RefundStatusFailed,
+				"failureReason": err.Error(),
+				"timeline": bson.M{
+					"failed": time.Now(),
+				},
+			},
+		}
+
+		_ = s.refundRepo.Update(ctx, refund.ID, update)
+		return fmt.Errorf("failed to initiate refund with PayU: %w", err)
+	}
+
+	// ---------------- SUCCESS CASE ----------------
+	update := bson.M{
+		"$set": bson.M{
+			"status":             domain.RefundStatusUnderProcess,
+			"payuRequestId":      payuResp.RequestID,
+			"payuTransactionId":  payuResp.RefundTransactionID,
+			"payuRefundResponse": payuResp.PayUResponse,
+			"timeline": bson.M{
+				"underProcess": time.Now(),
+			},
+		},
+	}
+
+	if err := s.refundRepo.Update(ctx, refund.ID, update); err != nil {
+		return fmt.Errorf("refund initiated but failed to update record: %w", err)
+	}
+
+	log.Printf(
+		"Refund initiated successfully: RefundID=%s, PayURequestID=%s",
+		refund.RefundID,
+		payuResp.RequestID,
+	)
+
+	return nil
 }
+
+func (s *RefundService) CheckRefundStatus(ctx context.Context, refundID string) error {
+	refund, err := s.refundRepo.FindByID(ctx, refundID)
+	if err != nil {
+		return fmt.Errorf("refund not found: %w", err)
+	}
+
+	if refund.Status == domain.RefundStatusSuccess || refund.Status == domain.RefundStatusFailed {
+		return fmt.Errorf("refund already in final state: %s", refund.Status)
+	}
+
+	if refund.PayURequestID == "" {
+		return fmt.Errorf("refund not initiated with PayU yet")
+	}
+
+	statusResp, err := s.payuService.CheckRefundStatus(ctx, refund.PayURequestID)
+	if err != nil {
+		return fmt.Errorf("failed to check refund status: %w", err)
+	}
+
+	now := time.Now()
+
+	setFields := bson.M{
+		"payuStatusResponse":     statusResp.RawResponse,
+		"timeline.statusChecked": now,
+	}
+
+	var newStatus domain.RefundStatus
+
+	switch statusResp.RefundStatus {
+	case "success", "successful", "completed":
+		newStatus = domain.RefundStatusSuccess
+		setFields["bankRefNum"] = statusResp.BankRefNum
+		setFields["refundMode"] = statusResp.Mode
+		setFields["settlementId"] = statusResp.SettlementID
+		setFields["bankArn"] = statusResp.BankArn
+		setFields["timeline.completed"] = now
+
+	case "failed", "failure":
+		newStatus = domain.RefundStatusFailed
+		reason := "Refund failed at payment gateway"
+		if statusResp.ErrorMsg != "" {
+			reason = statusResp.ErrorMsg
+		}
+		setFields["failureReason"] = reason
+		setFields["timeline.failed"] = now
+
+	case "pending", "initiated", "processing":
+		newStatus = domain.RefundStatusUnderProcess
+
+	default:
+		newStatus = refund.Status
+	}
+
+	if newStatus != refund.Status {
+		setFields["status"] = newStatus
+	}
+
+	update := bson.M{
+		"$set": setFields,
+	}
+
+	if err := s.refundRepo.Update(ctx, refund.ID, update); err != nil {
+		return fmt.Errorf("status checked but failed to update record: %w", err)
+	}
+
+	log.Printf("Refund status updated: RefundID=%s, Status=%s", refund.RefundID, newStatus)
+	return nil
+}
+

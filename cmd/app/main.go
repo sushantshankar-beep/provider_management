@@ -39,8 +39,6 @@ func main() {
 	client := db.ConnectMongo(cfg.MongoURI)
 	mongoDB := client.Database(cfg.MongoDBName)
 
-
-
 	complaintRepo := repository.NewComplaintRepository(mongoDB)
 	transactionRepo := repository.NewTransactionRepo(mongoDB)
 	acceptedServiceRepo := repository.NewAcceptedServiceRepo(mongoDB)
@@ -85,8 +83,6 @@ func main() {
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo,invoiceRepo,transactionRepo,settlementHistoryRepo,ratingRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo,kycRepo,transactionRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo,settlementHistoryRepo,kycRepo,transactionRepo)
-	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo)
-	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService,transactionRepo,kycRepo)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
 	adminService := service.NewAdminService(adminRepo, roleRepo)
 	activityLogService := service.NewActivityLogService(activityLogRepo)
@@ -101,6 +97,8 @@ func main() {
     zoneMapService := service.NewZoneMapService(providerRepo,adminRepo,roleRepo,acceptedServiceRepo)
 	providerAgreementService := service.NewAgreementService(providerAgreementRepo)
 	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo,serviceMasterRepo)
+	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo,complaintRepo,acceptedServiceRepo,payUService)
+	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService,transactionRepo,kycRepo)
 	 
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)

@@ -6,6 +6,7 @@ import (
 	"provider_management/internal/domain"
 	"provider_management/internal/service"
 	"strconv"
+	
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -24,11 +25,6 @@ func NewRefundHandler(refundService *service.RefundService) *RefundHandler {
 func (h *RefundHandler) GetAllRefunds(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	status := c.Query("status")
-	userID := c.Query("user_id")
-	mode :=   c.Query("mode")
-	reason := c.Query("reason")
-	search := c.Query("search")
 
 	if page < 1 {
 		page = 1
@@ -37,16 +33,17 @@ func (h *RefundHandler) GetAllRefunds(c *gin.Context) {
 		limit = 10
 	}
 
-	result, err := h.refundService.GetAllRefunds(c.Request.Context(), domain.RefundFilter{
+	filter := domain.RefundFilter{
 		Page:   page,
 		Limit:  limit,
-		Status: status,
-		UserID: userID,
-		Mode: mode,
-		Reason: reason,
-		Search: search,
-	})
+		Status: c.Query("status"),
+		UserID: c.Query("user_id"),
+		Mode:   c.Query("mode"),
+		Reason: c.Query("reason"),
+		Search: c.Query("search"),
+	}
 
+	result, err := h.refundService.GetAllRefunds(c.Request.Context(), filter)
 	if err != nil {
 		log.Printf("GetAllRefunds error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -62,9 +59,9 @@ func (h *RefundHandler) GetAllRefunds(c *gin.Context) {
 		"data":    result,
 	})
 }
+
 func (h *RefundHandler) GetRefundByID(c *gin.Context) {
-	id := c.Param("id")
-	id = strings.TrimPrefix(id, "REF")
+	id := strings.TrimPrefix(c.Param("id"), "REF")
 
 	log.Printf("Fetching refund with ID: %s", id)
 
@@ -82,5 +79,46 @@ func (h *RefundHandler) GetRefundByID(c *gin.Context) {
 		"error":   false,
 		"message": "Refund fetched successfully",
 		"data":    refund,
+	})
+}
+
+func (h *RefundHandler) InitiateRefund(c *gin.Context) {
+	id := strings.TrimPrefix(c.Param("id"), "REF")
+
+	log.Printf("Initiating refund with ID: %s", id)
+
+	if err := h.refundService.InitiateRefund(c.Request.Context(), id); err != nil {
+		log.Printf("InitiateRefund error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Refund initiated successfully",
+	})
+}
+
+
+func (h *RefundHandler) CheckRefundStatus(c *gin.Context) {
+	id := strings.TrimPrefix(c.Param("id"), "REF")
+
+	log.Printf("Checking refund status for ID: %s", id)
+
+	if err := h.refundService.CheckRefundStatus(c.Request.Context(), id); err != nil {
+		log.Printf("CheckRefundStatus error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   true,
+			"message": "Failed to check refund status: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"error":   false,
+		"message": "Refund status checked successfully",
 	})
 }

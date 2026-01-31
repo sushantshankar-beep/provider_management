@@ -691,3 +691,50 @@ func (r *AcceptedServiceRepo) MarkServicesAsSettled( ctx context.Context, servic
 	_, err := r.col.UpdateMany(ctx, filter, update)
 	return err
 }
+
+
+func (r *AcceptedServiceRepo) FindByServiceID(
+	ctx context.Context,
+	serviceID string,
+) (*domain.AcceptedService, error) {
+
+	serviceObjID, err := primitive.ObjectIDFromHex(serviceID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid serviceID: %w", err)
+	}
+
+	var res domain.AcceptedService
+
+	err = r.col.FindOne(ctx, bson.M{
+		"_id": serviceObjID,
+	}).Decode(&res)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &res, nil
+}
+
+
+func (r *AcceptedServiceRepo) FindByServiceRequestID(
+	ctx context.Context,
+	serviceRequestID string,
+) (*domain.AcceptedService, error) {
+
+	objID, err := primitive.ObjectIDFromHex(serviceRequestID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid serviceRequestID: %w", err)
+	}
+
+	var res domain.AcceptedService
+	err = r.col.FindOne(ctx, bson.M{
+		"_id": objID,
+	}).Decode(&res)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &res, nil
+}

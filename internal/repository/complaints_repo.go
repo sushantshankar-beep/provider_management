@@ -477,3 +477,85 @@ func (r *ComplaintRepository) GetByComplaintNumber(
 
 	return &complaint, nil
 }
+
+
+func (r *ComplaintRepository) FindByAcceptedServiceId(ctx context.Context, acceptedServiceId string) (*domain.Complaint, error) {
+	var complaint domain.Complaint
+	err := r.collection.FindOne(ctx, bson.M{"acceptedService": acceptedServiceId}).Decode(&complaint)
+	if err != nil {
+		return nil, err
+	}
+	return &complaint, nil
+}
+
+
+func (r *ComplaintRepository) FindByAcceptedServiceIDs(
+	ctx context.Context,
+	serviceIDs []primitive.ObjectID,
+) ([]domain.Complaint, error) {
+
+	if len(serviceIDs) == 0 {
+		return []domain.Complaint{}, nil
+	}
+
+	filter := bson.M{
+		"acceptedService": bson.M{
+			"$in": serviceIDs,
+		},
+	}
+
+	cursor, err := r.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var complaints []domain.Complaint
+	if err := cursor.All(ctx, &complaints); err != nil {
+		return nil, err
+	}
+
+	return complaints, nil
+}
+
+
+func (r *ComplaintRepository) FindByAcceptedServiceID(
+	ctx context.Context,
+	acceptedServiceID string,
+) (*domain.Complaint, error) {
+
+	var c domain.Complaint
+	err := r.collection.FindOne(ctx, bson.M{
+		"acceptedService": acceptedServiceID,
+	}).Decode(&c)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &c, nil
+}
+
+
+func (r *ComplaintRepository) FindComplaintByAcceptedServiceId(
+	ctx context.Context,
+	acceptedServiceId string,
+) (*domain.Complaint, error) {
+
+	objID, err := primitive.ObjectIDFromHex(acceptedServiceId)
+	if err != nil {
+		return nil, err
+	}
+
+	var complaint domain.Complaint
+	err = r.collection.FindOne(
+		ctx,
+		bson.M{"acceptedService": objID},
+	).Decode(&complaint)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &complaint, nil
+}
