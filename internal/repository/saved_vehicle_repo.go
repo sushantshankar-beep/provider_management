@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
-	"go.mongodb.org/mongo-driver/bson"
+	"log"
 	"provider_management/internal/domain"
-	"go.mongodb.org/mongo-driver/mongo"
+
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type SavedVehiclesRepo struct {
@@ -54,4 +56,33 @@ func (r *SavedVehiclesRepo) FindByID(ctx context.Context, id string) (*domain.Sa
 		return nil, err
 	}
 	return &vehicle, nil
+}
+
+func (r *SavedVehiclesRepo) FindByIDs(
+	ctx context.Context,
+	ids []primitive.ObjectID,
+) ([]domain.Vehicle, error) {
+
+	log.Println("vehiclesss",ids)
+	if len(ids) == 0 {
+		return []domain.Vehicle{}, nil
+	}
+
+	filter := bson.M{
+		"_id": bson.M{"$in": ids},
+	}
+
+	cursor, err := r.col.Find(ctx, filter)
+	log.Println("cursor",cursor)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+    
+	var vehicles []domain.Vehicle
+	if err := cursor.All(ctx, &vehicles); err != nil {
+		return nil, err
+	}
+
+	return vehicles, nil
 }

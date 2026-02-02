@@ -3,7 +3,6 @@ package repository
 import (
 	"fmt"
 	"time"
-	"strconv"
 	"strings"
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
@@ -117,25 +116,34 @@ func (r *ComplaintRepository) ListComplaints(ctx context.Context, filter dto.Com
 func (r *ComplaintRepository) buildQuery(filter dto.ComplaintFilter) bson.M {
 	query := bson.M{}
 
+	// Exact filters
 	if filter.Status != nil {
 		query["status"] = *filter.Status
 	}
+
 	if filter.RaisedBy != nil {
 		query["raisedBy"] = *filter.RaisedBy
 	}
+
 	if filter.Category != nil {
-		query["problem"] = *filter.Category
+		query["userComplaint.problem"] = bson.M{
+			"$regex": *filter.Category,
+			"$options": "i",
+		}
 	}
+
 	if filter.UserID != nil {
 		if userObjID, err := primitive.ObjectIDFromHex(*filter.UserID); err == nil {
 			query["userId"] = userObjID
 		}
 	}
+
 	if filter.ProviderID != nil {
 		if providerObjID, err := primitive.ObjectIDFromHex(*filter.ProviderID); err == nil {
 			query["providerId"] = providerObjID
 		}
 	}
+
 	if filter.CreatedAtFrom != nil && filter.CreatedAtTo != nil {
 		query["createdAt"] = bson.M{
 			"$gte": *filter.CreatedAtFrom,
@@ -143,34 +151,31 @@ func (r *ComplaintRepository) buildQuery(filter dto.ComplaintFilter) bson.M {
 		}
 	}
 
-	if filter.SearchQuery != nil && *filter.SearchQuery != "" {
+	if filter.SearchQuery != nil && strings.TrimSpace(*filter.SearchQuery) != "" {
 		search := strings.TrimSpace(*filter.SearchQuery)
 		searchUpper := strings.ToUpper(search)
 
 		orConditions := []bson.M{
-			{"problem": bson.M{"$regex": search, "$options": "i"}},
+			{"complaintNumber": bson.M{"$regex": searchUpper, "$options": "i"}},
+			{"serviceNumber": bson.M{"$regex": searchUpper, "$options": "i"}},
 			{"status": bson.M{"$regex": search, "$options": "i"}},
 			{"raisedBy": bson.M{"$regex": search, "$options": "i"}},
+			{"userComplaint.problem": bson.M{"$regex": search, "$options": "i"}},
 		}
 
-		if strings.HasPrefix(searchUpper, "CMP") {
-			id := strings.TrimPrefix(searchUpper, "CMP")
-			if num, err := strconv.ParseInt(id, 10, 64); err == nil {
-				orConditions = append(orConditions, bson.M{"id": num})
-			}
-		} else if num, err := strconv.ParseInt(search, 10, 64); err == nil {
-			orConditions = append(orConditions, bson.M{"id": num})
-		}
-
-		if strings.HasPrefix(searchUpper, "BK") {
-			id := strings.TrimPrefix(searchUpper, "BK")
-			if num, err := strconv.ParseInt(id, 10, 64); err == nil {
-				orConditions = append(orConditions, bson.M{"acceptedServiceId": num})
-			}
+		if objID, err := primitive.ObjectIDFromHex(search); err == nil {
+			orConditions = append(orConditions, bson.M{
+				"acceptedService": objID,
+			})
 		}
 
 		if len(query) > 0 {
-			query = bson.M{"$and": []bson.M{query, {"$or": orConditions}}}
+			query = bson.M{
+				"$and": []bson.M{
+					query,
+					{"$or": orConditions},
+				},
+			}
 		} else {
 			query["$or"] = orConditions
 		}
@@ -178,6 +183,7 @@ func (r *ComplaintRepository) buildQuery(filter dto.ComplaintFilter) bson.M {
 
 	return query
 }
+
 
 func (r *ComplaintRepository) Update(ctx context.Context, id string, update interface{}) error {
 

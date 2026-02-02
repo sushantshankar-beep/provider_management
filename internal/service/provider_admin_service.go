@@ -1010,7 +1010,13 @@ func (s *ProviderAdminService) getActivationTeamDetails( ctx context.Context, ad
 	return team, nil
 }
 
-func (s *ProviderAdminService) GetActivationPersonProviders( ctx context.Context, personID string, zoneName string, filters dto.ProviderFilters, pagination dto.ProviderPagination, adminZones map[string][]string,
+func (s *ProviderAdminService) GetActivationPersonProviders(
+	ctx context.Context,
+	personID string,
+	zoneName string,
+	filters dto.ProviderFilters,
+	pagination dto.ProviderPagination,
+	adminZones map[string][]string,
 ) (*dto.ProviderListResponse, error) {
 
 	adminObjectID, err := primitive.ObjectIDFromHex(personID)
@@ -1056,60 +1062,136 @@ func (s *ProviderAdminService) GetActivationPersonProviders( ctx context.Context
 
 	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
-	conditions := []bson.M{
-		{"createdBy": adminObjectID},
+	search := strings.TrimSpace(filters.Search)
+
+	var conditions []bson.M
+
+	conditions = append(conditions, bson.M{"createdBy": adminObjectID})
+
+	if search != "" {
+		conditions = append(conditions, bson.M{
+			"$or": []bson.M{
+				{"name": bson.M{"$regex": search, "$options": "i"}},
+				{"phone": bson.M{"$regex": search}},
+				{"providerCode": bson.M{"$regex": search, "$options": "i"}},
+				{"city": bson.M{"$regex": search, "$options": "i"}},
+				{"address": bson.M{"$regex": search, "$options": "i"}},
+				{"vehicleType": bson.M{"$regex": search, "$options": "i"}},
+			},
+		})
 	}
 
-	if filters.Search != "" {
-		searchConditions := []bson.M{
-			{"name": bson.M{"$regex": filters.Search, "$options": "i"}},
-			{"phone": bson.M{"$regex": filters.Search, "$options": "i"}},
-			{"email": bson.M{"$regex": filters.Search, "$options": "i"}},
+	switch strings.ToLower(filters.AccountStatus) {
+	case "active":
+		conditions = append(conditions, bson.M{
+			"isActive": domain.AccountStatusActive,
+		})
+	case "inactive":
+		conditions = append(conditions, bson.M{
+			"isActive": bson.M{
+				"$in": []string{
+					domain.AccountStatusSuspended,
+					domain.AccountStatusBlacklisted,
+					domain.AccountStatusDeactivated,
+				},
+			},
+		})
+	case "suspended":
+		conditions = append(conditions, bson.M{
+			"isActive": domain.AccountStatusSuspended,
+		})
+	case "blacklisted":
+		conditions = append(conditions, bson.M{
+			"isActive": domain.AccountStatusBlacklisted,
+		})
+	}
+
+	if filters.VehicleType != "" {
+		conditions = append(conditions, bson.M{"vehicleType": bson.M{"$elemMatch": bson.M{"$regex": filters.VehicleType, "$options": "i"}}})
+	}
+
+	if filters.KYCStatus != "" {
+		kycStatus := strings.ToUpper(filters.KYCStatus)
+		kycs, err := s.kycRepo.Find(ctx, bson.M{
+			"status": kycStatus,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to filter by kyc status: %w", err)
 		}
 
-		conditions = append(conditions, bson.M{"$or": searchConditions})
+		var kycIDs []primitive.ObjectID
+		for _, k := range kycs {
+			kycIDs = append(kycIDs, k.ID)
+		}
+
+		if len(kycIDs) > 0 {
+			conditions = append(conditions, bson.M{
+				"kycId": bson.M{"$in": kycIDs},
+			})
+		} else {
+			conditions = append(conditions, bson.M{
+				"_id": primitive.NilObjectID,
+			})
+		}
 	}
 
-	query := bson.M{"$and": conditions}
+	if filters.StartDate != "" {
+		if t, err := time.Parse("2006-01-02", filters.StartDate); err == nil {
+			conditions = append(conditions, bson.M{
+				"createdAt": bson.M{
+					"$gte": primitive.NewDateTimeFromTime(t),
+					"$lte": primitive.NewDateTimeFromTime(t.Add(24*time.Hour - time.Second)),
+				},
+			})
+		}
+	}
 
-	providers, total, err := s.providers.FindAll(ctx, query, pagination.Skip, pagination.Limit, pagination.Sort)
+	query := bson.M{}
+	if len(conditions) > 0 {
+		query["$and"] = conditions
+	}
 
+	providers, total, err := s.providers.FindAll(
+		ctx,
+		query,
+		pagination.Skip,
+		pagination.Limit,
+		pagination.Sort,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch providers")
+		return nil, fmt.Errorf("failed to fetch providers: %w", err)
 	}
 
-	inactiveStatuses := []string{
-		string(domain.AccountStatusSuspended),
-		string(domain.AccountStatusBlacklisted),
-		string(domain.AccountStatusDeactivated),
+	var kycIDs []primitive.ObjectID
+	for _, p := range providers {
+		if p.KYCID != primitive.NilObjectID {
+			kycIDs = append(kycIDs, p.KYCID)
+		}
 	}
 
-	activeCount, _ := s.providers.CountByStatus(ctx, query, "isActive", domain.AccountStatusActive)
-	inactiveCount, _ := s.providers.CountByMultipleStatuses(ctx, query, "isActive", inactiveStatuses)
-	pendingKycCount, _ := s.providers.CountByStatus(ctx, query, "status", domain.StatusPending)
+	kycMap := make(map[primitive.ObjectID]domain.ProviderKYC)
+	if len(kycIDs) > 0 {
+		kycs, _ := s.kycRepo.FindByIDs(ctx, kycIDs)
+		for _, k := range kycs {
+			kycMap[k.ID] = k
+		}
+	}
 
-	formatted := make([]dto.ProviderAllResponse, len(providers))
-	for i, p := range providers {
+	formatted := make([]dto.ProviderAllResponse, 0, len(providers))
+
+	for _, p := range providers {
 		totalJobs, completedJobs, _ := s.services.GetServiceStats(ctx, p.ID.Hex())
 
-		kyc := "Not Submitted"
-		if len(p.IdentityProof) > 0 {
-			switch p.IdentityProof[0].Verified {
-			case domain.VerificationApproved:
-				kyc = "Verified"
-			case domain.VerificationRejected:
-				kyc = "Rejected"
-			default:
-				kyc = "Pending"
+		kycStatus := "Not Submitted"
+		if k, ok := kycMap[p.KYCID]; ok {
+			switch k.Status {
+			case domain.KYC_APPROVED:
+				kycStatus = "Verified"
+			case domain.KYC_REJECTED:
+				kycStatus = "Rejected"
+			case domain.KYC_PENDING:
+				kycStatus = "Pending"
 			}
-		}
-
-		account := "Active"
-		switch p.IsActive {
-		case domain.AccountStatusSuspended:
-			account = "Suspended"
-		case domain.AccountStatusBlacklisted:
-			account = "Blacklisted"
 		}
 
 		vehicle := "N/A"
@@ -1117,24 +1199,44 @@ func (s *ProviderAdminService) GetActivationPersonProviders( ctx context.Context
 			vehicle = strings.Join(p.VehicleType, ", ")
 		}
 
-		formatted[i] =dto.ProviderAllResponse{
+		formatted = append(formatted, dto.ProviderAllResponse{
 			ID:            p.ID.Hex(),
 			ProviderID:    p.ProviderCode,
 			Name:          defaultStr(p.Name, "N/A"),
 			Mobile:        p.Phone,
 			Email:         defaultStr(p.Email, "N/A"),
-			Zone:          p.City,
-			KYC:           kyc,
-			Account:       account,
+			KYC:           kycStatus,
+			Account:       string(p.IsActive),
 			Vehicle:       vehicle,
+			Zone:          p.City,
 			DOJ:           formatDate(p.CreatedAt),
 			ProfileURL:    p.ProfileURL,
 			IsServiceOn:   p.IsServiceOn,
-			IsActive:      string(p.IsActive),
+			IsActive:      p.IsActive,
 			TotalJobs:     totalJobs,
 			CompletedJobs: completedJobs,
-		}
+		})
 	}
+
+	activeCount, _ := s.providers.Count(ctx, bson.M{
+		"$and": append([]bson.M{{"createdBy": adminObjectID}}, bson.M{"isActive": domain.AccountStatusActive}),
+	})
+
+	inactiveCount, _ := s.providers.Count(ctx, bson.M{
+		"$and": append([]bson.M{{"createdBy": adminObjectID}}, bson.M{
+			"isActive": bson.M{
+				"$in": []string{
+					domain.AccountStatusSuspended,
+					domain.AccountStatusBlacklisted,
+					domain.AccountStatusDeactivated,
+				},
+			},
+		}),
+	})
+
+	pendingKycCount, _ := s.kycRepo.Count(ctx, bson.M{
+		"status": domain.KYC_PENDING,
+	})
 
 	totalPages := int64(math.Ceil(float64(total) / float64(pagination.Limit)))
 

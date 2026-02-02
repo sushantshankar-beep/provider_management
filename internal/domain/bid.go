@@ -6,40 +6,33 @@ import (
 )
 
 type Bid struct {
-	ID               primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	InternalID       int64              `bson:"id" json:"bid_id"`
-	ServiceRequestID primitive.ObjectID `bson:"serviceRequest" json:"service_request_id"`
-	ProviderID       primitive.ObjectID `bson:"provider" json:"provider_id"`
-	OfferedPrice     float64            `bson:"offeredPrice" json:"offered_price"`
-	BasePrice        *float64           `bson:"basePrice,omitempty" json:"base_price,omitempty"`
-	EstimatedTime    EstimatedTime      `bson:"estimatedTime" json:"estimated_time"`
-	Distance         string             `bson:"distance" json:"distance"`
-	Message          string             `bson:"message,omitempty" json:"message,omitempty"`
-	Status           string             `bson:"status" json:"status"`
-	ExpiresAt        time.Time          `bson:"expiresAt" json:"expires_at"`
-	AcceptedAt       *time.Time         `bson:"acceptedAt,omitempty" json:"accepted_at,omitempty"`
-	RejectedAt       *time.Time         `bson:"rejectedAt,omitempty" json:"rejected_at,omitempty"`
-	ViewedByUser     bool               `bson:"viewedByUser" json:"viewed_by_user"`
-	ViewedAt         *time.Time         `bson:"viewedAt,omitempty" json:"viewed_at,omitempty"`
-	CreatedAt        time.Time          `bson:"createdAt" json:"created_at"`
-	UpdatedAt        time.Time          `bson:"updatedAt" json:"updated_at"`
+	ID              primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	ServiceRequest  primitive.ObjectID `bson:"serviceRequest" json:"serviceRequest"`
+	BidID           int64              `bson:"id" json:"bidId"`
+	Provider        primitive.ObjectID `bson:"provider" json:"provider"`
+	OfferedPrice    float64            `bson:"offeredPrice" json:"offeredPrice"`
+	BasePrice       *float64           `bson:"basePrice,omitempty" json:"basePrice,omitempty"`
+	EstimatedTime   EstimatedTime      `bson:"estimatedTime" json:"estimatedTime"`
+	Distance        string             `bson:"distance" json:"distance"`
+	Message         string             `bson:"message,omitempty" json:"message,omitempty"`
+	Status          string             `bson:"status" json:"status"`
+	ExpiresAt       time.Time          `bson:"expiresAt" json:"expiresAt"`
+	AcceptedAt      *time.Time         `bson:"acceptedAt,omitempty" json:"acceptedAt,omitempty"`
+	RejectedAt      *time.Time         `bson:"rejectedAt,omitempty" json:"rejectedAt,omitempty"`
+	ViewedByUser    bool               `bson:"viewedByUser" json:"viewedByUser"`
+	ViewedAt        *time.Time         `bson:"viewedAt,omitempty" json:"viewedAt,omitempty"`
+	CreatedAt       time.Time          `bson:"createdAt" json:"createdAt"`
+	UpdatedAt       time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
 
 type EstimatedTime struct {
-	Value int    `bson:"value" json:"value"`
+	Value int64  `bson:"value" json:"value"`
 	Unit  string `bson:"unit" json:"unit"`
 }
-
-const (
-	BidStatusPending   = "pending"
-	BidStatusAccepted  = "accepted"
-	BidStatusRejected  = "rejected"
-	BidStatusExpired   = "expired"
-	BidStatusWithdrawn = "withdrawn"
-)
-
-const (
-	TimeUnitMinutes = "minutes"
-	TimeUnitHours   = "hours"
-	TimeUnitDays    = "days"
-)
+type BidLog struct {
+	ID          primitive.ObjectID `bson:_id,ometempty" json: "id"`
+    ServiceID   primitive.ObjectID `bson:"serviceId"`
+    ProviderID  primitive.ObjectID `bson:"providerId"`
+    Price       int            `bson:"price"`
+    CreatedAt   time.Time          `bson:"createdAt"`
+}

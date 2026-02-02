@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"time"
+)
 
 type Preferences struct {
 	Email struct {
@@ -41,6 +44,9 @@ type User struct {
 	ServiceOTP        string      `bson:"service_otp" json:"service_otp"`
 	CreatedAt         time.Time   `bson:"createdAt" json:"created_at"`
 	UpdatedAt         time.Time   `bson:"updatedAt" json:"updated_at"`
+	VehicleID           *primitive.ObjectID  `bson:"vehicleId,omitempty" json:"vehicleId,omitempty"`
+	PrimaryVehicleID    *primitive.ObjectID  `bson:"primaryVehicleId,omitempty" json:"primaryVehicleId,omitempty"`
+	FallbackVehicleIDs []primitive.ObjectID  `bson:"fallbackVehicleIds,omitempty" json:"fallbackVehicleIds,omitempty"`
 }
 
 type UserNote struct {

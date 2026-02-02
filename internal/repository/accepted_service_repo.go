@@ -246,7 +246,7 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 	filter := bson.M{
 		"status":        "completed",
 		"paymentStatus": "paid",
-		"timestamps.CompletedAt": bson.M{
+		"timestamps.completedAt": bson.M{
 			"$gte": from,
 			"$lte": to,
 		},
@@ -504,7 +504,7 @@ func (r *AcceptedServiceRepo) GetBookingStats(ctx context.Context) (dto.Bookings
 					{"$count": "count"},
 				},
 				"ongoing": []bson.M{
-					{"$match": bson.M{"status": bson.M{"$in": []string{"started", "reached_location", "otp_verified", "in_progress"}}}},
+					{"$match": bson.M{"status": bson.M{"$in": []string{"confirmed","started", "reached_location", "otp_verified", "in_progress"}}}},
 					{"$count": "count"},
 				},
 			},
@@ -547,32 +547,13 @@ func (r *AcceptedServiceRepo) GetTopServices(ctx context.Context) ([]dto.TopServ
 	pipeline := []bson.M{
 		{
 			"$match": bson.M{
-				"status": "completed",
-			},
-		},
-		{
-			"$lookup": bson.M{
-				"from":         "servicerequests",
-				"localField":   "serviceRequest",
-				"foreignField": "_id",
-				"as":           "serviceRequestData",
-			},
-		},
-		{
-			"$unwind": bson.M{
-				"path":                       "$serviceRequestData",
-				"preserveNullAndEmptyArrays": false,
-			},
-		},
-		{
-			"$unwind": bson.M{
-				"path":                       "$serviceRequestData.problems",
-				"preserveNullAndEmptyArrays": false,
+				"status":      "completed",
+				"serviceType": bson.M{"$ne": ""},
 			},
 		},
 		{
 			"$group": bson.M{
-				"_id":   "$serviceRequestData.problems",
+				"_id":   "$serviceType",
 				"count": bson.M{"$sum": 1},
 			},
 		},
@@ -591,8 +572,8 @@ func (r *AcceptedServiceRepo) GetTopServices(ctx context.Context) ([]dto.TopServ
 	defer cursor.Close(ctx)
 
 	var results []struct {
-		Problem string `bson:"_id"`
-		Count   int64  `bson:"count"`
+		ServiceType string `bson:"_id"`
+		Count       int64  `bson:"count"`
 	}
 
 	if err := cursor.All(ctx, &results); err != nil {
@@ -604,18 +585,18 @@ func (r *AcceptedServiceRepo) GetTopServices(ctx context.Context) ([]dto.TopServ
 		totalCount += r.Count
 	}
 
-	services := make([]dto.TopService, len(results))
-	for i, r := range results {
+	services := make([]dto.TopService, 0, len(results))
+	for _, r := range results {
 		percentage := 0.0
 		if totalCount > 0 {
-			percentage = (float64(r.Count) / float64(totalCount)) * 100
-			percentage = math.Round(percentage)
+			percentage = math.Round((float64(r.Count) / float64(totalCount)) * 100)
 		}
-		services[i] = dto.TopService{
-			Name:       r.Problem,
-			Percentage: percentage,
+
+		services = append(services, dto.TopService{
+			Name:       r.ServiceType,
 			Count:      r.Count,
-		}
+			Percentage: percentage,
+		})
 	}
 
 	return services, nil

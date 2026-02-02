@@ -76,9 +76,10 @@ func main() {
 	providerVehicleBrandRepo := repository.NewProviderVehicleBrandRepo(mongoDB)
     invoiceRepo := repository.NewInvoiceRepo(mongoDB)
 	ratingRepo := repository.NewRatingRepo(mongoDB)
+	vehicleRepo := repository.NewVehiclesRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
-	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo)
+	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo,vehicleRepo)
 	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo,adminRepo,zoneRepo,roleRepo, settlementRepo, settlementHistoryRepo, serviceR,kycRepo)
 	adminBookingService := service.NewAdminBookingService(adminBookingRepo,invoiceRepo,transactionRepo,settlementHistoryRepo,ratingRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo,kycRepo,transactionRepo)
@@ -99,6 +100,7 @@ func main() {
 	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo,serviceMasterRepo)
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo,complaintRepo,acceptedServiceRepo,payUService)
 	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService,transactionRepo,kycRepo)
+
 	 
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)

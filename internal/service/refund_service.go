@@ -147,14 +147,14 @@ func (s *RefundService) GetAllRefunds(
 
 	for _, refund := range refunds {
 		userCode := refund.UserID
-		log.Println("djcsnjds")
+		
 		if u, ok := userMap[refund.UserID]; ok {
 			userCode = u.UserCode
 		}
 
 		var serviceNumber string
 		var complaintNumber string
-        log.Println("dscnjksdnbckjds",refund.ServiceID)
+
 		if service, ok := acceptedServices[refund.ServiceID]; ok {
 			serviceNumber = service.ServiceNumber
 			if complaint, exists := complaints[service.ID.Hex()]; exists {
@@ -279,14 +279,13 @@ func (s *RefundService) InitiateRefund(ctx context.Context, refundID string) err
 
 		update := bson.M{
 			"$set": bson.M{
-				"status":        domain.RefundStatusFailed,
-				"failureReason": err.Error(),
-				"timeline": bson.M{
-					"failed": time.Now(),
-				},
+				"status":           domain.RefundStatusFailed,
+				"failureReason":    err.Error(),
+				"timeline.failed":  time.Now(),
 			},
 		}
 
+		
 		_ = s.refundRepo.Update(ctx, refund.ID, update)
 		return fmt.Errorf("failed to initiate refund with PayU: %w", err)
 	}
@@ -294,15 +293,14 @@ func (s *RefundService) InitiateRefund(ctx context.Context, refundID string) err
 	// ---------------- SUCCESS CASE ----------------
 	update := bson.M{
 		"$set": bson.M{
-			"status":             domain.RefundStatusUnderProcess,
-			"payuRequestId":      payuResp.RequestID,
-			"payuTransactionId":  payuResp.RefundTransactionID,
-			"payuRefundResponse": payuResp.PayUResponse,
-			"timeline": bson.M{
-				"underProcess": time.Now(),
-			},
+			"status":                domain.RefundStatusUnderProcess,
+			"payuRequestId":         payuResp.RequestID,
+			"payuTransactionId":     payuResp.RefundTransactionID,
+			"payuRefundResponse":    payuResp.PayUResponse,
+			"timeline.underProcess": time.Now(),
 		},
 	}
+	
 
 	if err := s.refundRepo.Update(ctx, refund.ID, update); err != nil {
 		return fmt.Errorf("refund initiated but failed to update record: %w", err)

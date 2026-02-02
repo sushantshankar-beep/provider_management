@@ -448,3 +448,22 @@ func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.
 		ServiceAmount:    result[0].ServiceAmount,
 	}, nil
 }
+
+func (r *PaymentPayoutRepo) FindByPayoutNumber(
+	ctx context.Context,
+	payoutNumber int64,
+) (*domain.PaymentPayout, error) {
+
+	var payout domain.PaymentPayout
+
+	err := r.col.FindOne(
+		ctx,
+		bson.M{"payoutId": payoutNumber},
+	).Decode(&payout)
+
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+
+	return &payout, err
+}

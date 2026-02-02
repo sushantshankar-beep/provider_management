@@ -419,3 +419,22 @@ func (r *ProviderRepo) FindByPhone(ctx context.Context, phone string) (*domain.P
 	}
 	return &provider, nil
 }
+
+func (r *ProviderRepo) FindByProviderCode(
+	ctx context.Context,
+	code string,
+) (*domain.Provider, error) {
+
+	var provider domain.Provider
+
+	err := r.col.FindOne(
+		ctx,
+		bson.M{"providerCode": code},
+	).Decode(&provider)
+
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+
+	return &provider, err
+}

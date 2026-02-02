@@ -1,15 +1,17 @@
 package service
 
 import (
-	"fmt"
-	"math"
-	"time"
-	"strings"
 	"context"
-	"go.mongodb.org/mongo-driver/bson"
+	"fmt"
+	"log"
+	"math"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
+	"strings"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -18,6 +20,7 @@ type UserAdminService struct {
 	vehicles *repository.SavedVehiclesRepo
 	bookings *repository.AcceptedServiceRepo
 	amc      *repository.AMCPurchaseRepo
+	vehicleRepo *repository.VehiclesRepo
 }
 
 func NewUserAdminService(
@@ -25,12 +28,14 @@ func NewUserAdminService(
 	v *repository.SavedVehiclesRepo,
 	b *repository.AcceptedServiceRepo,
 	a *repository.AMCPurchaseRepo,
+	vehicleRepo *repository.VehiclesRepo,
 ) *UserAdminService {
 	return &UserAdminService{
 		users:    u,
 		vehicles: v,
 		bookings: b,
 		amc:      a,
+		vehicleRepo: vehicleRepo,
 	}
 }
 
@@ -217,7 +222,18 @@ func (s *UserAdminService) GetUserByID(ctx context.Context, userCode string) (*d
 		return nil, err
 	}
 
-	vehicles, err := s.vehicles.FindByUserID(ctx, u.ID)
+	var vehicleIDs []primitive.ObjectID
+
+	if u.PrimaryVehicleID != nil {
+		vehicleIDs = append(vehicleIDs, *u.PrimaryVehicleID)
+	}
+
+	if len(u.FallbackVehicleIDs) > 0 {
+		vehicleIDs = append(vehicleIDs, u.FallbackVehicleIDs...)
+	}
+
+	vehicles, err := s.vehicleRepo.FindByIDs(ctx, vehicleIDs)
+	log.Println("vehiclessss",vehicles)
 	if err != nil {
 		return nil, err
 	}
@@ -241,17 +257,16 @@ func (s *UserAdminService) GetUserByID(ctx context.Context, userCode string) (*d
 		return nil, err
 	}
 
-	vehicleInfos := make([]dto.VehicleInfo, len(vehicles))
-	for i, v := range vehicles {
-		vehicleInfos[i] = dto.VehicleInfo{
+	vehicleInfos := make([]dto.VehicleInfo, 0, len(vehicles))
+	for _, v := range vehicles {
+		vehicleInfos = append(vehicleInfos, dto.VehicleInfo{
 			ID:            v.ID.Hex(),
 			VehicleNumber: v.VehicleNumber,
 			Brand:         v.Brand,
 			Model:         v.Model,
-			Year:          v.Year,
-			FuelType:      v.FuelType,
+			Year:          v.ModelYear,
 			VehicleType:   v.VehicleType,
-		}
+		})
 	}
 
 	status := u.IsActive
