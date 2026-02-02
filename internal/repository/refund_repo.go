@@ -3,7 +3,6 @@ package repository
 import (
 	"fmt"
 	"time"
-    "strconv"
 	"strings"
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
@@ -17,6 +16,8 @@ type RefundRepository struct {
 	collection *mongo.Collection
 	counterCol *mongo.Collection
 	userCollection *mongo.Collection
+	complaintCollection *mongo.Collection
+	acceptedServiceCollection *mongo.Collection
 }
 
 func NewRefundRepository(db *mongo.Database) *RefundRepository {
@@ -24,6 +25,8 @@ func NewRefundRepository(db *mongo.Database) *RefundRepository {
 		collection: db.Collection("refund_transactions"),
 		counterCol: db.Collection("counters"),
 		userCollection: db.Collection("users"),
+		complaintCollection: db.Collection("complaints"),
+		acceptedServiceCollection: db.Collection("acceptedservices"),
 	}
 }
 
@@ -130,52 +133,64 @@ func (r *RefundRepository) FindAll(
 
 	if filter.Search != "" {
 		orFilters := []bson.M{}
-
-		searchUpper := strings.ToUpper(filter.Search)
-
-		if strings.HasPrefix(searchUpper, "RF") {
-			orFilters = append(orFilters, bson.M{"refundId": filter.Search})
-			orFilters = append(orFilters, bson.M{"refundId": bson.M{"$regex": filter.Search, "$options": "i"}})
-		}
-
-		if strings.HasPrefix(searchUpper, "VW") {
-			if internalID, err := strconv.ParseInt(filter.Search[2:], 10, 64); err == nil {
-				var user domain.User
-				err := r.userCollection.FindOne(ctx, bson.M{"id": internalID}).Decode(&user)
-				if err == nil && user.ID != "" {
-					orFilters = append(orFilters, bson.M{"userId": user.ID})
-				}
+		search := strings.TrimSpace(filter.Search)
+		searchUpper := strings.ToUpper(search)
+		
+		orFilters = append(orFilters, bson.M{
+		   "_id": bson.M{"$regex": search, "$options": "i"},
+		})
+		
+		orFilters = append(orFilters, bson.M{
+			"txnid": bson.M{"$regex": search, "$options": "i"},
+		})
+	
+		if strings.HasPrefix(searchUpper, "VHCR") {
+			var user domain.User
+			err := r.userCollection.FindOne(
+				ctx,
+				bson.M{"userCode": search},
+			).Decode(&user)
+	
+			if err == nil {
+				orFilters = append(orFilters, bson.M{
+					"userId": user.ID,
+				})
 			}
 		}
-
-		if strings.HasPrefix(searchUpper, "BK") {
-			if bookingNo, err := strconv.ParseInt(filter.Search[2:], 10, 64); err == nil {
-				orFilters = append(orFilters, bson.M{"bookingNo": bookingNo})
+	
+		if strings.HasPrefix(searchUpper, "VHBK") {
+			var service domain.AcceptedService
+			err := r.acceptedServiceCollection.FindOne(
+				ctx,
+				bson.M{"serviceNumber": search},
+			).Decode(&service)
+	
+			if err == nil {
+				orFilters = append(orFilters, bson.M{
+					"serviceId": service.ID.Hex(),
+				})
 			}
 		}
-
+	
 		if strings.HasPrefix(searchUpper, "CMP") {
-			if complaintNo, err := strconv.ParseInt(filter.Search[3:], 10, 64); err == nil {
-				orFilters = append(orFilters, bson.M{"complaintNo": complaintNo})
+			var complaint domain.Complaint
+			err := r.complaintCollection.FindOne(
+				ctx,
+				bson.M{"complaintNumber": search},
+			).Decode(&complaint)
+	
+			if err == nil {
+				orFilters = append(orFilters, bson.M{
+					"complaintId": complaint.ID,
+				})
 			}
 		}
-
-		if numericSearch, err := strconv.ParseInt(filter.Search, 10, 64); err == nil {
-			orFilters = append(orFilters,
-				bson.M{"bookingNo": numericSearch},
-				bson.M{"complaintNo": numericSearch},
-			)
-		}
-
-		orFilters = append(orFilters, 
-			bson.M{"transactionId": bson.M{"$regex": filter.Search, "$options": "i"}},
-			bson.M{"refundId": bson.M{"$regex": filter.Search, "$options": "i"}},
-		)
-
+	
 		if len(orFilters) > 0 {
 			query["$or"] = orFilters
 		}
 	}
+	
 
 	total, err := r.collection.CountDocuments(ctx, query)
 	if err != nil {

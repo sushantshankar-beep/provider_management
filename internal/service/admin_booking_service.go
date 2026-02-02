@@ -11,7 +11,6 @@ import (
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
 	"provider_management/internal/utils"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -233,18 +232,13 @@ func (s *AdminBookingService) addBookingIDFilter(serviceNumber string, filter bs
 
 func (s *AdminBookingService) addSearchFilter(ctx context.Context, search string, filter bson.M) error {
 	searchConditions := []bson.M{}
-	cleanSearch := strings.ReplaceAll(search, "BK", "")
 
-	if bookingID, err := strconv.ParseInt(cleanSearch, 10, 64); err == nil {
-		searchConditions = append(searchConditions, bson.M{"serviceNumber": bookingID})
-	}
+	if strings.HasPrefix(search, "VHBK") {
+		serviceNumber := strings.TrimSpace(search)
 
-	cleanSearch = strings.ReplaceAll(search, "VW", "")
-	if userID, err := strconv.ParseInt(cleanSearch, 10, 64); err == nil {
-		if users, err := s.repo.FindUsersByInternalID(ctx, userID); err == nil && len(users) > 0 {
-			userIDs := s.convertToObjectIDs(users)
-			searchConditions = append(searchConditions, bson.M{"user": bson.M{"$in": userIDs}})
-		}
+		searchConditions = append(searchConditions, bson.M{
+			"serviceNumber": serviceNumber,
+		})
 	}
 
 	if users, err := s.repo.FindUsersBySearch(ctx, search); err == nil && len(users) > 0 {

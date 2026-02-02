@@ -95,7 +95,7 @@ type ServiceTimestamps struct {
     StartedAt    *time.Time `bson:"startedAt,omitempty" json:"started_at,omitempty"`
     ReachedAt    *time.Time `bson:"reachedAt,omitempty" json:"reached_at,omitempty"`
     InProgressAt *time.Time `bson:"inProgressAt,omitempty" json:"in_progress,omitempty"`
-    CompletedAt  *time.Time `bson:"CompletedAt,omitempty" json:"completed,omitempty"`
+    CompletedAt  *time.Time `bson:"completedAt,omitempty" json:"completed,omitempty"`
     CancelledAt  *time.Time `bson:"cancelledAt,omitempty" json:"cancelled,omitempty"`
     OtpVerified  *time.Time `bson:"OtpVerified,omitempty" json:"otp_verified,omitempty"`
 }

@@ -86,7 +86,6 @@ func (s *ComplaintService) GetAllComplaints(
 	pagination dto.ComplaintPagination,
 ) (*dto.ComplaintListResponse, error) {
 
-	// ---- Pagination defaults ----
 	if pagination.Page < 1 {
 		pagination.Page = 1
 	}
@@ -94,7 +93,6 @@ func (s *ComplaintService) GetAllComplaints(
 		pagination.Limit = 10
 	}
 
-	// ---- Build domain filter ----
 	domainFilter := dto.ComplaintFilter{
 		Page:          pagination.Page,
 		Limit:         pagination.Limit,
@@ -108,7 +106,6 @@ func (s *ComplaintService) GetAllComplaints(
 		CreatedAtTo:   filters.CreatedAtTo,
 	}
 
-	// ---- Fetch complaints ----
 	complaints, total, stats, err := s.complaintRepo.ListComplaints(ctx, domainFilter)
 	if err != nil {
 		return nil, err
@@ -116,13 +113,8 @@ func (s *ComplaintService) GetAllComplaints(
 
 	data := make([]dto.ComplaintListItem, 0, len(complaints))
 
-	// ---- Build response ----
 	for _, complaint := range complaints {
-
-		// Convert to IST
 		indianTime := complaint.CreatedAt.Add(5*time.Hour + 30*time.Minute)
-
-		// Fetch accepted service safely
 		var booking *domain.AcceptedService
 		if complaint.AcceptedService != "" {
 			booking, err = s.acceptedServiceRepo.FindByID(ctx, complaint.AcceptedService)
@@ -136,7 +128,6 @@ func (s *ComplaintService) GetAllComplaints(
 			}
 		}
 
-		// Nil-safe service number
 		serviceNumber := ""
 		if booking != nil {
 			serviceNumber = booking.ServiceNumber
@@ -150,7 +141,6 @@ func (s *ComplaintService) GetAllComplaints(
 			CreatedAt:         indianTime.Format("2006-01-02 15:04:05"),
 		}
 
-		// Raised by logic
 		if complaint.UserComplaint != nil && complaint.UserID != "" && complaint.ProviderID != "" {
 			resp.RaisedBy = "user"
 			resp.Against = "provider"
@@ -164,7 +154,6 @@ func (s *ComplaintService) GetAllComplaints(
 		data = append(data, resp)
 	}
 
-	// ---- Pagination meta ----
 	totalPages := (total + int64(pagination.Limit) - 1) / int64(pagination.Limit)
 
 	return &dto.ComplaintListResponse{

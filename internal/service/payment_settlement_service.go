@@ -29,8 +29,8 @@ type SettlementService struct {
 	payoutRepo            *repository.PaymentPayoutRepo
 	providerRepo          *repository.ProviderRepo
 	settlementHistoryRepo *repository.SettlementHistoryRepository
-	kycRepo *repository.ProviderKYCRepository
-	transactionRepo *repository.TransactionRepo
+	kycRepo               *repository.ProviderKYCRepository
+	transactionRepo       *repository.TransactionRepo
 }
 
 type GetSettlementsRequest struct {
@@ -45,6 +45,7 @@ type GetSettlementsRequest struct {
 	Limit       int64  `form:"limit,default=10"`
 	SortField   string `form:"sort_field,default=createdAt"`
 	SortOrder   string `form:"sort_order,default=desc"`
+	Search      string `form:"search"`
 }
 
 type CreateSettlementRequest struct {
@@ -59,6 +60,7 @@ type ProviderSettlementResponse struct {
 	SettlementID   string                  `json:"settlementId"`
 	ProviderID     primitive.ObjectID      `json:"providerId"`
 	ProviderName   string                  `json:"providerName"`
+	ProviderCode   string                  `json:"providerCode"`
 	AccountNo      string                  `json:"accountNo"`
 	IfscCode       string                  `json:"ifscCode"`
 	TotalAmount    float64                 `json:"totalAmount"`
@@ -66,7 +68,7 @@ type ProviderSettlementResponse struct {
 	PaymentMode    string                  `json:"paymentMode"`
 	PaymentMethod  string                  `json:"paymentMethod"`
 	Justification  string                  `json:"justification"`
-	Status         domain.SettlementStatus `json:"stransactionRetatus"`
+	Status         domain.SettlementStatus `json:"settelementStatus"`
 	PayoutIdNumber string                  `json:"payoutId"`
 	SettledAt      *time.Time              `json:"settledAt"`
 	CreatedAt      time.Time               `json:"createdAt"`
@@ -76,6 +78,7 @@ type ProviderSettlementIDResponse struct {
 	ID              primitive.ObjectID      `json:"id"`
 	SettlementID    string                  `json:"settlement_id"`
 	PayoutIdNumber  string                  `json:"payout_id"`
+	ProviderCode    string                  `json:"providerCode"`
 	ProviderID      primitive.ObjectID      `json:"provider_id"`
 	ProviderName    string                  `json:"provider_name"`
 	AccountNo       string                  `json:"account_no"`
@@ -97,7 +100,7 @@ func NewSettlementService(
 	providerRepo *repository.ProviderRepo,
 	settlementHistoryRepo *repository.SettlementHistoryRepository,
 	kycRepo *repository.ProviderKYCRepository,
-	transactionRepo * repository.TransactionRepo,
+	transactionRepo *repository.TransactionRepo,
 ) *SettlementService {
 	return &SettlementService{
 		serviceRepo:           serviceRepo,
@@ -105,8 +108,8 @@ func NewSettlementService(
 		payoutRepo:            payoutRepo,
 		providerRepo:          providerRepo,
 		settlementHistoryRepo: settlementHistoryRepo,
-		kycRepo: kycRepo,
-		transactionRepo: transactionRepo,
+		kycRepo:               kycRepo,
+		transactionRepo:       transactionRepo,
 	}
 }
 
@@ -114,7 +117,6 @@ func parsePayoutID(payoutIDStr string) (int64, error) {
 	numStr := strings.TrimPrefix(payoutIDStr, "PAY")
 	return strconv.ParseInt(numStr, 10, 64)
 }
-
 
 func (s *SettlementService) CreateSettlement(
 	ctx context.Context,
@@ -148,10 +150,10 @@ func (s *SettlementService) CreateSettlement(
 	}
 
 	tdsPercent := 0.0
-	gstPercent := 0.0  
+	gstPercent := 0.0
 	if hasGSTNumber {
 		tdsPercent = 10.0
-		gstPercent = 18.0  
+		gstPercent = 18.0
 	}
 
 	serviceObjIDs := make([]primitive.ObjectID, 0, len(req.ServiceIDs))
@@ -253,20 +255,20 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		commission := baseAmount * (providerCommissionPercent / 100)  // ← CHANGED: Always charge commission
+		commission := baseAmount * (providerCommissionPercent / 100) // ← CHANGED: Always charge commission
 		afterCommission := baseAmount - commission
-		
+
 		var tds, gst, net float64
 		if hasGSTNumber {
 			// Provider has GST: Commission + 10% TDS + 18% GST
-			tds = afterCommission * 0.10  // ← CHANGED: 10% TDS on (FinalPrice - Commission)
-			gst = afterCommission * 0.18  // ← CHANGED: 18% GST on (FinalPrice - Commission)
+			tds = afterCommission * 0.10 // ← CHANGED: 10% TDS on (FinalPrice - Commission)
+			gst = afterCommission * 0.18 // ← CHANGED: 18% GST on (FinalPrice - Commission)
 			net = afterCommission - tds - gst
 		} else {
 			// Provider doesn't have GST: Only Commission
 			tds = 0
 			gst = 0
-			net = afterCommission  // ← Net = FinalPrice - Commission
+			net = afterCommission // ← Net = FinalPrice - Commission
 		}
 
 		log.Printf("Service %s: Base=%.2f Commission=%.2f TDS=%.2f GST=%.2f Net=%.2f",
@@ -300,7 +302,7 @@ func (s *SettlementService) CreateSettlement(
 		if service.HasComplaintAdjustment {
 			netAmount = -service.PendingDeductionAmount
 		} else {
-			baseAmount := service.FinalPrice 
+			baseAmount := service.FinalPrice
 			if payout.ServicePartialAmounts != nil {
 				if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt > 0 {
 					baseAmount = partialAmt
@@ -309,7 +311,7 @@ func (s *SettlementService) CreateSettlement(
 
 			commission := baseAmount * (providerCommissionPercent / 100)
 			afterCommission := baseAmount - commission
-			
+
 			if hasGSTNumber {
 				tds := afterCommission * 0.10
 				gst := afterCommission * 0.18
@@ -342,7 +344,7 @@ func (s *SettlementService) CreateSettlement(
 		PayoutID:        payout.ID,
 		ProviderID:      provider.ID,
 		ProviderName:    provider.Name,
-		AccountNo:       kyc.Bank.AccountHolderName,
+		AccountNo:       kyc.Bank.AccountNumber,
 		IfscCode:        kyc.Bank.IFSC,
 		TotalAmount:     utils.RoundTo2(settlementAmount),
 		PaymentMode:     req.PaymentMode,
@@ -398,7 +400,7 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		originalAmount := service.FinalPrice 
+		originalAmount := service.FinalPrice
 
 		var partialAmount float64
 		if payout.ServicePartialAmounts != nil {
@@ -412,7 +414,7 @@ func (s *SettlementService) CreateSettlement(
 			calculationAmount = partialAmount
 		}
 
-		commission := calculationAmount * (providerCommissionPercent / 100)  // ← CHANGED: Always charge
+		commission := calculationAmount * (providerCommissionPercent / 100) // ← CHANGED: Always charge
 		afterCommission := calculationAmount - commission
 
 		var tds, gst, netAmount float64
@@ -528,7 +530,6 @@ func (s *SettlementService) CreateSettlement(
 	return settlement, nil
 }
 
-
 func (s *SettlementService) GetSettlements(
 	ctx context.Context,
 	req *GetSettlementsRequest,
@@ -596,6 +597,36 @@ func (s *SettlementService) GetSettlements(
 		}
 	}
 
+	if req.Search != "" {
+		search := strings.TrimSpace(req.Search)
+		or := bson.A{}
+
+		if strings.HasPrefix(strings.ToUpper(search), "SET") {
+			num, err := strconv.ParseInt(strings.TrimPrefix(strings.ToUpper(search), "SET"), 10, 64)
+			if err == nil {
+				or = append(or, bson.M{"settlementId": num})
+			}
+		}
+		
+		if strings.HasPrefix(strings.ToUpper(search), "PAY") {
+			num, err := strconv.ParseInt(strings.TrimPrefix(strings.ToUpper(search), "PAY"),10,64,)
+			if err == nil {
+				payout, err := s.payoutRepo.FindByPayoutNumber(ctx, num)
+				if err == nil && payout != nil {
+					or = append(or, bson.M{
+						"payoutId": payout.ID,
+					})
+				}
+			}
+		}
+		
+		if provider, _ := s.providerRepo.FindByProviderCode(ctx, search); provider != nil {
+			or = append(or, bson.M{"providerId": provider.ID})
+		}
+		
+		filter["$or"] = or
+	}
+
 	skip := (req.Page - 1) * req.Limit
 	sortOrder := -1
 	if strings.ToLower(req.SortOrder) == "asc" {
@@ -638,6 +669,10 @@ func (s *SettlementService) GetSettlements(
 		if err == nil && payout != nil {
 			resp.PayoutIdNumber = "PAY" + strconv.FormatInt(payout.PayoutID, 10)
 			resp.IsDeduction = payout.IsDeduction
+		}
+
+		if provider, _ := s.providerRepo.FindByID(ctx, settlement.ProviderID.Hex()); provider != nil {
+			resp.ProviderCode = provider.ProviderCode
 		}
 
 		responses = append(responses, resp)
@@ -765,6 +800,10 @@ func (s *SettlementService) GetSettlementByID(
 		if err == nil && payout != nil {
 			resp.PayoutIdNumber = "PAY" + strconv.FormatInt(payout.PayoutID, 10)
 		}
+	}
+
+	if provider, _ := s.providerRepo.FindByID(ctx, settlement.ProviderID.Hex()); provider != nil {
+		resp.ProviderCode = provider.ProviderCode
 	}
 
 	return &resp, nil
