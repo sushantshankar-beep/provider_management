@@ -8,23 +8,48 @@ type PayoutCalculation struct {
 	NetPayable float64
 }
 
-func CalculatePayout(amount, commissionPct, gstPct float64, tdsPercent float64) PayoutCalculation {
-	commission := amount * commissionPct / 100
-	afterCommission := amount - commission
+// func CalculatePayout(amount, commissionPct, gstPct float64, tdsPercent float64) PayoutCalculation {
+// 	commission := amount * commissionPct / 100
+// 	afterCommission := amount - commission
 
-	gst := 0.0
-	tds := 0.0
+// 	gst := 0.0
+// 	tds := 0.0
 
-	if tdsPercent > 0 {
-		tds = afterCommission * tdsPercent / 100
+// 	if tdsPercent > 0 {
+// 		tds = afterCommission * tdsPercent / 100
+// 	} else {
+// 		gst = afterCommission * gstPct / 100
+// 	}
+
+// 	netPayable := afterCommission - gst - tds
+
+// 	return PayoutCalculation{
+// 		BaseAmount: RoundTo2(amount),
+// 		Commission: RoundTo2(commission),
+// 		GST:        RoundTo2(gst),
+// 		TDS:        RoundTo2(tds),
+// 		NetPayable: RoundTo2(netPayable),
+// 	}
+// }
+
+func CalculatePayout(baseAmount, commissionPercent, gstPercent, tdsPercent float64) PayoutCalculation {
+	var commission, gst, tds, netPayable float64
+
+	if gstPercent > 0 && tdsPercent > 0 {
+		commission = baseAmount * (commissionPercent / 100)
+		afterCommission := baseAmount - commission
+		gst = afterCommission * (gstPercent / 100)
+		amountWithGST := afterCommission + gst
+		tds = amountWithGST * (tdsPercent / 100)
+		netPayable = amountWithGST - tds
 	} else {
-		gst = afterCommission * gstPct / 100
+		commission = baseAmount * (commissionPercent / 100)
+		gst = 0
+		tds = 0
+		netPayable = baseAmount - commission
 	}
 
-	netPayable := afterCommission - gst - tds
-
 	return PayoutCalculation{
-		BaseAmount: RoundTo2(amount),
 		Commission: RoundTo2(commission),
 		GST:        RoundTo2(gst),
 		TDS:        RoundTo2(tds),

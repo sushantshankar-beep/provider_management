@@ -55,6 +55,12 @@ type ResetPasswordRequest struct {
 	NewPassword string `json:"newPassword" binding:"required"`
 }
 
+type ChangeAdminPasswordRequest struct {
+	AdminID    string `json:"adminId" binding:"required"`
+	NewPassword string `json:"newPassword" binding:"required,min=8"`
+}
+
+
 func (h *AdminHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -409,4 +415,35 @@ func (h *AdminHandler) GetProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"admin": profile})
+}
+
+func (h *AdminHandler) ChangeAdminPassword(c *gin.Context) {
+	loggedInAdmin := middleware.GetAdminFromContext(c)
+
+	var req ChangeAdminPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	err := h.service.ChangeAdminPassword(
+		c.Request.Context(),
+		loggedInAdmin,
+		req.AdminID,
+		req.NewPassword,
+	)
+
+	if err != nil {
+		switch err.Error() {
+		case "unauthorized":
+			c.JSON(http.StatusForbidden, gin.H{"message": "You are not allowed to change this password"})
+		case "admin not found":
+			c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password updated successfully"})
 }

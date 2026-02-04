@@ -255,21 +255,23 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		commission := baseAmount * (providerCommissionPercent / 100) // ← CHANGED: Always charge commission
-		afterCommission := baseAmount - commission
-
-		var tds, gst, net float64
+		var commission, tds, gst, net float64
 		if hasGSTNumber {
-			// Provider has GST: Commission + 10% TDS + 18% GST
-			tds = afterCommission * 0.10 // ← CHANGED: 10% TDS on (FinalPrice - Commission)
-			gst = afterCommission * 0.18 // ← CHANGED: 18% GST on (FinalPrice - Commission)
-			net = afterCommission - tds - gst
+			commission = baseAmount * (providerCommissionPercent / 100)
+			afterCommission := baseAmount - commission
+			
+			gst = afterCommission * 0.18
+			amountWithGST := afterCommission + gst
+			
+			tds = amountWithGST * 0.10
+			net = amountWithGST - tds
 		} else {
-			// Provider doesn't have GST: Only Commission
+			commission = baseAmount * (providerCommissionPercent / 100)
 			tds = 0
 			gst = 0
-			net = afterCommission // ← Net = FinalPrice - Commission
+			net = baseAmount - commission
 		}
+
 
 		log.Printf("Service %s: Base=%.2f Commission=%.2f TDS=%.2f GST=%.2f Net=%.2f",
 			serviceKey, baseAmount, commission, tds, gst, net)
@@ -309,15 +311,16 @@ func (s *SettlementService) CreateSettlement(
 				}
 			}
 
-			commission := baseAmount * (providerCommissionPercent / 100)
-			afterCommission := baseAmount - commission
-
 			if hasGSTNumber {
-				tds := afterCommission * 0.10
+				commission := baseAmount * (providerCommissionPercent / 100)
+				afterCommission := baseAmount - commission
 				gst := afterCommission * 0.18
-				netAmount = afterCommission - tds - gst
+				amountWithGST := afterCommission + gst
+				tds := amountWithGST * 0.10
+				netAmount = amountWithGST - tds
 			} else {
-				netAmount = afterCommission
+				commission := baseAmount * (providerCommissionPercent / 100)
+				netAmount = baseAmount - commission
 			}
 		}
 
@@ -414,18 +417,19 @@ func (s *SettlementService) CreateSettlement(
 			calculationAmount = partialAmount
 		}
 
-		commission := calculationAmount * (providerCommissionPercent / 100) // ← CHANGED: Always charge
-		afterCommission := calculationAmount - commission
-
-		var tds, gst, netAmount float64
+		var commission, tds, gst, netAmount float64
 		if hasGSTNumber {
-			tds = afterCommission * 0.10
+			commission = calculationAmount * (providerCommissionPercent / 100)
+			afterCommission := calculationAmount - commission
 			gst = afterCommission * 0.18
-			netAmount = afterCommission - tds - gst
+			amountWithGST := afterCommission + gst
+			tds = amountWithGST * 0.10
+			netAmount = amountWithGST - tds
 		} else {
+			commission = calculationAmount * (providerCommissionPercent / 100)
 			tds = 0
 			gst = 0
-			netAmount = afterCommission
+			netAmount = calculationAmount - commission
 		}
 
 		settlementType := "regular"

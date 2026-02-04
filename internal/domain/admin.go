@@ -47,6 +47,7 @@ type Admin struct {
 	Token         string  `bson:"token,omitempty" json:"token,omitempty"`
 	CreatedAt     time.Time            `bson:"createdAt" json:"createdAt"`
 	UpdatedAt     time.Time            `bson:"updatedAt" json:"updatedAt"`
+	PasswordChangedAt *time.Time         `bson:"passwordChangedAt,omitempty"`
 }
 
 type AdminResponse struct {

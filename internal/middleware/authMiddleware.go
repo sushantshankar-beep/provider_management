@@ -2,33 +2,35 @@ package middleware
 
 import (
 	"context"
-	
+	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
+
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
 type AuthMiddleware struct {
-    adminRepo *repository.AdminRepository
+	adminRepo *repository.AdminRepository
 }
 
 func NewAuthMiddleware(adminRepo *repository.AdminRepository) *AuthMiddleware {
-    return &AuthMiddleware{
-        adminRepo: adminRepo,
-    }
+	return &AuthMiddleware{
+		adminRepo: adminRepo,
+	}
 }
 
 func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		// ✅ Allow CORS preflight
 		if c.Request.Method == http.MethodOptions {
-			c.AbortWithStatus(204)
+			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 
@@ -48,6 +50,7 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
+			log.Println("Invalid JWT token:", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
 			c.Abort()
 			return
@@ -75,8 +78,31 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 		}
 
 		admin, err := m.adminRepo.FindByID(context.Background(), adminID)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Account is Deleted","code": "ACCOUNT_DELETED",})
+		if err != nil || admin == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"message": "Account is deleted or does not exist",
+				"code":    "ACCOUNT_DELETED",
+			})
+			c.Abort()
+			return
+		}
+
+		iatFloat, ok := claims["iat"].(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		tokenIssuedAt := time.Unix(int64(iatFloat), 0)
+
+		if admin.PasswordChangedAt != nil &&
+			tokenIssuedAt.Before(*admin.PasswordChangedAt) {
+
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"message": "Password changed. Please login again.",
+				"code":    "PASSWORD_CHANGED",
+			})
 			c.Abort()
 			return
 		}
@@ -84,7 +110,7 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 		if admin.Status == domain.StatusDeactive {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"message": "Account is deactivated.",
-				"code": "ACCOUNT_DEACTIVATED",
+				"code":    "ACCOUNT_DEACTIVATED",
 			})
 			c.Abort()
 			return
@@ -92,6 +118,7 @@ func (m *AuthMiddleware) AdminAuth() gin.HandlerFunc {
 
 		c.Set("admin", admin)
 		c.Set("token", tokenString)
+
 		c.Next()
 	}
 }

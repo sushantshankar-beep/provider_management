@@ -315,15 +315,15 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		return fmt.Errorf("no transaction associated with this booking")
 	}
 
-	var transaction *domain.Transaction
-	if complaint.AcceptedService != "" {
-		transaction, err = s.transactionRepo.FindByServiceID(ctx, complaint.AcceptedService)
-		if err != nil {
-			log.Println("Error fetching transactio:", err, "Service", complaint.AcceptedService)
-		}
-	}
+	// var transaction *domain.Transaction
+	// if complaint.AcceptedService != "" {
+	// 	transaction, err = s.transactionRepo.FindByServiceID(ctx, complaint.AcceptedService)
+	// 	if err != nil {
+	// 		log.Println("Error fetching transactio:", err, "Service", complaint.AcceptedService)
+	// 	}
+	// }
 
-	if err := s.validateComplaintAssessmentAmounts(&req, transaction.Amount); err != nil {
+	if err := s.validateComplaintAssessmentAmounts(&req, acceptedService.FinalPrice); err != nil {
 		return err
 	}	
 
@@ -490,20 +490,20 @@ func (s *ComplaintService) processRefund(ctx context.Context, complaint *domain.
 
 func (s *ComplaintService) processPayout(ctx context.Context, complaint *domain.Complaint, acceptedService *domain.AcceptedService, req dto.AssessComplaintRequest) []string {
 
-	var transaction *domain.Transaction
-	if complaint.AcceptedService != "" {
-		var err error
-		transaction, err = s.transactionRepo.FindByServiceID(ctx, complaint.AcceptedService)
-		if err != nil {
-			log.Println("Error fetching transactio:", err, "Service", complaint.AcceptedService)
-		}
-	}
+	// var transaction *domain.Transaction
+	// if complaint.AcceptedService != "" {
+	// 	var err error
+	// 	transaction, err = s.transactionRepo.FindByServiceID(ctx, complaint.AcceptedService)
+	// 	if err != nil {
+	// 		log.Println("Error fetching transactio:", err, "Service", complaint.AcceptedService)
+	// 	}
+	// }
 
 	providerID := acceptedService.Provider.Hex()
-	originalAmount := transaction.Amount
+	originalAmount := acceptedService.FinalPrice
 	isNoPayout := req.PayoutToProvider == domain.PayoutTypeNone || req.PayoutToProvider == "No Payout"
 	isSettled := acceptedService.SettlementStatus == domain.SettleStatusPending || acceptedService.SettlementStatus == domain.SettleStatusSettled
-    log.Println("kcdjnkjsndscdc",transaction.Amount)
+
 	if isNoPayout && isSettled {
 		return s.handleNoPayoutSettled(ctx, complaint, acceptedService, providerID, originalAmount)
 	}
