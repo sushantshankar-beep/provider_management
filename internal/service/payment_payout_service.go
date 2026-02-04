@@ -314,36 +314,36 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 		var baseAmount float64
 
 		if isDeduction {
-			baseAmount = service.FinalPrice  // ← Use transaction.Amount for calculations
+			baseAmount = service.FinalPrice
 			partialAmount = 0
 		} else if hasPartialAmount {
 			baseAmount = partialAmount
 		} else {
-			baseAmount = service.FinalPrice  // ← Use transaction.Amount for calculations
+			baseAmount = service.FinalPrice
 			partialAmount = 0
 		}
 
 		var serviceCommission, serviceTDS, serviceGST, serviceNet float64
 		var tdsPercent, gstPercent float64
 		
-		serviceCommission = baseAmount * (providerCommissionPercent / 100)
-		afterCommission := baseAmount - serviceCommission
 
 		if hasGSTNumber {
-			// Provider has GST number: Commission + 10% TDS + 18% GST (all from FinalPrice)
 			tdsPercent = constants.DefaultTDSPercent
 			gstPercent = constants.DefaultGSTPercent
-			
-			serviceTDS = afterCommission * 0.10  // ← CHANGED: 10% TDS on amount after commission
-			serviceGST = afterCommission * 0.18  // ← CHANGED: 18% GST on amount after commission
-			serviceNet = afterCommission - serviceTDS - serviceGST
+			serviceCommission = baseAmount * (providerCommissionPercent / 100)
+			afterCommission := baseAmount - serviceCommission
+			serviceGST = afterCommission * 0.18
+			amountWithGST := afterCommission + serviceGST
+			serviceTDS = amountWithGST * 0.10
+			serviceNet = amountWithGST - serviceTDS
 		} else {
 			tdsPercent = 0.0
 			gstPercent = 0.0
 			
+			serviceCommission = baseAmount * (providerCommissionPercent / 100)
 			serviceTDS = 0
 			serviceGST = 0
-			serviceNet = afterCommission
+			serviceNet = baseAmount - serviceCommission
 		}
 
 		showComplaintAdjustment := false
@@ -680,40 +680,175 @@ func (s *PayoutService) createNewPayoutWithoutComplaint( ctx context.Context, pr
 	return s.payoutRepo.Create(ctx, payout)
 }
 
-func (s *PayoutService) updateExistingProviderPayout( ctx context.Context, existing *domain.PaymentPayout, serviceIDs []primitive.ObjectID, req dto.PayoutRequest, commissionPercent, gstPercent float64 ) error {
+// func (s *PayoutService) updateExistingProviderPayout( ctx context.Context, existing *domain.PaymentPayout, serviceIDs []primitive.ObjectID, req dto.PayoutRequest, commissionPercent, gstPercent float64 ) error {
 
+// 	if existing.ServicePartialAmounts == nil {
+// 		existing.ServicePartialAmounts = make(map[string]float64)
+// 	}
+
+// 	serviceExists := make(map[string]bool)
+// 	for _, sid := range existing.ServiceIDs {
+// 		serviceExists[sid.Hex()] = true
+// 	}
+
+// 	for _, sid := range serviceIDs {
+// 		key := sid.Hex()
+// 		if !serviceExists[key] {
+// 			existing.ServiceIDs = append(existing.ServiceIDs, sid)
+// 			serviceExists[key] = true
+// 			if req.PartialAmount > 0 {
+// 				existing.ServicePartialAmounts[key] = req.PartialAmount
+// 			}
+// 			if req.Amount > 0 {
+// 				existing.BaseAmount += req.Amount
+// 				existing.TotalPayAmount += req.Amount 
+// 			}
+// 		} else if req.PartialAmount > 0 {
+// 			existing.ServicePartialAmounts[key] = req.PartialAmount
+// 		}
+// 	}
+
+// 	for _, sid := range serviceIDs {
+// 		if req.CancelPayout {
+// 			if err := s.cancelServiceProviderPayout(ctx, sid.Hex()); err != nil {
+// 				fmt.Printf("ERROR: Failed to cancel service: %v", err)
+// 			}
+// 			existing.ServicePartialAmounts[sid.Hex()] = 0
+// 		}
+// 	}
+
+// 	effective := s.calculateEffectiveAmount(ctx, existing)
+// 	tdsPercent := 0.0
+// 	finalGSTPercent := 0.0
+
+// 	kyc, _ := s.kycRepo.FindByProviderID(ctx, existing.ProviderID)
+// 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
+// 		tdsPercent = constants.DefaultTDSPercent
+// 		finalGSTPercent = 18.0
+// 	}
+
+// 	calc := utils.CalculatePayout(effective, commissionPercent, finalGSTPercent,tdsPercent)
+
+// 	existing.CommissionPercent = commissionPercent
+// 	existing.CommissionAmount = calc.Commission
+// 	existing.GSTPercent = finalGSTPercent
+// 	existing.GSTAmount = calc.GST
+// 	existing.TDSPercent = tdsPercent
+// 	existing.TDSAmount = calc.TDS
+// 	existing.NetPayable = calc.NetPayable
+// 	existing.UpdatedAt = time.Now()
+
+// 	return s.payoutRepo.Update(ctx, existing)
+// }
+
+// func (s *PayoutService) updateExistingProviderPayout( ctx context.Context, existing *domain.PaymentPayout, serviceIDs []primitive.ObjectID, req dto.PayoutRequest, commissionPercent, gstPercent float64 ) error {
+
+// 	if existing.ServicePartialAmounts == nil {
+// 		existing.ServicePartialAmounts = make(map[string]float64)
+// 	}
+
+// 	serviceExists := make(map[string]bool)
+// 	for _, sid := range existing.ServiceIDs {
+// 		serviceExists[sid.Hex()] = true
+// 	}
+
+// 	for _, sid := range serviceIDs {
+// 		key := sid.Hex()
+// 		if !serviceExists[key] {
+// 			service, err := s.serviceRepo.FindByID(ctx, sid.Hex())
+// 			if err != nil {
+// 				fmt.Printf("ERROR: Failed to fetch service: %v", err)
+// 				continue
+// 			}
+
+// 			transaction, err := s.transactionRepo.FindByServiceID(ctx, sid.Hex())
+// 			if err != nil {
+// 				fmt.Printf("ERROR: Failed to fetch transaction: %v", err)
+// 				continue
+// 			}
+
+// 			existing.ServiceIDs = append(existing.ServiceIDs, sid)
+// 			serviceExists[key] = true
+			
+// 			if req.PartialAmount > 0 {
+// 				existing.ServicePartialAmounts[key] = req.PartialAmount
+// 				existing.BaseAmount += req.PartialAmount 
+// 			} else {
+// 				existing.BaseAmount += service.FinalPrice
+// 			}
+			
+// 			existing.TotalPayAmount += transaction.Amount
+// 		} else if req.PartialAmount > 0 {
+// 			oldPartialAmount := existing.ServicePartialAmounts[key]
+// 			existing.ServicePartialAmounts[key] = req.PartialAmount
+// 			existing.BaseAmount = existing.BaseAmount - oldPartialAmount + req.PartialAmount
+// 		}
+// 	}
+
+// 	for _, sid := range serviceIDs {
+// 		if req.CancelPayout {
+// 			if err := s.cancelServiceProviderPayout(ctx, sid.Hex()); err != nil {
+// 				fmt.Printf("ERROR: Failed to cancel service: %v", err)
+// 			}
+// 			existing.ServicePartialAmounts[sid.Hex()] = 0
+// 		}
+// 	}
+
+// 	effective := s.calculateEffectiveAmount(ctx, existing)
+// 	tdsPercent := 0.0
+// 	finalGSTPercent := 0.0
+
+// 	kyc, _ := s.kycRepo.FindByProviderID(ctx, existing.ProviderID)
+// 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
+// 		tdsPercent = constants.DefaultTDSPercent
+// 		finalGSTPercent = 18.0
+// 	}
+
+// 	calc := utils.CalculatePayout(effective, commissionPercent, finalGSTPercent,tdsPercent)
+
+// 	existing.CommissionPercent = commissionPercent
+// 	existing.CommissionAmount = calc.Commission
+// 	existing.GSTPercent = finalGSTPercent
+// 	existing.GSTAmount = calc.GST
+// 	existing.TDSPercent = tdsPercent
+// 	existing.TDSAmount = calc.TDS
+// 	existing.NetPayable = calc.NetPayable
+// 	existing.UpdatedAt = time.Now()
+
+// 	return s.payoutRepo.Update(ctx, existing)
+// }
+
+func (s *PayoutService) updateExistingProviderPayout(
+	ctx context.Context,
+	existing *domain.PaymentPayout,
+	serviceIDs []primitive.ObjectID,
+	req dto.PayoutRequest,
+	commissionPercent, gstPercent float64,
+) error {
 	if existing.ServicePartialAmounts == nil {
 		existing.ServicePartialAmounts = make(map[string]float64)
 	}
-
-	// FIX: Create a map to track existing service IDs to prevent duplicates
-	// Previously, the code only checked ServicePartialAmounts which could miss services added without partial amounts
 	serviceExists := make(map[string]bool)
 	for _, sid := range existing.ServiceIDs {
 		serviceExists[sid.Hex()] = true
 	}
-
-	// FIX: Only add service IDs that don't already exist in the payout
-	// This prevents the same service from being added multiple times during complaint assessments
 	for _, sid := range serviceIDs {
 		key := sid.Hex()
 		if !serviceExists[key] {
-			// Service doesn't exist - add it to the payout
+			transaction, err := s.transactionRepo.FindByServiceID(ctx, sid.Hex())
+			if err != nil {
+				fmt.Printf("ERROR: Failed to fetch transaction: %v", err)
+				continue
+			}
 			existing.ServiceIDs = append(existing.ServiceIDs, sid)
 			serviceExists[key] = true
-			if req.PartialAmount > 0 {
-				existing.ServicePartialAmounts[key] = req.PartialAmount
-			}
-			if req.Amount > 0 {
-				existing.BaseAmount += req.Amount
-				existing.TotalPayAmount += req.Amount 
-			}
-		} else if req.PartialAmount > 0 {
-			// Service already exists - only update the partial amount if provided
+			existing.TotalPayAmount += transaction.Amount
+		}
+		
+		if req.PartialAmount > 0 {
 			existing.ServicePartialAmounts[key] = req.PartialAmount
 		}
 	}
-
 	for _, sid := range serviceIDs {
 		if req.CancelPayout {
 			if err := s.cancelServiceProviderPayout(ctx, sid.Hex()); err != nil {
@@ -722,19 +857,17 @@ func (s *PayoutService) updateExistingProviderPayout( ctx context.Context, exist
 			existing.ServicePartialAmounts[sid.Hex()] = 0
 		}
 	}
-
 	effective := s.calculateEffectiveAmount(ctx, existing)
+	existing.BaseAmount = effective
+	
 	tdsPercent := 0.0
 	finalGSTPercent := 0.0
-
 	kyc, _ := s.kycRepo.FindByProviderID(ctx, existing.ProviderID)
 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
 		tdsPercent = constants.DefaultTDSPercent
 		finalGSTPercent = 18.0
 	}
-
-	calc := utils.CalculatePayout(effective, commissionPercent, finalGSTPercent,tdsPercent)
-
+	calc := utils.CalculatePayout(effective, commissionPercent, finalGSTPercent, tdsPercent)
 	existing.CommissionPercent = commissionPercent
 	existing.CommissionAmount = calc.Commission
 	existing.GSTPercent = finalGSTPercent
@@ -743,7 +876,6 @@ func (s *PayoutService) updateExistingProviderPayout( ctx context.Context, exist
 	existing.TDSAmount = calc.TDS
 	existing.NetPayable = calc.NetPayable
 	existing.UpdatedAt = time.Now()
-
 	return s.payoutRepo.Update(ctx, existing)
 }
 

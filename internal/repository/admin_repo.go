@@ -158,3 +158,25 @@ func (r *AdminRepository) AggregateActivationTeam(ctx context.Context, pipeline 
 
 	return team, nil
 }
+
+func (r *AdminRepository) UpdatePassword(
+	ctx context.Context,
+	adminID primitive.ObjectID,
+	hashedPassword string,
+) error {
+
+	now := time.Now()
+
+	_, err := r.collection.UpdateOne(
+		ctx,
+		bson.M{"_id": adminID},
+		bson.M{
+			"$set": bson.M{
+				"password":          hashedPassword,
+				"passwordChangedAt": now,
+			},
+		},
+	)
+
+	return err
+}

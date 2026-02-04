@@ -3,14 +3,16 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"provider_management/internal/domain"
 	"provider_management/internal/repository"
+	"provider_management/internal/utils"
 	"regexp"
 	"strconv"
 	"time"
-    "fmt"
+
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -382,6 +384,7 @@ func generateToken(id primitive.ObjectID, role string, powerLevel int) (string, 
 		"_id":        id.Hex(),
 		"role":       role,
 		"powerLevel": powerLevel,
+		"iat": time.Now().Unix(),
 		"exp":        time.Now().Add(7 * 24 * time.Hour).Unix(),
 	})
 
@@ -420,4 +423,38 @@ func (s *AdminService) validateAndSetRole(ctx context.Context, roleID primitive.
 	}
 	
 	return roleType, powerLevel, role.Name, nil
+}
+func (s *AdminService) ChangeAdminPassword(
+	ctx context.Context,
+	loggedInAdmin *domain.Admin,
+	targetAdminID string,
+	newPassword string,
+) error {
+
+	if loggedInAdmin.Role != domain.RoleSuperAdmin &&
+		loggedInAdmin.Role != domain.RoleAdmin {
+		return errors.New("unauthorized")
+	}
+
+	targetID, err := primitive.ObjectIDFromHex(targetAdminID)
+	if err != nil {
+		return err
+	}
+
+	targetAdmin, err := s.repo.FindByID(ctx, targetID)
+	if err != nil {
+		return errors.New("admin not found")
+	}
+
+	if targetAdmin.Role == domain.RoleSuperAdmin &&
+		loggedInAdmin.Role != domain.RoleSuperAdmin {
+		return errors.New("unauthorized")
+	}
+
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	return s.repo.UpdatePassword(ctx, targetID, hashedPassword)
 }

@@ -53,7 +53,7 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest
 
 	
 	gstAmount := req.Amount * 0.18
-	netRefund := req.Amount - gstAmount
+
 	refund := &domain.Refund{
 		UserID:        req.UserID,
 		TxnID:         transaction.TxnID,
@@ -62,7 +62,7 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest
 		Reason:        req.Reason,
 		Amount:        utils.RoundTo2(req.Amount),
 		GST:           utils.RoundTo2(gstAmount),
-		NetRefund:     utils.RoundTo2(netRefund),
+		NetRefund:     utils.RoundTo2(req.Amount),
 		Mode:          transaction.Method,
 		Status:        domain.RefundStatusPending,
 		Timeline: domain.RefundTimeline{
@@ -264,7 +264,7 @@ func (s *RefundService) InitiateRefund(ctx context.Context, refundID string) err
 		time.Now().Unix()%1000000,
 	)
 
-	totalAmount := refund.NetRefund
+	totalAmount := refund.Amount
 
 	payuResp, err := s.payuService.InitiateRefundByParams(
 		ctx,
