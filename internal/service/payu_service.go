@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"provider_management/internal/domain"
 	"strings"
-	"math/rand"
 	"time"
 )
 
@@ -123,92 +122,92 @@ func (s *PayUService) InitiateRefund(ctx context.Context, refund *domain.AMCRefu
 	}, nil
 }
 
-// func (s *PayUService) CheckRefundStatus(ctx context.Context, requestID string) (*CheckRefundStatusResult, error) {
-// 	command := "check_action_status"
+func (s *PayUService) CheckRefundStatus(ctx context.Context, requestID string) (*CheckRefundStatusResult, error) {
+	command := "check_action_status"
 
-// 	hash := s.generateHash(fmt.Sprintf("%s|%s|%s|%s", s.key, command, requestID, s.salt))
+	hash := s.generateHash(fmt.Sprintf("%s|%s|%s|%s", s.key, command, requestID, s.salt))
 
-// 	formData := url.Values{}
-// 	formData.Set("key", s.key)
-// 	formData.Set("command", command)
-// 	formData.Set("var1", requestID)
-// 	formData.Set("var2", "request_id")
-// 	formData.Set("hash", hash)
+	formData := url.Values{}
+	formData.Set("key", s.key)
+	formData.Set("command", command)
+	formData.Set("var1", requestID)
+	formData.Set("var2", "request_id")
+	formData.Set("hash", hash)
 
-// 	client := &http.Client{Timeout: 30 * time.Second}
-// 	req, err := http.NewRequestWithContext(ctx, "POST", s.baseURL+"/merchant/postservice.php?form=2", strings.NewReader(formData.Encode()))
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "POST", s.baseURL+"/merchant/postservice.php?form=2", strings.NewReader(formData.Encode()))
+	if err != nil {
+		return nil, err
+	}
 
-// 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-// 	resp, err := client.Do(req)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-// 	body, err := io.ReadAll(resp.Body)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
-// 	var data map[string]interface{}
-// 	if err := json.Unmarshal(body, &data); err != nil {
-// 		return nil, err
-// 	}
+	var data map[string]interface{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return nil, err
+	}
 
-// 	result := &CheckRefundStatusResult{
-// 		RefundStatus: "pending",
-// 		RawResponse:  data,
-// 	}
+	result := &CheckRefundStatusResult{
+		RefundStatus: "pending",
+		RawResponse:  data,
+	}
 
-// 	transactionDetails, ok := data["transaction_details"].(map[string]interface{})
-// 	if !ok {
-// 		return result, nil
-// 	}
+	transactionDetails, ok := data["transaction_details"].(map[string]interface{})
+	if !ok {
+		return result, nil
+	}
 
-// 	requestIDData, ok := transactionDetails[requestID].(map[string]interface{})
-// 	if !ok {
-// 		return result, nil
-// 	}
+	requestIDData, ok := transactionDetails[requestID].(map[string]interface{})
+	if !ok {
+		return result, nil
+	}
 
-// 	txnDetails, ok := requestIDData[requestID].(map[string]interface{})
-// 	if !ok {
-// 		return result, nil
-// 	}
+	txnDetails, ok := requestIDData[requestID].(map[string]interface{})
+	if !ok {
+		return result, nil
+	}
 
-// 	if status, ok := txnDetails["status"].(string); ok {
-// 		result.RefundStatus = strings.ToLower(status)
-// 	}
+	if status, ok := txnDetails["status"].(string); ok {
+		result.RefundStatus = strings.ToLower(status)
+	}
 
-// 	if amt, ok := txnDetails["amt"].(float64); ok {
-// 		result.Amount = amt
-// 	}
+	if amt, ok := txnDetails["amt"].(float64); ok {
+		result.Amount = amt
+	}
 
-// 	if bankRefNum, ok := txnDetails["bank_ref_num"].(string); ok {
-// 		result.BankRefNum = bankRefNum
-// 	}
+	if bankRefNum, ok := txnDetails["bank_ref_num"].(string); ok {
+		result.BankRefNum = bankRefNum
+	}
 
-// 	if mode, ok := txnDetails["refund_mode"].(string); ok {
-// 		result.Mode = mode
-// 	}
+	if mode, ok := txnDetails["refund_mode"].(string); ok {
+		result.Mode = mode
+	}
 
-// 	if settlementID, ok := txnDetails["settlement_id"].(string); ok {
-// 		result.SettlementID = settlementID
-// 	}
+	if settlementID, ok := txnDetails["settlement_id"].(string); ok {
+		result.SettlementID = settlementID
+	}
 
-// 	if bankArn, ok := txnDetails["bank_arn"].(string); ok {
-// 		result.BankArn = bankArn
-// 	}
+	if bankArn, ok := txnDetails["bank_arn"].(string); ok {
+		result.BankArn = bankArn
+	}
 
-// 	if errorMsg, ok := txnDetails["error"].(string); ok {
-// 		result.ErrorMsg = errorMsg
-// 	}
+	if errorMsg, ok := txnDetails["error"].(string); ok {
+		result.ErrorMsg = errorMsg
+	}
 
-// 	return result, nil
-// }
+	return result, nil
+}
 
 func (s *PayUService) InitiateRefundByParams(ctx context.Context, payuTransactionID, refundID string, amount float64) (*InitiateRefundResult, error) {
 	if payuTransactionID == "" {
@@ -281,35 +280,35 @@ func (s *PayUService) InitiateRefundByParams(ctx context.Context, payuTransactio
 	}, nil
 }
 
-func (s *PayUService) CheckRefundStatus(ctx context.Context, requestID string) (*CheckRefundStatusResult, error) {
+// func (s *PayUService) CheckRefundStatus(ctx context.Context, requestID string) (*CheckRefundStatusResult, error) {
 
-	rand.Seed(time.Now().UnixNano())
-	random := rand.Intn(2) // 0 or 1
+// 	rand.Seed(time.Now().UnixNano())
+// 	random := rand.Intn(2) // 0 or 1
 
-	// ❌ FAILED
-	if random == 0 {
-		return &CheckRefundStatusResult{
-			RefundStatus: "failed",
-			Amount:       250,
-			ErrorMsg:     "Insufficient balance at bank",
-			RawResponse: map[string]interface{}{
-				"mock":   true,
-				"status": "failed",
-			},
-		}, nil
-	}
+// 	// ❌ FAILED
+// 	if random == 0 {
+// 		return &CheckRefundStatusResult{
+// 			RefundStatus: "failed",
+// 			Amount:       250,
+// 			ErrorMsg:     "Insufficient balance at bank",
+// 			RawResponse: map[string]interface{}{
+// 				"mock":   true,
+// 				"status": "failed",
+// 			},
+// 		}, nil
+// 	}
 
-	// ✅ SUCCESS
-	return &CheckRefundStatusResult{
-		RefundStatus: "success",
-		Amount:       250,
-		BankRefNum:   fmt.Sprintf("TEST_REF_%d", rand.Intn(999999)),
-		Mode:         "original",
-		SettlementID: fmt.Sprintf("SETT_%d", rand.Intn(999999)),
-		BankArn:      fmt.Sprintf("ARN_%d", rand.Intn(999999)),
-		RawResponse: map[string]interface{}{
-			"mock":   true,
-			"status": "success",
-		},
-	}, nil
-}
+// 	// ✅ SUCCESS
+// 	return &CheckRefundStatusResult{
+// 		RefundStatus: "success",
+// 		Amount:       250,
+// 		BankRefNum:   fmt.Sprintf("TEST_REF_%d", rand.Intn(999999)),
+// 		Mode:         "original",
+// 		SettlementID: fmt.Sprintf("SETT_%d", rand.Intn(999999)),
+// 		BankArn:      fmt.Sprintf("ARN_%d", rand.Intn(999999)),
+// 		RawResponse: map[string]interface{}{
+// 			"mock":   true,
+// 			"status": "success",
+// 		},
+// 	}, nil
+// }
