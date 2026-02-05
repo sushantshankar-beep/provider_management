@@ -95,7 +95,6 @@ func main() {
 	adminRoleService := service.NewRoleService(roleRepo)
 	dashboardService := service.NewDashboardService(providerRepo, userRepo, acceptedServiceRepo, settlementRepo, complaintRepo,transactionRepo, amcPurchaseRepo, bidRepo)   
 	permissionService := service.NewPermissionService(permissionRepo)
-    zoneMapService := service.NewZoneMapService(providerRepo,adminRepo,roleRepo,acceptedServiceRepo)
 	providerAgreementService := service.NewAgreementService(providerAgreementRepo)
 	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo,serviceMasterRepo)
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo,complaintRepo,acceptedServiceRepo,payUService)
@@ -124,7 +123,6 @@ func main() {
 	vehicleBrandHandler := handler.NewVehicleBrandHandler(vehicleBrandService)
     dashboardHandler := handler.NewDashboardHandler(dashboardService)
 	permissionHandler := handler.NewPermissionHandler(permissionService)
-    zoneMapHandler := handler.NewZoneMapHandler(zoneMapService)
 	providerAgreementHandler := handler.NewAgreementHandler(providerAgreementService)
     providerBrandServiceHandler := handler.NewProviderBrandServiceHandler(providerBrandService)
 
@@ -159,7 +157,6 @@ func main() {
 		s3Uploader,
 		zoneFilterMiddleware,
 		permissionHandler,
-		zoneMapHandler,
 		providerBrandServiceHandler,
 		providerAgreementHandler,
 	)

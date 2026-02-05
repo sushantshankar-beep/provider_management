@@ -38,7 +38,7 @@ func CalculatePayout(baseAmount, commissionPercent, gstPercent, tdsPercent float
 	if gstPercent > 0 && tdsPercent > 0 {
 		commission = baseAmount * (commissionPercent / 100)
 		afterCommission := baseAmount - commission
-		gst = afterCommission * (gstPercent / 100)
+		gst = baseAmount * (gstPercent / 100)
 		amountWithGST := afterCommission + gst
 		tds = amountWithGST * (tdsPercent / 100)
 		netPayable = amountWithGST - tds
@@ -48,7 +48,7 @@ func CalculatePayout(baseAmount, commissionPercent, gstPercent, tdsPercent float
 		tds = 0
 		netPayable = baseAmount - commission
 	}
-
+	
 	return PayoutCalculation{
 		Commission: RoundTo2(commission),
 		GST:        RoundTo2(gst),

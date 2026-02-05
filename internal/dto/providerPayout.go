@@ -59,6 +59,7 @@ type PayoutServiceResponse struct {
 	CommissionAmount        float64             `json:"commission_amount"`
 	GSTPercent              float64             `json:"gst_percent"`
 	GSTAmount               float64             `json:"gst_amount"`
+	ProviderCode         string                  `json:"providerCode"`
 	TDSPercent              float64             `json:"tds_percent"`
 	TDSAmount               float64             `json:"tds_amount"`
 	NetAmount               float64             `json:"net_amount"`

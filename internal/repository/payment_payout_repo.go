@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -61,10 +60,9 @@ func (r *PaymentPayoutRepo) GetProviderPayouts(ctx context.Context, filters dto.
 func (r *PaymentPayoutRepo) buildFilter(filters dto.PayoutFilters) bson.M {
 	filter := bson.M{}
 
-	// ← ADD THIS: Handle PayoutIDInt filter (highest priority)
 	if filters.PayoutIDInt != 0 {
 		filter["payoutId"] = filters.PayoutIDInt
-		return filter  // Return early - when searching by specific payout ID, ignore other filters
+		return filter
 	}
 
 	if filters.ProviderID != "" {
@@ -388,7 +386,7 @@ type PayoutStats struct {
 	CommissionAmount float64
 	GSTAmount        float64
 	TDSAmount        float64
-	ServiceAmount    float64 // For calculating Partner GST
+	ServiceAmount    float64
 }
 
 func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.M) (*PayoutStats, error) {
@@ -404,7 +402,7 @@ func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.
 				"commissionAmount": bson.M{"$sum": "$commissionAmount"},
 				"gstAmount":        bson.M{"$sum": "$gstAmount"},
 				"tdsAmount":        bson.M{"$sum": "$tdsAmount"},
-				"serviceAmount":    bson.M{"$sum": "$baseAmount"}, // Assuming baseAmount is service amount
+				"serviceAmount":    bson.M{"$sum": "$baseAmount"}, 
 			},
 		},
 	}

@@ -625,6 +625,7 @@ func (s *AdminBookingService) GetBookingByID(ctx context.Context, bookingID stri
 		booking.ProviderPhone = provider.Phone
 		booking.MechanicType = provider.VehicleType
 		booking.Zone = provider.City
+		booking.RatingProvider = provider.Rating
 	}
 
 	basePrice := svc.BasePrice
@@ -947,116 +948,6 @@ func (s *AdminBookingService) mapPaymentStatus(status string) string {
 		return "paid"
 	}
 	return status
-}
-
-func (s *AdminBookingService) GetInvoiceData(
-	ctx context.Context,
-	serviceID string,
-) (*dto.InvoiceData, error) {
-
-	if serviceID == "" {
-		return nil, fmt.Errorf("service ID is required")
-	}
-
-	serviceObjectID, err := primitive.ObjectIDFromHex(serviceID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid service id")
-	}
-
-	filter := bson.M{"_id": serviceObjectID}
-
-	services, _, err := s.repo.FindAcceptedServices(ctx, filter, 0, 1, "-createdAt")
-	if err != nil {
-		return nil, fmt.Errorf("error finding service: %v", err)
-	}
-
-	if len(services) == 0 {
-		return nil, fmt.Errorf("service not found")
-	}
-
-	svc := services[0]
-
-	user, err := s.repo.FindUserByID(ctx, svc.User.Hex())
-	if err != nil {
-		return nil, fmt.Errorf("error finding user: %v", err)
-	}
-
-	provider, err := s.repo.FindProviderByID(ctx, svc.Provider.Hex())
-	if err != nil {
-		return nil, fmt.Errorf("error finding provider: %v", err)
-	}
-
-	sr, err := s.repo.FindServiceRequestByID(ctx, svc.ID.Hex())
-	if err != nil {
-		return nil, fmt.Errorf("error finding service request: %v", err)
-	}
-
-	finalPrice := svc.FinalPrice
-	gst := finalPrice * 0.18
-	subtotal := finalPrice - gst
-
-	var serviceDate string
-	// if svc.CompletedAt != nil {
-	// 	serviceDate = svc.CompletedAt.Format("2006-01-02")
-	// } else {
-	// 	serviceDate = svc.CreatedAt.Format("2006-01-02")
-	// }
-
-	var gstNumber string
-	if provider.GSTNumber != "" {
-		gstNumber = provider.GSTNumber
-	}
-
-	invoiceSuffix := svc.ID.Hex()
-
-	if len(invoiceSuffix) >= 8 {
-		invoiceSuffix = invoiceSuffix[len(invoiceSuffix)-8:]
-	}
-
-	invoice := &dto.InvoiceData{
-		InvoiceNumber: fmt.Sprintf("INV-%s", strings.ToUpper(invoiceSuffix)),
-		InvoiceDate:   time.Now().Format("2006-01-02"),
-		ServiceDate:   serviceDate,
-
-		Provider: dto.InvoiceProvider{
-			Name:      provider.Name,
-			Phone:     provider.Phone,
-			Address:   provider.Address,
-			GSTNumber: gstNumber,
-		},
-
-		Customer: dto.InvoiceCustomer{
-			Name:    user.Name,
-			Phone:   user.Phone,
-			Address: user.Address,
-		},
-
-		Vehicle: dto.InvoiceVehicle{
-			Brand:         sr.Brand,
-			Model:         sr.Model,
-			Year:          sr.Year,
-			FuelType:      sr.FuelType,
-			VehicleNumber: sr.VehicleNumber,
-			VehicleType:   sr.VehicleType,
-		},
-
-		Service: dto.InvoiceService{
-			Type:          sr.ServiceType,
-			Problems:      sr.Problems,
-			Status:        domain.ServiceStatus(s.mapStatus(svc.Status)),
-			PaymentStatus: s.mapPaymentStatus(svc.PaymentStatus),
-		},
-
-		Pricing: dto.InvoicePricing{
-			ServiceCharge: fmt.Sprintf("%.2f", finalPrice),
-			Discount:      "0.00",
-			Subtotal:      fmt.Sprintf("%.2f", subtotal),
-			GST:           fmt.Sprintf("%.2f", gst),
-			Total:         fmt.Sprintf("%.2f", finalPrice),
-		},
-	}
-
-	return invoice, nil
 }
 
 func (s *AdminBookingService) AddNote(ctx context.Context, bookingID string, req dto.AddNoteRequest) error {

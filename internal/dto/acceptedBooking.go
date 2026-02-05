@@ -99,6 +99,7 @@ type DetailedBookingResponse struct {
 	ProviderName       string                  `json:"providerName"`
 	ProviderPhone      string                  `json:"providerPhone"`
 	MechanicType       []string                `json:"mechanicType"`
+	RatingProvider     string                   `json:"ratingProvider"`
 	Rating             *RatingsSummary         `json:"rating"`
 	VehicleType        string                  `json:"vehicleType"`
 	VehicleNumber      string                  `json:"vehicleNumber"`

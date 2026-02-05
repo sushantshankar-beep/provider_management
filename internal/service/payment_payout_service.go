@@ -230,7 +230,6 @@ func (s *PayoutService) GetProviderPayouts( ctx context.Context, filters dto.Pay
 
 
 func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) (*dto.PayoutServiceListResponse, error) {
-    log.Println("dkjcnkjanjkcds",payoutID)
 	numericID := payoutID
 	if strings.HasPrefix(strings.ToUpper(payoutID), "PAY") {
 		numericID = payoutID[3:]
@@ -247,7 +246,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 	pagination := dto.PaginationParams{Page: 1, Limit: 1000}
 
 	payouts, _, err := s.payoutRepo.GetProviderPayouts(ctx, filters, sort, pagination)
-    log.Println("donee hereee",payouts)
+    
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch payout: %v", err)
 	}
@@ -332,7 +331,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			gstPercent = constants.DefaultGSTPercent
 			serviceCommission = baseAmount * (providerCommissionPercent / 100)
 			afterCommission := baseAmount - serviceCommission
-			serviceGST = afterCommission * 0.18
+			serviceGST = baseAmount * 0.18
 			amountWithGST := afterCommission + serviceGST
 			serviceTDS = amountWithGST * 0.10
 			serviceNet = amountWithGST - serviceTDS
@@ -356,15 +355,16 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			BookingID:               service.ServiceNumber,
 			AMCID:                   "amc",
 			ProviderID:              payout.ProviderID.Hex(),
-			ServiceAmount:           utils.RoundTo2(service.FinalPrice),  // ← Display service.FinalPrice
-			TotalPaidAmount:         utils.RoundTo2(transaction.Amount),  // ← NEW: Display transaction.Amount
+			ProviderCode:            provider.ProviderCode,
+			ServiceAmount:           utils.RoundTo2(service.FinalPrice), 
+			TotalPaidAmount:         utils.RoundTo2(transaction.Amount),  
 			CommissionPercent:       providerCommissionPercent,
-			CommissionAmount:        utils.RoundTo2(serviceCommission),    // ← Calculated from transaction.Amount
+			CommissionAmount:        utils.RoundTo2(serviceCommission),   
 			TDSPercent:              tdsPercent,
-			TDSAmount:               utils.RoundTo2(serviceTDS),           // ← Calculated from transaction.Amount
+			TDSAmount:               utils.RoundTo2(serviceTDS),         
 			GSTPercent:              gstPercent,
-			GSTAmount:               utils.RoundTo2(serviceGST),           // ← Calculated from transaction.Amount
-			NetAmount:               utils.RoundTo2(serviceNet),           // ← Calculated from transaction.Amount
+			GSTAmount:               utils.RoundTo2(serviceGST),          
+			NetAmount:               utils.RoundTo2(serviceNet),         
 			PartialAmount:           utils.RoundTo2(partialAmount),
 			PayoutID:                fmt.Sprintf("SET%d", payout.PayoutID),
 			SettlementStatus:        string(service.SettlementStatus),
@@ -445,6 +445,7 @@ func getProviderDetails(provider *domain.Provider, payout *domain.PaymentPayout)
 		"name":          provider.Name,
 		"phone_number":  provider.Phone,
 		"provider_id":   payout.ProviderID.Hex(),
+		"provider_code": provider.ProviderCode,
 		"email_id":      provider.Email,
 		"mechanic_type": strings.Join(provider.VehicleType, ", "),
 		"vehicle_brand": provider.ProviderBrands,
@@ -1031,7 +1032,7 @@ type SettlementStatsResponse struct {
 	TotalProviderRevenue  float64 `json:"total_provider_revenue"` 
 	VahanwireCommission   float64 `json:"vahanwire_commission"`  
 	VahanwireGST         float64 `json:"vahanwire_gst"`         
-	PartnerGST           float64 `json:"partner_gst"`            // GST on service amount
+	PartnerGST           float64 `json:"partner_gst"`         
 	TotalTDS             float64 `json:"total_tds"`             
 }
 
@@ -1048,13 +1049,20 @@ func (s *PayoutService) GetPayoutStats(
 	
 	switch strings.ToLower(req.Tab) {
 	case "pending":
-		filter["status"] = "pending"
+		filter["status"] = bson.M{
+			"$in": []string{
+				string(domain.PayoutStatusPending),
+				string(domain.PayoutStatusPartiallySettled),
+			},
+		}
+	
 	case "settled":
-		filter["status"] = "settled"
+		filter["status"] = string(domain.PayoutStatusSettled)
+	
 	default:
 		return nil, fmt.Errorf("invalid tab value. Use 'pending' or 'settled'")
 	}
-
+	
 	if req.StartDate != "" {
 		startDate, err := time.Parse("2006-01-02", req.StartDate)
 		if err != nil {
@@ -1088,11 +1096,6 @@ func (s *PayoutService) GetPayoutStats(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get settlement stats: %v", err)
 	}
-
-	// partnerGST := 0.0
-	// if stats.ServiceAmount > 0 {
-	// 	partnerGST = stats.ServiceAmount * 0.18
-	// }
 
 	response := &SettlementStatsResponse{
 		TotalPayout:           utils.RoundTo2(stats.TotalPayAmount),
