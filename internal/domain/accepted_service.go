@@ -25,23 +25,14 @@ const (
 
 type AcceptedService struct {
 	ID                      primitive.ObjectID  `bson:"_id,omitempty"`
-	// InternalID              int64               `bson:"id" json:"id"`
 	ServiceRequest       primitive.ObjectID   `bson:"serviceRequest" json:"serviceRequest"`
 	ServiceNumber     	 string                `bson:"serviceNumber" json:"serviceNumber"`
 	NumericID            int64                `bson:"id" json:"numericId"`
-	// ServiceRequestID        primitive.ObjectID  `bson:"serviceRequest" json:"-"`
-	// ServiceNumber     	 string                `bson:"serviceNumber" json:"serviceNumber"`
 	User                 primitive.ObjectID   `bson:"user" json:"user"`
 	NotToSendProviders   []primitive.ObjectID `bson:"notToSendProviders,omitempty" json:"notToSendProviders,omitempty"`
 	Provider             primitive.ObjectID   `bson:"provider" json:"provider"`
 	AcceptedBid          primitive.ObjectID   `bson:"acceptedBid" json:"acceptedBid"`
-	// OTP                  string            `bson:"otp" json:"otp"`
 	ServiceRequestNo        int64               `bson:"serviceRequestId,omitempty" json:"service_request_no,omitempty"`
-	// UserID                  string              `bson:"user" json:"user_id"`
-	// ProviderID              primitive.ObjectID  `bson:"provider" json:"provider_id"`
-	// AcceptedBidID           string              `bson:"acceptedBid" json:"accepted_bid_id"`
-	// NotToSendProviders      []string            `bson:"notToSendProviders,omitempty" json:"not_to_send_providers,omitempty"`
-	// OTP                     OTPInfo             `bson:"otp,omitempty" json:"otp,omitempty"`
 	Status                ServiceStatus      `bson:"status" json:"status"`
 
 	Timestamps *ServiceTimestamps `bson:"timestamps,omitempty"`

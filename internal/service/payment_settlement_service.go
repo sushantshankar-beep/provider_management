@@ -260,7 +260,7 @@ func (s *SettlementService) CreateSettlement(
 			commission = baseAmount * (providerCommissionPercent / 100)
 			afterCommission := baseAmount - commission
 			
-			gst = afterCommission * 0.18
+			gst = baseAmount * 0.18
 			amountWithGST := afterCommission + gst
 			
 			tds = amountWithGST * 0.10
@@ -314,7 +314,7 @@ func (s *SettlementService) CreateSettlement(
 			if hasGSTNumber {
 				commission := baseAmount * (providerCommissionPercent / 100)
 				afterCommission := baseAmount - commission
-				gst := afterCommission * 0.18
+				gst := baseAmount * 0.18
 				amountWithGST := afterCommission + gst
 				tds := amountWithGST * 0.10
 				netAmount = amountWithGST - tds
@@ -421,7 +421,7 @@ func (s *SettlementService) CreateSettlement(
 		if hasGSTNumber {
 			commission = calculationAmount * (providerCommissionPercent / 100)
 			afterCommission := calculationAmount - commission
-			gst = afterCommission * 0.18
+			gst = payout.BaseAmount * 0.18
 			amountWithGST := afterCommission + gst
 			tds = amountWithGST * 0.10
 			netAmount = amountWithGST - tds

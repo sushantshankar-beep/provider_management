@@ -68,10 +68,6 @@ type UpdateProviderRequest struct {
 	GSTNumber         string               `form:"gstNumber"`
 	Description       string               `form:"description"`
 	ProfileURL        string               `form:"-"`
-	IdentityProofs    []domain.Proof       `form:"-"`
-	AddressProofs     []domain.Proof       `form:"-"`
-	CancelCheque      *domain.CancelCheque `form:"-"`
-	BankDetails       *domain.BankDetails  `form:"-"`
 	AccountHolderName string               `form:"accountHolderName"`
 	AccountNumber     string               `form:"accountNumber"`
 	IfscCode          string               `form:"ifscCode"`

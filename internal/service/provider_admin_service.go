@@ -504,88 +504,88 @@ func formatDateDetailed(t time.Time) string {
 	return t.Format("Jan 2, 2006")
 }
 
-func (s *ProviderAdminService) GetDocumentURL( ctx context.Context, providerID, documentType, documentID string ) (*dto.DocumentResponse, error) {
+// func (s *ProviderAdminService) GetDocumentURL( ctx context.Context, providerID, documentType, documentID string ) (*dto.DocumentResponse, error) {
 
-	provider, err := s.providers.FindByID(ctx, providerID)
-	if err != nil {
-		return nil, fmt.Errorf("provider not found")
-	}
+// 	provider, err := s.providers.FindByID(ctx, providerID)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("provider not found")
+// 	}
 
-	switch documentType {
+// 	switch documentType {
 
-	case "identity":
-		if len(provider.IdentityProof) == 0 {
-			return nil, fmt.Errorf("no identity proof documents found")
-		}
+// 	case "identity":
+// 		if len(provider.IdentityProof) == 0 {
+// 			return nil, fmt.Errorf("no identity proof documents found")
+// 		}
 
-		if documentID != "" {
-			for _, proof := range provider.IdentityProof {
-				if proof.ID.Hex() == documentID {
-					return &dto.DocumentResponse{
-						DocumentID:   proof.ID.Hex(),
-						DocumentType: "identity",
-						Type:         proof.Type,
-						File:         proof.File,
-						Verified:     proof.Verified,
-					}, nil
-				}
-			}
-			return nil, fmt.Errorf("identity document with ID %s not found", documentID)
-		}
+// 		if documentID != "" {
+// 			for _, proof := range provider.IdentityProof {
+// 				if proof.ID.Hex() == documentID {
+// 					return &dto.DocumentResponse{
+// 						DocumentID:   proof.ID.Hex(),
+// 						DocumentType: "identity",
+// 						Type:         proof.Type,
+// 						File:         proof.File,
+// 						Verified:     proof.Verified,
+// 					}, nil
+// 				}
+// 			}
+// 			return nil, fmt.Errorf("identity document with ID %s not found", documentID)
+// 		}
 
-		proof := provider.IdentityProof[0]
-		return &dto.DocumentResponse{
-			DocumentID:   proof.ID.Hex(),
-			DocumentType: "identity",
-			Type:         proof.Type,
-			File:         proof.File,
-			Verified:     proof.Verified,
-		}, nil
+// 		proof := provider.IdentityProof[0]
+// 		return &dto.DocumentResponse{
+// 			DocumentID:   proof.ID.Hex(),
+// 			DocumentType: "identity",
+// 			Type:         proof.Type,
+// 			File:         proof.File,
+// 			Verified:     proof.Verified,
+// 		}, nil
 
-	case "address":
-		if len(provider.AddressProof) == 0 {
-			return nil, fmt.Errorf("no address proof documents found")
-		}
+// 	case "address":
+// 		if len(provider.AddressProof) == 0 {
+// 			return nil, fmt.Errorf("no address proof documents found")
+// 		}
 
-		if documentID != "" {
-			for _, proof := range provider.AddressProof {
-				if proof.ID.Hex() == documentID {
-					return &dto.DocumentResponse{
-						DocumentID:   proof.ID.Hex(),
-						DocumentType: "address",
-						Type:         proof.Type,
-						File:         proof.File,
-						Verified:     proof.Verified,
-					}, nil
-				}
-			}
-			return nil, fmt.Errorf("address document with ID %s not found", documentID)
-		}
+// 		if documentID != "" {
+// 			for _, proof := range provider.AddressProof {
+// 				if proof.ID.Hex() == documentID {
+// 					return &dto.DocumentResponse{
+// 						DocumentID:   proof.ID.Hex(),
+// 						DocumentType: "address",
+// 						Type:         proof.Type,
+// 						File:         proof.File,
+// 						Verified:     proof.Verified,
+// 					}, nil
+// 				}
+// 			}
+// 			return nil, fmt.Errorf("address document with ID %s not found", documentID)
+// 		}
 
-		proof := provider.AddressProof[0]
-		return &dto.DocumentResponse{
-			DocumentID:   proof.ID.Hex(),
-			DocumentType: "address",
-			Type:         proof.Type,
-			File:         proof.File,
-			Verified:     proof.Verified,
-		}, nil
+// 		proof := provider.AddressProof[0]
+// 		return &dto.DocumentResponse{
+// 			DocumentID:   proof.ID.Hex(),
+// 			DocumentType: "address",
+// 			Type:         proof.Type,
+// 			File:         proof.File,
+// 			Verified:     proof.Verified,
+// 		}, nil
 
-	case "cancel_cheque":
-		if provider.CancelCheque == nil {
-			return nil, fmt.Errorf("no cancel cheque document found")
-		}
+// 	case "cancel_cheque":
+// 		if provider.CancelCheque == nil {
+// 			return nil, fmt.Errorf("no cancel cheque document found")
+// 		}
 
-		return &dto.DocumentResponse{
-			DocumentType: "cancel_cheque",
-			File:         provider.CancelCheque.File,
-			Verified:     provider.CancelCheque.Verified,
-		}, nil
+// 		return &dto.DocumentResponse{
+// 			DocumentType: "cancel_cheque",
+// 			File:         provider.CancelCheque.File,
+// 			Verified:     provider.CancelCheque.Verified,
+// 		}, nil
 
-	default:
-		return nil, fmt.Errorf("invalid document type. Use: identity, address, or cancel_cheque")
-	}
-}
+// 	default:
+// 		return nil, fmt.Errorf("invalid document type. Use: identity, address, or cancel_cheque")
+// 	}
+// }
 
 func (s *ProviderAdminService) AddNote( ctx context.Context, providerID string, req dto.AddNoteRequest ) error {
 
@@ -1385,4 +1385,44 @@ func (s *ProviderAdminService) GetProviderEarnings(
 	}
 
 	return responses, summary, total, nil
+}
+
+func (s *ProviderAdminService) GetKYCDocument(
+	ctx context.Context,
+	providerID string,
+	documentType string,
+	documentID string,
+) (*domain.KYCDocument, error) {
+
+	providerObjID, err := primitive.ObjectIDFromHex(providerID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid provider id")
+	}
+
+	kyc, err := s.kycRepo.FindByProviderID(ctx, providerObjID)
+	if err != nil || kyc == nil {
+		return nil, fmt.Errorf("kyc not found for provider")
+	}
+
+	if documentID != "" {
+		docObjID, err := primitive.ObjectIDFromHex(documentID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid document id")
+		}
+
+		for _, doc := range kyc.Documents {
+			if doc.ID == docObjID {
+				return &doc, nil
+			}
+		}
+		return nil, fmt.Errorf("document not found")
+	}
+
+	for _, doc := range kyc.Documents {
+		if string(doc.Type) == documentType {
+			return &doc, nil
+		}
+	}
+
+	return nil, fmt.Errorf("document type %s not found", documentType)
 }

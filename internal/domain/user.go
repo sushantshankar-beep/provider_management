@@ -25,7 +25,6 @@ type Preferences struct {
 type User struct {
 	ID                string      `bson:"_id,omitempty" json:"_id"`
 	UserCode          string      `bson:"userCode" json:"userCode"`
-	InternalID        int64       `bson:"id" json:"id"`
 	Name              string      `bson:"name" json:"name"`
 	Email             string      `bson:"email,omitempty" json:"email,omitempty"`
 	ImageUrl          string      `bson:"image_url" json:"image_url"`
@@ -42,6 +41,7 @@ type User struct {
 	Notes             []UserNote  `bson:"notes,omitempty" json:"notes,omitempty"`
 	IsActive          string      `bson:"isActive" json:"is_active"`
 	ServiceOTP        string      `bson:"service_otp" json:"service_otp"`
+	Rating               string             `bson:"rating" json:"rating"`
 	CreatedAt         time.Time   `bson:"createdAt" json:"created_at"`
 	UpdatedAt         time.Time   `bson:"updatedAt" json:"updated_at"`
 	VehicleID           *primitive.ObjectID  `bson:"vehicleId,omitempty" json:"vehicleId,omitempty"`

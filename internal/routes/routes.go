@@ -38,13 +38,12 @@ func SetupRoutes(
 	s3Uploader *middleware.S3Uploader,
 	zoneFilter *middleware.ZoneFilterMiddleware,
 	permissionHandler *handler.PermissionHandler,
-	zoneMapHandler *handler.ZoneMapHandler,
 	providerBrandServiceHandler *handler.ProviderBrandServiceHandler,
 	providerAgreementHandler *handler.AgreementHandler,
 ) {
 	r.GET("/health", func(c *gin.Context) {
-        c.JSON(200, gin.H{"status": "ok"})
-    })
+		c.JSON(200, gin.H{"status": "ok"})
+	})
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
@@ -162,7 +161,7 @@ func SetupRoutes(
 		users.GET("/:id", rbac.Check("users", "view_user_profile"), userAdminHandler.GetByID)
 		users.GET("/:id/activity-logs", rbac.Check("users", "view_user_activity_logs"), activityLogHandler.GetUserActivityLogs)
 		users.PATCH("/:id/status", rbac.Check("users", "change_user_status"), userAdminHandler.UpdateStatus)
-		users.POST("/:id/notes",rbac.Check("users", "add_user_notes"), userAdminHandler.AddNote)
+		users.POST("/:id/notes", rbac.Check("users", "add_user_notes"), userAdminHandler.AddNote)
 	}
 
 	providers := admin.Group("/providers")
@@ -171,23 +170,23 @@ func SetupRoutes(
 		providers.GET("", rbac.Check("providers", "view_providers"), providerAdminHandler.GetAll)
 		providers.GET("/:id", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.GetByID)
 		providers.POST("",
-		    rbac.Check("providers", "create_provider_profile"),
+			rbac.Check("providers", "create_provider_profile"),
 			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 				{FormFieldName: "profileUrl", ContextKey: "profileUrl"},
 				{FormFieldName: "aadhaarFront", ContextKey: "aadhaarFront"},
-			    {FormFieldName: "aadhaarBack", ContextKey: "aadhaarBack"},
-			    {FormFieldName: "pan", ContextKey: "pan"},
+				{FormFieldName: "aadhaarBack", ContextKey: "aadhaarBack"},
+				{FormFieldName: "pan", ContextKey: "pan"},
 			}),
 			providerAdminHandler.CreateProvider,
 		)
 
 		providers.PUT("/:id",
-		    rbac.Check("providers", "edit_provider_profile"),
+			rbac.Check("providers", "edit_provider_profile"),
 			s3Uploader.UploadMiddleware([]middleware.FieldConfig{
 				{FormFieldName: "profileUrl", ContextKey: "profileUrl"},
 				{FormFieldName: "aadhaarFront", ContextKey: "aadhaarFront"},
-			    {FormFieldName: "aadhaarBack", ContextKey: "aadhaarBack"},
-			    {FormFieldName: "pan", ContextKey: "pan"},
+				{FormFieldName: "aadhaarBack", ContextKey: "aadhaarBack"},
+				{FormFieldName: "pan", ContextKey: "pan"},
 			}),
 			providerAdminHandler.UpdateProvider,
 		)
@@ -199,14 +198,13 @@ func SetupRoutes(
 		providers.PATCH("/account-action/:id", rbac.Check("providers", "change_provider_status"), providerAdminHandler.UpdateAccountAction)
 		providers.PATCH("/commission/:id", rbac.Check("providers", "change_provider_commission"), providerAdminHandler.UpdateCommission)
 		providers.GET("/:id/documents/download", rbac.Check("providers", "view_provider_profile"), providerAdminHandler.DownloadDocument)
-		providers.POST("/:id/notes",  rbac.Check("providers", "edit_provider_profile"),providerAdminHandler.AddNote)
+		providers.POST("/:id/notes", rbac.Check("providers", "edit_provider_profile"), providerAdminHandler.AddNote)
 		providers.GET("/zones/stats", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneStats)
 		providers.GET("/zones/:zone/activation-team", rbac.Check("providers", "view_providers"), providerAdminHandler.GetZoneActivationTeam)
 		providers.GET("/zones/:zone/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
 		providers.GET("/activation-team/:person", rbac.Check("providers", "view_providers"), providerAdminHandler.GetActivationPersonProviders)
 		providers.GET("/provider-earnings", providerAdminHandler.GetProviderEarnings)
-}
-
+	}
 
 	bookings := admin.Group("/bookings")
 	bookings.Use(zoneFilter.ApplyZoneFilter("both"))
@@ -215,14 +213,12 @@ func SetupRoutes(
 		bookings.GET("/stats", rbac.Check("bookings", "view_bookings"), bookingAdminHandler.GetBookingStats)
 		bookings.GET("/:bookingId", rbac.Check("bookings", "view_booking_profile"), bookingAdminHandler.GetBookingByID)
 		bookings.GET("/:bookingId/activity-logs", rbac.Check("bookings", "view_booking_activity_logs"), activityLogHandler.GetBookingActivityLogs)
-		bookings.GET("/get-invoice/:serviceId", rbac.Check("bookings", "view_booking_profile"), bookingAdminHandler.GetInvoiceData)
 		bookings.PUT("/:bookingId/cancel", rbac.Check("bookings", "booking_action"), bookingAdminHandler.CancelBooking)
 		bookings.PUT("/:bookingId/complete", rbac.Check("bookings", "booking_action"), bookingAdminHandler.MarkBookingCompleted)
 		bookings.POST("/:bookingId/notes", rbac.Check("bookings", "add_booking_notes"), bookingAdminHandler.AddNote)
 		bookings.GET("/invoice", bookingAdminHandler.GetInvoice)
 	}
 
-	//Done
 	complaints := admin.Group("/complaints")
 	{
 		complaints.GET("", rbac.Check("complaints", "view_complaint"), complaintHandler.GetAll)
@@ -234,15 +230,13 @@ func SetupRoutes(
 		complaints.POST("/:id/notes", rbac.Check("complaints", "add_complaint_notes"), complaintHandler.AddNote)
 		complaints.PATCH("/:id/status", rbac.Check("complaints", "status"), complaintHandler.UpdateStatus)
 	}
- 
-	//Done
+
 	userTransactions := admin.Group("/user-transaction")
 	{
 		userTransactions.GET("", rbac.Check("paymentandtransactions", "view_users_transaction"), transactionHandler.GetAll)
 		userTransactions.GET("/:id", rbac.Check("paymentandtransactions", "view_user_transaction_details"), transactionHandler.GetByID)
 	}
 
-	//Done
 	providerPayout := admin.Group("/provider-payout")
 	{
 		providerPayout.GET("", rbac.Check("paymentandtransactions", "view_provider_payout"), payoutHandler.GetProviderPayouts)
@@ -329,14 +323,13 @@ func SetupRoutes(
 		zones.DELETE("/:id", zoneHandler.Delete)
 
 	}
-	//Done
+
 	vehicleBrands := admin.Group("/vehicle-brands")
 	{
 		vehicleBrands.GET("", vehicleBrandHandler.GetBrands)
 		vehicleBrands.GET("/models", vehicleBrandHandler.GetModels)
 	}
 
-	//Done
 	panelPermission := admin.Group("/permission")
 	{
 		panelPermission.GET("", permissionHandler.GetAllPermissions)
@@ -346,22 +339,12 @@ func SetupRoutes(
 		panelPermission.DELETE("/:id", permissionHandler.DeletePermission)
 	}
 
-	zoneMap := admin.Group("/zoneMap")
-	{
-		zoneMap.GET("/stats", zoneMapHandler.GetZoneStats)
-		zoneMap.GET("/:zone/activation-team", zoneMapHandler.GetActivationTeam)
-		zoneMap.GET("/:zone/activators/:activator/providers", zoneMapHandler.GetProvidersByActivator)
-		zoneMap.GET("/my-providers", zoneMapHandler.GetMyProviders)
-	}
-
-	//Done
 	vehicle := admin.Group("/vehicle")
 	{
-		vehicle.GET("/brands",  providerBrandServiceHandler.GetProviderBrands)
-		vehicle.GET("/services",   providerBrandServiceHandler.GetProviderServices)
+		vehicle.GET("/brands", providerBrandServiceHandler.GetProviderBrands)
+		vehicle.GET("/services", providerBrandServiceHandler.GetProviderServices)
 	}
 
-	//Done
 	providerAgreement := admin.Group("/provider-agreement")
 	{
 		providerAgreement.GET("/:id", providerAgreementHandler.GetAgreement)

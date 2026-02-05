@@ -19,27 +19,6 @@ const (
 	VehicleTypeCar  = "car"
 	VehicleTypeBike = "bike"
 )
-
-type Proof struct {
-	ID       primitive.ObjectID `bson:"_id,omitempty" json:"document_id,omitempty"`
-	Type     string             `bson:"type" json:"type"`
-	File     string             `bson:"file" json:"file"`
-	Verified string             `bson:"verified" json:"verified"`
-}
-
-type CancelCheque struct {
-	File     string `bson:"file" json:"file"`
-	Verified string `bson:"verified" json:"verified"`
-}
-
-type BankDetails struct {
-	AccountHolderName string `bson:"accountHolderName" json:"account_holder_name"`
-	AccountNumber     string `bson:"accountNumber" json:"account_number"`
-	IfscCode          string `bson:"ifscCode" json:"ifsc_code"`
-	BranchName        string `bson:"branchName" json:"branch_name"`
-	Upi               string `bson:"upi" json:"upi"`
-}
-
 type Provider struct {
 	ID                   primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	ProviderCode         string             `bson:"providerCode" json:"providerCode"`
@@ -86,11 +65,6 @@ type Provider struct {
 	IsSocketConnected bool          `bson:"isSocketConnected" json:"is_socket_connected"`
 	IsServiceOn       bool          `bson:"isServiceOn" json:"is_service_on"`
 	Tokens            []string      `bson:"tokens,omitempty" json:"-"`
-	IdentityProof     []Proof       `bson:"identityProof" json:"identity_proof"`
-	AddressProof      []Proof       `bson:"addressProof" json:"address_proof"`
-	CancelCheque      *CancelCheque `bson:"cancelCheque,omitempty" json:"cancel_cheque,omitempty"`
-	BankDetails       *BankDetails  `bson:"bankDetails,omitempty" json:"bank_details,omitempty"`
-	GSTNumber         string        `bson:"GSTNumber,omitempty" json:"gst_number,omitempty"`
 }
 
 // no need

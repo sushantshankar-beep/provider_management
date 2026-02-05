@@ -8,7 +8,6 @@ import (
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
-	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -39,36 +38,35 @@ func NewUserAdminService(
 	}
 }
 
-
-func (s *UserAdminService) GetAllUsers( ctx context.Context, filter dto.UserFilters, pagination dto.UserPagination) (*dto.UserAdminListResponse, error) {
+func (s *UserAdminService) GetAllUsers(
+	ctx context.Context,
+	filter dto.UserFilters,
+	pagination dto.UserPagination,
+) (*dto.UserAdminListResponse, error) {
 
 	if pagination.Page < 1 {
 		pagination.Page = 1
 	}
-
 	if pagination.Limit < 1 {
 		pagination.Limit = 20
 	}
-
 	pagination.Skip = (pagination.Page - 1) * pagination.Limit
 
 	query := bson.M{}
 
 	if filter.Search != "" {
-		orConditions := []bson.M{
+		query["$or"] = []bson.M{
 			{"name": bson.M{"$regex": filter.Search, "$options": "i"}},
-			{"email": bson.M{"$regex":  filter.Search, "$options": "i"}},
-			{"phone": bson.M{"$regex":  filter.Search, "$options": "i"}},
+			{"email": bson.M{"$regex": filter.Search, "$options": "i"}},
+			{"phone": bson.M{"$regex": filter.Search, "$options": "i"}},
 			{"userCode": bson.M{"$regex": filter.Search, "$options": "i"}},
 		}
-		query["$or"] = orConditions
 	}
 
 	if filter.Status != "" {
 		switch filter.Status {
 		case "active":
 			query["isActive"] = domain.AccountStatusActive
-	
 		case "inactive":
 			query["isActive"] = bson.M{
 				"$in": []string{
@@ -76,40 +74,33 @@ func (s *UserAdminService) GetAllUsers( ctx context.Context, filter dto.UserFilt
 					domain.AccountStatusDeactivated,
 				},
 			}
-	
 		case "blacklisted":
 			query["isActive"] = domain.AccountStatusBlacklisted
-	
 		case "deactivated":
 			query["isActive"] = domain.AccountStatusDeactivated
 		}
 	}
-	
+
 	if filter.Zone != "" {
 		query["selectedCityName"] = filter.Zone
 	}
 
 	if filter.StartDate != "" {
 		if t, err := time.Parse("2006-01-02", filter.StartDate); err == nil {
-			endOfDay := t.Add(24*time.Hour - time.Second)
+			end := t.Add(24*time.Hour - time.Second)
 			query["createdAt"] = bson.M{
 				"$gte": primitive.NewDateTimeFromTime(t),
-				"$lte": primitive.NewDateTimeFromTime(endOfDay),
+				"$lte": primitive.NewDateTimeFromTime(end),
 			}
 		}
 	}
 
 	users, total, err := s.users.FindAll(ctx, query, pagination.Skip, pagination.Limit)
-
 	if err != nil {
 		return nil, err
 	}
 
-	stats, err := s.getUserStatistics(ctx, 14)
-	if err != nil {
-		fmt.Printf("Error getting user stats: %v", err)
-		stats = &dto.UserStatsResponse{}
-	}
+	stats, _ := s.getUserStatistics(ctx, 14)
 
 	if len(users) == 0 {
 		return &dto.UserAdminListResponse{
@@ -118,11 +109,35 @@ func (s *UserAdminService) GetAllUsers( ctx context.Context, filter dto.UserFilt
 				CurrentPage: pagination.Page,
 				TotalPages:  0,
 				TotalUsers:  0,
-				HasNext:     false,
-				HasPrev:     false,
 			},
 			Stats: stats,
 		}, nil
+	}
+
+	vehicleIDSet := make(map[primitive.ObjectID]struct{})
+
+	for _, u := range users {
+		if u.PrimaryVehicleID != nil {
+			vehicleIDSet[*u.PrimaryVehicleID] = struct{}{}
+		}
+		for _, vid := range u.FallbackVehicleIDs {
+			vehicleIDSet[vid] = struct{}{}
+		}
+	}
+
+	vehicleIDs := make([]primitive.ObjectID, 0, len(vehicleIDSet))
+	for id := range vehicleIDSet {
+		vehicleIDs = append(vehicleIDs, id)
+	}
+
+	vehicles, err := s.vehicleRepo.FindByIDs(ctx, vehicleIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	vehicleMap := make(map[primitive.ObjectID]domain.Vehicle)
+	for _, v := range vehicles {
+		vehicleMap[v.ID] = v
 	}
 
 	userIDs := make([]string, len(users))
@@ -130,26 +145,31 @@ func (s *UserAdminService) GetAllUsers( ctx context.Context, filter dto.UserFilt
 		userIDs[i] = u.ID
 	}
 
-	vehicleMap, err := s.getVehicleCounts(ctx, userIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	bookingMap, err := s.getBookingCounts(ctx, userIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	amcMap, err := s.getAMCStatus(ctx, userIDs)
-	if err != nil {
-		return nil, err
-	}
+	vehicleCountMap, _ := s.getVehicleCounts(ctx, userIDs)
+	bookingMap, _ := s.getBookingCounts(ctx, userIDs)
+	amcMap, _ := s.getAMCStatus(ctx, userIDs)
 
 	result := make([]dto.UserAdminResponse, 0, len(users))
+
 	for _, u := range users {
-		vehicleInfo := vehicleMap[u.ID]
+
+		userVehicleType := "N/A"
+
+		if u.PrimaryVehicleID != nil {
+			if v, ok := vehicleMap[*u.PrimaryVehicleID]; ok {
+				userVehicleType = v.VehicleType
+			}
+		} else {
+			for _, vid := range u.FallbackVehicleIDs {
+				if v, ok := vehicleMap[vid]; ok {
+					userVehicleType = v.VehicleType
+					break
+				}
+			}
+		}
+
 		userAMCStatus := "No"
-		if amc, exists := amcMap[u.ID]; exists {
+		if amc, ok := amcMap[u.ID]; ok {
 			if amc.PlanEndDate.After(time.Now()) {
 				userAMCStatus = "Active"
 			} else {
@@ -157,38 +177,23 @@ func (s *UserAdminService) GetAllUsers( ctx context.Context, filter dto.UserFilt
 			}
 		}
 
-		userStatus := u.IsActive
+		status := u.IsActive
 		if u.IsActive == "true" {
-			userStatus = "active"
-		}
-
-		userVehicleType := defaultStr(vehicleInfo.Type, "N/A")
-		userPlatformUsed := "Android"
-
-		if filter.AMCStatus != "" && strings.ToLower(filter.AMCStatus) != strings.ToLower(userAMCStatus) {
-			continue
-		}
-
-		if filter.PlatformUsed != "" && strings.ToLower(filter.PlatformUsed) != strings.ToLower(userPlatformUsed) {
-			continue
-		}
-
-		if filter.VehicleType != "" && strings.ToLower(filter.VehicleType) != strings.ToLower(userVehicleType) {
-			continue
+			status = "active"
 		}
 
 		result = append(result, dto.UserAdminResponse{
-			ID:        u.ID,
+			ID:            u.ID,
 			Name:          defaultStr(u.Name, "N/A"),
 			Phone:         u.Phone,
 			Email:         defaultStr(u.Email, "—"),
 			UserID:        u.UserCode,
 			Zone:          defaultStr(u.SelectedCityName, "N/A"),
-			Status:        userStatus,
+			Status:        status,
 			CreatedDate:   u.CreatedAt.Format("2006-01-02"),
-			PlatformUsed:  userPlatformUsed,
+			PlatformUsed:  "Android",
 			VehicleType:   userVehicleType,
-			VehicleCount:  vehicleInfo.Count,
+			VehicleCount:  vehicleCountMap[u.ID].Count,
 			TotalBookings: bookingMap[u.ID],
 			AMCStatus:     userAMCStatus,
 			ProfileURL:    u.ImageUrl,
@@ -204,12 +209,13 @@ func (s *UserAdminService) GetAllUsers( ctx context.Context, filter dto.UserFilt
 			CurrentPage: pagination.Page,
 			TotalPages:  totalPages,
 			TotalUsers:  total,
-			HasNext:     pagination.Page < int64(totalPages),
+			HasNext:     pagination.Page < totalPages,
 			HasPrev:     pagination.Page > 1,
 		},
 		Stats: stats,
 	}, nil
 }
+
 
 func (s *UserAdminService) GetUserByID(ctx context.Context, userCode string) (*dto.UserDetailResponse, error) {
 

@@ -262,20 +262,24 @@ func (h *ProviderAdminHandler) UpdateCommission(c *gin.Context) {
 }
 
 func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
-
-	id := c.Param("id")
+	providerID := c.Param("id")
 	documentType := c.Query("documentType")
 	documentID := c.Query("documentId")
 
-	if documentType == "" {
+	if documentType == "" && documentID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   true,
-			"message": "documentType query parameter is required (identity, address, cancel_cheque)",
+			"message": "either documentType or documentId is required",
 		})
 		return
 	}
 
-	result, err := h.svc.GetDocumentURL(c.Request.Context(), id, documentType, documentID)
+	doc, err := h.svc.GetKYCDocument(
+		c.Request.Context(),
+		providerID,
+		documentType,
+		documentID,
+	)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":   true,
@@ -284,63 +288,33 @@ func (h *ProviderAdminHandler) DownloadDocument(c *gin.Context) {
 		return
 	}
 
-	resp, err := http.Get(result.File)
-	if err != nil {
+	resp, err := http.Get(doc.URL)
+	if err != nil || resp.StatusCode != http.StatusOK {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
-			"message": "Failed to download file from storage",
+			"message": "failed to fetch file from storage",
 		})
 		return
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   true,
-			"message": "Failed to fetch file from storage",
-		})
-		return
-	}
 
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
 
-	extension := ".pdf"
-	switch contentType {
-	case "image/jpeg", "image/jpg":
-		extension = ".jpg"
-	case "image/png":
-		extension = ".png"
-	case "image/gif":
-		extension = ".gif"
-	case "image/webp":
-		extension = ".webp"
-	case "application/pdf":
-		extension = ".pdf"
-	}
+	extension := getExtensionFromContentType(contentType)
+	filename := fmt.Sprintf("%s_%s%s", doc.Type, doc.ID.Hex(), extension)
 
-	filename := fmt.Sprintf("%s_%s%s", documentType, documentID, extension)
-
-	c.Header("Content-Description", "File Transfer")
-	c.Header("Content-Transfer-Encoding", "binary")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "no-cache")
 
-	if contentLength := resp.Header.Get("Content-Length"); contentLength != "" {
-		c.Header("Content-Length", contentLength)
+	if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+		fmt.Printf("file stream error: %v\n", err)
 	}
-
-	written, err := io.Copy(c.Writer, resp.Body)
-	if err != nil {
-		fmt.Printf("Error copying file: %v", err)
-		return
-	}
-
-	fmt.Printf("Successfully streamed %d bytes of %s", written, contentType)
 }
+
 func (h *ProviderAdminHandler) AddNote(c *gin.Context) {
 	providerID := c.Param("id")
 
@@ -684,4 +658,19 @@ func (h *ProviderAdminHandler) GetProviderEarnings(c *gin.Context) {
 			"has_previous": page > 1,
 		},
 	})
+}
+
+func getExtensionFromContentType(contentType string) string {
+	switch contentType {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "application/pdf":
+		return ".pdf"
+	default:
+		return ""
+	}
 }

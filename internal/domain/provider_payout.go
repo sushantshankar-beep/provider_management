@@ -30,7 +30,7 @@ type PaymentPayout struct {
 	ServicePartialAmounts map[string]float64    `bson:"servicePartialAmounts,omitempty"`
 	TotalPayAmount        float64               `bson:"totalPayAmount" json:"total_pay_amount"`
 	BaseAmount            float64               `bson:"baseAmount" json:"base_amount"`
-	TDSPercent     float64               `bson:"tdsPercent" json:"tds_percent"`
+	TDSPercent            float64                      `bson:"tdsPercent" json:"tds_percent"`
 	TDSAmount             float64               `bson:"tdsAmount" json:"tds_amount"`
 	PartialAmount         float64               `bson:"partialAmount" json:"partial_amount"`
 	CommissionPercent     float64               `bson:"commissionPercent" json:"commission_percent"`

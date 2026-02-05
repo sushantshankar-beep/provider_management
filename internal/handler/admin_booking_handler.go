@@ -146,26 +146,6 @@ func (h *AdminBookingHandler) MarkBookingCompleted(c *gin.Context) {
 	})
 }
 
-func (h *AdminBookingHandler) GetInvoiceData(c *gin.Context) {
-	serviceID := c.Param("serviceId")
-
-	invoiceData, err := h.svc.GetInvoiceData(c.Request.Context(), serviceID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   true,
-			"message": err.Error(),
-			"data":    nil,
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"error":   false,
-		"message": "Invoice data fetched successfully",
-		"data":    invoiceData,
-	})
-}
-
 func (h *AdminBookingHandler) AddNote(c *gin.Context) {
 	bookingID := c.Param("bookingId")
 
