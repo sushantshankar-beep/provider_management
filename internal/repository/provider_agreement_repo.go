@@ -2,10 +2,11 @@ package repository
 
 import (
 	"context"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"provider_management/internal/domain"
+
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AgreementRepo struct {
@@ -48,4 +49,13 @@ func (r *AgreementRepo) Update(ctx context.Context, id string, agreement *domain
 	update := bson.M{"$set": agreement}
 	_, err = r.col.UpdateOne(ctx, bson.M{"_id": objID}, update)
 	return err
+}
+
+func (r *AgreementRepo) FindDefault(ctx context.Context) (*domain.Agreement, error) {
+	var agreement domain.Agreement
+	err := r.col.FindOne(ctx, bson.M{}).Decode(&agreement)
+	if err != nil {
+		return nil, err
+	}
+	return &agreement, nil
 }

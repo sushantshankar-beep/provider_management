@@ -204,6 +204,7 @@ func (s *PayoutService) GetProviderPayouts( ctx context.Context, filters dto.Pay
 			TDSPercent: p.TDSPercent,
 			TDSAmount: utils.RoundTo2(p.TDSAmount),
 			NetPayable:        utils.RoundTo2(p.NetPayable),
+			VahanwireGSTAmount: utils.RoundTo2(p.VahanwireGSTAmount),
 			Status:            string(p.Status),
 			PeriodFrom:        p.PeriodFrom,
 			PeriodTo:          p.PeriodTo,
@@ -586,7 +587,7 @@ func (s *PayoutService) ProcessPayout(ctx context.Context, req dto.PayoutRequest
 
 func (s *PayoutService) mergeIntoExistingPayoutWithoutComplaint( ctx context.Context, existing *domain.PaymentPayout, bucket *providerBucket,providerID primitive.ObjectID, ) error {
 
-	log.Println("kjcbsdjbdjsccsd",bucket)
+	
 	if existing.ServicePartialAmounts == nil {
 		existing.ServicePartialAmounts = make(map[string]float64)
 	}
@@ -610,11 +611,14 @@ func (s *PayoutService) mergeIntoExistingPayoutWithoutComplaint( ctx context.Con
 
 	tdsPercent := 0.0
 	finalGSTPercent := 0.0
+	vahanwireGSTAmount := 0.0
 
 	kyc, _ := s.kycRepo.FindByProviderID(ctx, existing.ProviderID)
 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
 		tdsPercent = constants.DefaultTDSPercent
 		finalGSTPercent = 18.0
+	} else {
+		vahanwireGSTAmount = effective * 0.18
 	}
 
 	calc := utils.CalculatePayout( effective, commissionPercent, finalGSTPercent,tdsPercent)
@@ -623,6 +627,7 @@ func (s *PayoutService) mergeIntoExistingPayoutWithoutComplaint( ctx context.Con
 	existing.CommissionAmount = calc.Commission
 	existing.GSTPercent = finalGSTPercent
 	existing.GSTAmount = calc.GST
+	existing.VahanwireGSTAmount = vahanwireGSTAmount
 	existing.TDSPercent = tdsPercent
 	existing.TDSAmount = calc.TDS
 	existing.NetPayable = calc.NetPayable
@@ -647,11 +652,14 @@ func (s *PayoutService) createNewPayoutWithoutComplaint( ctx context.Context, pr
     log.Println("lcldsmklmskcdnlnslds",bucket)
 	tdsPercent := 0.0
 	finalGSTPercent := 0.0
+	vahanwireGSTAmount := 0.0
 
 	kyc, _ := s.kycRepo.FindByProviderID(ctx, providerID)
 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
 		tdsPercent = constants.DefaultTDSPercent
 		finalGSTPercent = 18.0
+	} else {
+		vahanwireGSTAmount = bucket.Total * 0.18
 	}
 
 	calc := utils.CalculatePayout( bucket.Total, commissionPercent, finalGSTPercent,
@@ -664,6 +672,7 @@ func (s *PayoutService) createNewPayoutWithoutComplaint( ctx context.Context, pr
 		TotalPayAmount:    bucket.TotalTransAmount,
 		BaseAmount:        bucket.Total,  
 		CommissionPercent: commissionPercent,
+		VahanwireGSTAmount: vahanwireGSTAmount,
 		CommissionAmount:  calc.Commission,
 		GSTPercent:        constants.DefaultGSTPercent,
 		GSTAmount:         calc.GST,
@@ -863,17 +872,23 @@ func (s *PayoutService) updateExistingProviderPayout(
 	
 	tdsPercent := 0.0
 	finalGSTPercent := 0.0
+	vahanwireGSTAmount := 0.0
+
 	kyc, _ := s.kycRepo.FindByProviderID(ctx, existing.ProviderID)
 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
 		tdsPercent = constants.DefaultTDSPercent
 		finalGSTPercent = 18.0
+	} else {
+		vahanwireGSTAmount = effective * 0.18
 	}
+
 	calc := utils.CalculatePayout(effective, commissionPercent, finalGSTPercent, tdsPercent)
 	existing.CommissionPercent = commissionPercent
 	existing.CommissionAmount = calc.Commission
 	existing.GSTPercent = finalGSTPercent
 	existing.GSTAmount = calc.GST
 	existing.TDSPercent = tdsPercent
+	existing.VahanwireGSTAmount = vahanwireGSTAmount
 	existing.TDSAmount = calc.TDS
 	existing.NetPayable = calc.NetPayable
 	existing.UpdatedAt = time.Now()
@@ -903,11 +918,14 @@ func (s *PayoutService) createDeductionProviderPayout( ctx context.Context, prov
 
 	tdsPercent := 0.0
 	finalGSTPercent := 0.0
+	vahanwireGSTAmount := 0.0
 
 	kyc, _ := s.kycRepo.FindByProviderID(ctx, providerID)
 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
 		tdsPercent = constants.DefaultTDSPercent
 		finalGSTPercent = 18.0
+	} else {
+		vahanwireGSTAmount = effective * 0.18
 	}
 
 	calc := utils.CalculatePayout(effective, commissionPercent, finalGSTPercent, tdsPercent)
@@ -929,6 +947,7 @@ func (s *PayoutService) createDeductionProviderPayout( ctx context.Context, prov
 		ServicePartialAmounts: servicePartialAmounts,
 		CommissionPercent:     commissionPercent,
 		CommissionAmount:      -calc.Commission,
+		VahanwireGSTAmount:    -vahanwireGSTAmount,
 		GSTPercent:            gstPercent,
 		GSTAmount:             -calc.GST,
 		TDSPercent:            tdsPercent,
@@ -977,10 +996,13 @@ func (s *PayoutService) createNewProcessPayout( ctx context.Context, providerID 
 
 	tdsPercent := 0.0
     finalGSTPercent := 0.0
+	vahanwireGSTAmount := 0.0
 
 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
 		tdsPercent = constants.DefaultTDSPercent
 		finalGSTPercent = 18.0
+	} else {
+		vahanwireGSTAmount = effective * 0.18
 	}
 
 	calc := utils.CalculatePayout(effective, commissionPercent, finalGSTPercent, tdsPercent)
@@ -999,6 +1021,7 @@ func (s *PayoutService) createNewProcessPayout( ctx context.Context, providerID 
 		CommissionAmount:      calc.Commission,
 		GSTPercent:            gstPercent,
 		GSTAmount:             calc.GST,
+		VahanwireGSTAmount:    vahanwireGSTAmount,
 		TDSPercent:            tdsPercent,
 		TDSAmount:             calc.TDS,
 		NetPayable:            calc.NetPayable,
@@ -1040,29 +1063,11 @@ func (s *PayoutService) GetPayoutStats(
 	ctx context.Context,
 	req *GetSettlementStatsRequest,
 ) (*SettlementStatsResponse, error) {
-	
-	if req.Tab == "" {
-		return nil, fmt.Errorf("tab parameter is required. Use 'pending' or 'settled'")
+
+	filter := bson.M{
+		"status": string(domain.PayoutStatusSettled),
 	}
 
-	filter := bson.M{}
-	
-	switch strings.ToLower(req.Tab) {
-	case "pending":
-		filter["status"] = bson.M{
-			"$in": []string{
-				string(domain.PayoutStatusPending),
-				string(domain.PayoutStatusPartiallySettled),
-			},
-		}
-	
-	case "settled":
-		filter["status"] = string(domain.PayoutStatusSettled)
-	
-	default:
-		return nil, fmt.Errorf("invalid tab value. Use 'pending' or 'settled'")
-	}
-	
 	if req.StartDate != "" {
 		startDate, err := time.Parse("2006-01-02", req.StartDate)
 		if err != nil {
@@ -1077,7 +1082,8 @@ func (s *PayoutService) GetPayoutStats(
 			return nil, fmt.Errorf("invalid end date format. Use YYYY-MM-DD")
 		}
 		endDate = endDate.Add(24 * time.Hour)
-		if _, exists := filter["createdAt"]; exists {
+
+		if _, ok := filter["createdAt"]; ok {
 			filter["createdAt"].(bson.M)["$lte"] = endDate
 		} else {
 			filter["createdAt"] = bson.M{"$lte": endDate}
@@ -1098,14 +1104,15 @@ func (s *PayoutService) GetPayoutStats(
 	}
 
 	response := &SettlementStatsResponse{
-		TotalPayout:           utils.RoundTo2(stats.TotalPayAmount),
-		TotalProviderRevenue:  utils.RoundTo2(stats.NetPayable),
-		VahanwireCommission:   utils.RoundTo2(stats.CommissionAmount),
-		VahanwireGST:         utils.RoundTo2(stats.GSTAmount),
-		PartnerGST:           0,
-		TotalTDS:             utils.RoundTo2(stats.TDSAmount),
+		TotalPayout:          utils.RoundTo2(stats.TotalPayAmount),
+		TotalProviderRevenue: utils.RoundTo2(stats.NetPayable),
+		VahanwireCommission:  utils.RoundTo2(stats.CommissionAmount),
+		VahanwireGST:         utils.RoundTo2(stats.VahanwireGSTAmount),
+		PartnerGST: utils.RoundTo2(stats.GSTAmount),
+		TotalTDS: utils.RoundTo2(stats.TDSAmount),
 	}
 
 	return response, nil
 }
+
 

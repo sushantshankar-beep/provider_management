@@ -715,3 +715,4 @@ func (s *ComplaintService) calculateNetAmounts(originalAmount float64, hasGSTNum
     }
     return gstAmount, tdsAmount, netAmount
 }
+

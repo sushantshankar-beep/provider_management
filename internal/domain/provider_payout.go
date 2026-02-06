@@ -36,6 +36,7 @@ type PaymentPayout struct {
 	CommissionPercent     float64               `bson:"commissionPercent" json:"commission_percent"`
 	CommissionAmount      float64               `bson:"commissionAmount" json:"commission_amount"`
 	GSTPercent            float64               `bson:"gstPercent" json:"gst_percent"`
+	VahanwireGSTAmount    float64               `bson:"vahanwireGstAmount" json:"vahanwire_gst_amount"`
 	GSTAmount             float64               `bson:"gstAmount" json:"gst_amount"`
 	NetPayable            float64               `bson:"netPayable" json:"net_payable"`
 	SettlementID          *primitive.ObjectID   `bson:"settlementId,omitempty" json:"settlement_id,omitempty"`

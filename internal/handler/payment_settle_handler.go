@@ -167,3 +167,21 @@ func (h *SettlementHandler) GetSettlementByID(c *gin.Context) {
 		"data":    settlement,
 	})
 }
+
+func (h *SettlementHandler) GetBookingsForPayoutStats(c *gin.Context) {
+    var req service.GetBookingsByFinancialTypeRequest
+    if err := c.ShouldBindQuery(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    response, err := h.svc.GetBookingsForPayoutStats(c.Request.Context(), &req)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        return
+    }
+
+    c.JSON(http.StatusOK, response)
+}
+
+
