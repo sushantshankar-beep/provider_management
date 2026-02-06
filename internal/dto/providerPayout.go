@@ -63,6 +63,7 @@ type PayoutServiceResponse struct {
 	GSTAmount               float64             `json:"gst_amount"`
 	ProviderCode            string              `json:"providerCode"`
 	TDSPercent              float64             `json:"tds_percent"`
+	VahanwireGSTAmount    float64                `json:"vahanwire_gst_amount"`
 	TDSAmount               float64             `json:"tds_amount"`
 	NetAmount               float64             `json:"net_amount"`
 	PartialAmount           float64             `json:"partial_amount"`
@@ -77,6 +78,8 @@ type PayoutServiceResponse struct {
 	IsPayoutCancelled       bool                `json:"isPayoutCancelled"`
 	IsSettledAfterComplaint bool                `json:"is_settled_after_complaint"`
 	TotalPaidAmount         float64             `json:"total_paid_amount"`
+	 
+	Complaints []ComplaintBookingInfo `json:"complaints,omitempty"`
 }
 
 type ProviderPayoutDetailsResponse struct {
@@ -88,4 +91,10 @@ type ProviderPayoutDetailsResponse struct {
 
 type PayoutServiceListResponse struct {
 	Data []PayoutServiceResponse `json:"data"`
+}
+
+
+type ComplaintBookingInfo struct {
+	ID       string `json:"id"`
+	RaisedBy string `json:"raised_by"`
 }
