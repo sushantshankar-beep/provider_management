@@ -7,7 +7,7 @@ import (
 	"log"
 	"strings"
 	"time"
-
+     "path"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -29,7 +29,8 @@ func NewPDFUploader(sess *session.Session, bucketName string, folder string) *PD
 
 func (u *PDFUploader) UploadPDF(pdfBytes []byte, providerID string) (string, error) {
 	fileName := fmt.Sprintf("agreement_%s_%d.pdf", providerID, time.Now().UnixMilli())
-	key := fmt.Sprintf("%s/%s", u.folder, fileName)
+    key := path.Join(u.folder, fileName)
+
 
 	uploadInput := &s3.PutObjectInput{
 		Bucket:      aws.String(u.bucketName),
