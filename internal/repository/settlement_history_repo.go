@@ -173,7 +173,6 @@ func (r *SettlementHistoryRepository) GetSettlementRecords(
 	return records, total, nil
 }
 
-// repository/settlement_repo.go
 func (r *SettlementHistoryRepository) FindLatestByServiceID(
 	ctx context.Context,
 	serviceID primitive.ObjectID,
@@ -194,4 +193,38 @@ func (r *SettlementHistoryRepository) FindLatestByServiceID(
 	}
 
 	return &settlement, nil
+}
+
+
+func (r *SettlementHistoryRepository) GetSettlementRecordsPayout(
+    ctx context.Context,
+    filter bson.M,
+    skip int64,
+    limit int64,
+    sortField string,
+    sortOrder int,
+) ([]*domain.SettlementRecord, int64, error) {
+
+    total, err := r.collection.CountDocuments(ctx, filter)
+    if err != nil {
+        return nil, 0, err
+    }
+
+    opts := options.Find().
+        SetSkip(skip).
+        SetLimit(limit).
+        SetSort(bson.D{{Key: sortField, Value: sortOrder}})
+
+    cursor, err := r.collection.Find(ctx, filter, opts)
+    if err != nil {
+        return nil, 0, err
+    }
+    defer cursor.Close(ctx)
+
+    var records []*domain.SettlementRecord
+    if err := cursor.All(ctx, &records); err != nil {
+        return nil, 0, err
+    }
+
+    return records, total, nil
 }

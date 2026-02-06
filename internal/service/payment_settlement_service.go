@@ -61,7 +61,9 @@ type ProviderSettlementResponse struct {
 	ProviderID     primitive.ObjectID      `json:"providerId"`
 	ProviderName   string                  `json:"providerName"`
 	ProviderCode   string                  `json:"providerCode"`
+	ProviderEmail  string                  `json:"providerEmail"`
 	AccountNo      string                  `json:"accountNo"`
+	PaymentType    string                  `json:"paymentType"`
 	IfscCode       string                  `json:"ifscCode"`
 	TotalAmount    float64                 `json:"totalAmount"`
 	IsDeduction    bool                    `json:"isDeduction"`
@@ -70,6 +72,7 @@ type ProviderSettlementResponse struct {
 	Justification  string                  `json:"justification"`
 	Status         domain.SettlementStatus `json:"settelementStatus"`
 	PayoutIdNumber string                  `json:"payoutId"`
+	DebitAccountNumber string `json:"debitAccountNumber"`
 	SettledAt      *time.Time              `json:"settledAt"`
 	CreatedAt      time.Time               `json:"createdAt"`
 }
@@ -92,6 +95,54 @@ type ProviderSettlementIDResponse struct {
 	SettledAt       *time.Time              `json:"settled_at,omitempty"`
 	CreatedAt       time.Time               `json:"created_at"`
 }
+
+
+type GetBookingsByFinancialTypeRequest struct {
+    FinancialType string `form:"stats_type" binding:"required"`
+    Status        string `form:"status"`                          
+    StartDate     string `form:"start_date"`
+    EndDate       string `form:"end_date"`
+    Page          int64  `form:"page,default=1"`
+    Limit         int64  `form:"limit,default=10"`
+    SortField     string `form:"sort_field,default=createdAt"`
+    SortOrder     string `form:"sort_order,default=desc"`
+}
+
+type BookingFinancialDetail struct {
+    ServiceID          primitive.ObjectID `json:"service_id"`
+    ServiceNumber      string              `json:"serviceNumber"`
+    ProviderName       string             `json:"provider_name"`
+    TotalPayAmount     float64         `json:"amount"`
+    ProviderCode       string             `json:"provider_code"`
+	ProviderID                 primitive.ObjectID `json:"provider_id"`
+    SettlementID       string             `json:"settlement_id"`
+    PayoutID           string             `json:"payout_id"`
+    BaseAmount         float64            `json:"base_amount"`
+    CommissionAmount   float64            `json:"commission_amount,omitempty"`
+    CommissionPercent  float64            `json:"commission_percent,omitempty"`
+    GSTAmount          float64            `json:"gst_amount,omitempty"`
+    GSTPercent         float64            `json:"gst_percent,omitempty"`
+    TDSAmount          float64            `json:"tds_amount,omitempty"`
+    TDSPercent         float64            `json:"tds_percent,omitempty"`
+    VahanwireGSTAmount float64            `json:"vahanwire_gst_amount,omitempty"`
+    NetAmount          float64            `json:"net_amount"`
+    Status             string             `json:"status"`
+    CreatedAt          time.Time          `json:"created_at"`
+    SettledAt          *time.Time         `json:"settled_at,omitempty"`
+}
+
+type BookingFinancialResponse struct {
+    Bookings   []BookingFinancialDetail `json:"bookings"`
+    Total      int64                    `json:"total"`
+    TotalPages int64                    `json:"total_pages"`
+    Summary    FinancialSummary         `json:"summary"`
+}
+
+type FinancialSummary struct {
+    TotalAmount float64 `json:"total_amount"`
+    Count       int64   `json:"count"`
+}
+
 
 func NewSettlementService(
 	serviceRepo *repository.AcceptedServiceRepo,
@@ -259,10 +310,8 @@ func (s *SettlementService) CreateSettlement(
 		if hasGSTNumber {
 			commission = baseAmount * (providerCommissionPercent / 100)
 			afterCommission := baseAmount - commission
-			
 			gst = baseAmount * 0.18
 			amountWithGST := afterCommission + gst
-			
 			tds = amountWithGST * 0.10
 			net = amountWithGST - tds
 		} else {
@@ -271,7 +320,6 @@ func (s *SettlementService) CreateSettlement(
 			gst = 0
 			net = baseAmount - commission
 		}
-
 
 		log.Printf("Service %s: Base=%.2f Commission=%.2f TDS=%.2f GST=%.2f Net=%.2f",
 			serviceKey, baseAmount, commission, tds, gst, net)
@@ -417,7 +465,7 @@ func (s *SettlementService) CreateSettlement(
 			calculationAmount = partialAmount
 		}
 
-		var commission, tds, gst, netAmount float64
+		var commission, tds, gst, vahanwireGST, netAmount float64
 		if hasGSTNumber {
 			commission = calculationAmount * (providerCommissionPercent / 100)
 			afterCommission := calculationAmount - commission
@@ -425,8 +473,10 @@ func (s *SettlementService) CreateSettlement(
 			amountWithGST := afterCommission + gst
 			tds = amountWithGST * 0.10
 			netAmount = amountWithGST - tds
+			vahanwireGST = 0
 		} else {
 			commission = calculationAmount * (providerCommissionPercent / 100)
+			vahanwireGST = calculationAmount * 0.18 
 			tds = 0
 			gst = 0
 			netAmount = calculationAmount - commission
@@ -460,6 +510,7 @@ func (s *SettlementService) CreateSettlement(
 			DeductionRemarks:      "",
 			DeductionProcessedAt:  nil,
 			SettlementType:        settlementType,
+			VahanwireGSTAmount:    utils.RoundTo2(vahanwireGST),
 			ComplaintID:           payout.ComplaintID,
 			SettlementStatus:      domain.SettleStatusPending,
 			CreatedAt:             now,
@@ -548,7 +599,7 @@ func (s *SettlementService) GetSettlements(
 		case "settled":
 			filter["status"] = "settled"
 		default:
-			return nil, 0, 0, fmt.Errorf("invalid tab value. Use 'pending' or 'settled'")
+			return nil, 0, 0, fmt.Errorf("invalid tab value")
 		}
 	}
 
@@ -556,24 +607,21 @@ func (s *SettlementService) GetSettlements(
 		filter["status"] = req.Status
 	}
 
+
 	if req.ProviderID != "" {
-		providerID, err := primitive.ObjectIDFromHex(req.ProviderID)
+		providerObjID, err := primitive.ObjectIDFromHex(req.ProviderID)
 		if err != nil {
 			return nil, 0, 0, fmt.Errorf("invalid provider id")
 		}
-		filter["providerId"] = providerID
+		filter["providerId"] = providerObjID
 	}
 
 	if req.PayoutID != "" {
-		payoutID, err := primitive.ObjectIDFromHex(req.PayoutID)
+		payoutObjID, err := primitive.ObjectIDFromHex(req.PayoutID)
 		if err != nil {
 			return nil, 0, 0, fmt.Errorf("invalid payout id")
 		}
-		filter["payoutId"] = payoutID
-	}
-
-	if req.Status != "" {
-		filter["status"] = req.Status
+		filter["payoutId"] = payoutObjID
 	}
 
 	if req.PaymentMode != "" {
@@ -581,54 +629,53 @@ func (s *SettlementService) GetSettlements(
 	}
 
 	if req.StartDate != "" {
-		startDate, err := time.Parse("2006-01-02", req.StartDate)
+		start, err := time.Parse("2006-01-02", req.StartDate)
 		if err != nil {
-			return nil, 0, 0, fmt.Errorf("invalid start date format. Use YYYY-MM-DD")
+			return nil, 0, 0, fmt.Errorf("invalid start date")
 		}
-		filter["createdAt"] = bson.M{"$gte": startDate}
+		filter["createdAt"] = bson.M{"$gte": start}
 	}
 
 	if req.EndDate != "" {
-		endDate, err := time.Parse("2006-01-02", req.EndDate)
+		end, err := time.Parse("2006-01-02", req.EndDate)
 		if err != nil {
-			return nil, 0, 0, fmt.Errorf("invalid end date format. Use YYYY-MM-DD")
+			return nil, 0, 0, fmt.Errorf("invalid end date")
 		}
-		endDate = endDate.Add(24 * time.Hour)
-		if _, exists := filter["createdAt"]; exists {
-			filter["createdAt"].(bson.M)["$lte"] = endDate
+		end = end.Add(24 * time.Hour)
+
+		if filter["createdAt"] != nil {
+			filter["createdAt"].(bson.M)["$lte"] = end
 		} else {
-			filter["createdAt"] = bson.M{"$lte": endDate}
+			filter["createdAt"] = bson.M{"$lte": end}
 		}
 	}
 
-	if req.Search != "" {
+	if strings.TrimSpace(req.Search) != "" {
 		search := strings.TrimSpace(req.Search)
 		or := bson.A{}
 
 		if strings.HasPrefix(strings.ToUpper(search), "SET") {
-			num, err := strconv.ParseInt(strings.TrimPrefix(strings.ToUpper(search), "SET"), 10, 64)
-			if err == nil {
+			if num, err := strconv.ParseInt(strings.TrimPrefix(strings.ToUpper(search), "SET"), 10, 64); err == nil {
 				or = append(or, bson.M{"settlementId": num})
 			}
 		}
-		
+
 		if strings.HasPrefix(strings.ToUpper(search), "PAY") {
-			num, err := strconv.ParseInt(strings.TrimPrefix(strings.ToUpper(search), "PAY"),10,64,)
-			if err == nil {
-				payout, err := s.payoutRepo.FindByPayoutNumber(ctx, num)
-				if err == nil && payout != nil {
-					or = append(or, bson.M{
-						"payoutId": payout.ID,
-					})
+			if num, err := strconv.ParseInt(strings.TrimPrefix(strings.ToUpper(search), "PAY"), 10, 64); err == nil {
+				payout, _ := s.payoutRepo.FindByPayoutNumber(ctx, num)
+				if payout != nil {
+					or = append(or, bson.M{"payoutId": payout.ID})
 				}
 			}
 		}
-		
+
 		if provider, _ := s.providerRepo.FindByProviderCode(ctx, search); provider != nil {
 			or = append(or, bson.M{"providerId": provider.ID})
 		}
-		
-		filter["$or"] = or
+
+		if len(or) > 0 {
+			filter["$or"] = or
+		}
 	}
 
 	skip := (req.Page - 1) * req.Limit
@@ -646,37 +693,45 @@ func (s *SettlementService) GetSettlements(
 		sortOrder,
 	)
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("failed to get settlements: %v", err)
+		return nil, 0, 0, err
 	}
 
-	var responses []ProviderSettlementResponse
+	responses := make([]ProviderSettlementResponse, 0, len(settlements))
 
 	for _, settlement := range settlements {
+
 		resp := ProviderSettlementResponse{
 			ID:            settlement.ID,
 			SettlementID:  "SET" + strconv.FormatInt(settlement.SettlementID, 10),
 			ProviderID:    settlement.ProviderID,
-			ProviderName:  settlement.ProviderName,
+			PaymentType:   "NEFT",
 			AccountNo:     settlement.AccountNo,
 			IfscCode:      settlement.IfscCode,
 			TotalAmount:   utils.RoundTo2(settlement.TotalAmount),
 			PaymentMode:   settlement.PaymentMode,
 			PaymentMethod: settlement.PaymentMethod,
 			Justification: settlement.Justification,
-
-			Status:    settlement.Status,
-			SettledAt: settlement.SettledAt,
-			CreatedAt: settlement.CreatedAt,
+			Status:        settlement.Status,
+			SettledAt:     settlement.SettledAt,
+			DebitAccountNumber: "",
+			CreatedAt:     settlement.CreatedAt,
 		}
 
-		payout, err := s.payoutRepo.FindByID(ctx, settlement.PayoutID)
-		if err == nil && payout != nil {
+		provider, _ := s.providerRepo.FindByID(ctx, settlement.ProviderID.Hex())
+		if provider != nil {
+			resp.ProviderEmail = provider.Email
+			resp.ProviderCode = provider.ProviderCode
+
+			kyc, _ := s.kycRepo.FindByProviderID(ctx, provider.ID)
+			if kyc != nil {
+				resp.ProviderName = kyc.Bank.AccountHolderName
+			}
+		}
+
+		payout, _ := s.payoutRepo.FindByID(ctx, settlement.PayoutID)
+		if payout != nil {
 			resp.PayoutIdNumber = "PAY" + strconv.FormatInt(payout.PayoutID, 10)
 			resp.IsDeduction = payout.IsDeduction
-		}
-
-		if provider, _ := s.providerRepo.FindByID(ctx, settlement.ProviderID.Hex()); provider != nil {
-			resp.ProviderCode = provider.ProviderCode
 		}
 
 		responses = append(responses, resp)
@@ -818,4 +873,159 @@ func (s *SettlementService) GetSettlementsByIDs(
 	ids []string,
 ) ([]domain.ProviderSettlement, error) {
 	return s.settlementRepo.FindBySettlementIDs(ctx, ids)
+}
+
+func (s *SettlementService) GetBookingsForPayoutStats(
+	ctx context.Context,
+	req *GetBookingsByFinancialTypeRequest,
+) (*BookingFinancialResponse, error) {
+
+	filter := bson.M{}
+
+	if req.Status != "" {
+		filter["settlementStatus"] = req.Status
+	}
+
+	if req.StartDate != "" {
+		start, err := time.Parse("2006-01-02", req.StartDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start date")
+		}
+		filter["createdAt"] = bson.M{"$gte": start}
+	}
+
+	if req.EndDate != "" {
+		end, err := time.Parse("2006-01-02", req.EndDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end date")
+		}
+		end = end.Add(24 * time.Hour)
+
+		if filter["createdAt"] != nil {
+			filter["createdAt"].(bson.M)["$lte"] = end
+		} else {
+			filter["createdAt"] = bson.M{"$lte": end}
+		}
+	}
+
+	switch req.FinancialType {
+	case "gst":
+		filter["gstAmount"] = bson.M{"$gt": 0}
+	case "commission":
+		filter["commissionAmount"] = bson.M{"$gt": 0}
+	case "tds":
+		filter["tdsAmount"] = bson.M{"$gt": 0}
+	case "vahanwire_gst":
+		filter["vahanwireGstAmount"] = bson.M{"$gt": 0}
+	default:
+		return nil, fmt.Errorf("invalid financial type")
+	}
+
+	skip := (req.Page - 1) * req.Limit
+	sortOrder := -1
+	if strings.ToLower(req.SortOrder) == "asc" {
+		sortOrder = 1
+	}
+
+	records, total, err := s.settlementHistoryRepo.GetSettlementRecordsPayout(
+		ctx,
+		filter,
+		skip,
+		req.Limit,
+		req.SortField,
+		sortOrder,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch settlement records: %w", err)
+	}
+
+	bookings := make([]BookingFinancialDetail, 0, len(records))
+	var totalAmount float64
+
+	for _, record := range records {
+
+		service, err := s.serviceRepo.FindByID(ctx, record.ServiceID.Hex())
+		if err != nil || service == nil {
+			log.Printf("service not found: %s", record.ServiceID.Hex())
+			continue
+		}
+
+		provider, _ := s.providerRepo.FindByID(ctx, record.ProviderID.Hex())
+		payout, _ := s.payoutRepo.FindByID(ctx, record.PayoutID)
+		settlement, _ := s.settlementRepo.FindByID(ctx, record.SettlementID)
+
+		transaction, err := s.transactionRepo.FindByServiceID(ctx, record.ServiceID.Hex())
+		log.Println("jdbcjsbhjcbsdcs",transaction)
+		if err != nil {
+			log.Printf("transaction fetch failed for service %s: %v", record.ServiceID.Hex(), err)
+			continue
+		}
+		if transaction == nil {
+			log.Printf("transaction not found for service %s", record.ServiceID.Hex())
+			continue
+		}
+
+		booking := BookingFinancialDetail{
+			ServiceID:       record.ServiceID,
+			ServiceNumber:   service.ServiceNumber,
+			TotalPayAmount: transaction.Amount,
+			BaseAmount:     record.SettlementAmount,
+			NetAmount:      record.NetAmount,
+			Status:         string(record.SettlementStatus),
+			CreatedAt:      record.CreatedAt,
+			SettledAt:      record.SettledAt,
+		}
+
+		if provider != nil {
+			booking.ProviderName = provider.Name
+			booking.ProviderCode = provider.ProviderCode
+			booking.ProviderID = provider.ID
+		}
+
+		if settlement != nil {
+			booking.SettlementID = "SET" + strconv.FormatInt(settlement.SettlementID, 10)
+		}
+
+		if payout != nil {
+			booking.PayoutID = "PAY" + strconv.FormatInt(payout.PayoutID, 10)
+		}
+
+		switch req.FinancialType {
+		case "gst":
+			booking.GSTAmount = record.GSTAmount
+			booking.GSTPercent = record.GSTPercent
+			totalAmount += record.GSTAmount
+
+		case "commission":
+			booking.CommissionAmount = record.CommissionAmount
+			booking.CommissionPercent = record.CommissionPercent
+			totalAmount += record.CommissionAmount
+
+		case "tds":
+			booking.TDSAmount = record.TDSAmount
+			booking.TDSPercent = record.TDSPercent
+			totalAmount += record.TDSAmount
+
+		case "vahanwire_gst":
+			booking.VahanwireGSTAmount = record.VahanwireGSTAmount
+			totalAmount += record.VahanwireGSTAmount
+		}
+
+		bookings = append(bookings, booking)
+	}
+
+	totalPages := total / req.Limit
+	if total%req.Limit > 0 {
+		totalPages++
+	}
+
+	return &BookingFinancialResponse{
+		Bookings:   bookings,
+		Total:      total,
+		TotalPages: totalPages,
+		Summary: FinancialSummary{
+			TotalAmount: utils.RoundTo2(totalAmount),
+			Count:       int64(len(bookings)),
+		},
+	}, nil
 }

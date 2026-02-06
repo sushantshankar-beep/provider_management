@@ -263,7 +263,7 @@ func (s *RefundService) InitiateRefund(ctx context.Context, refundID string) err
 		refund.ID.Hex()[len(refund.ID.Hex())-6:],
 		time.Now().Unix()%1000000,
 	)
-
+    
 	totalAmount := refund.Amount
 
 	payuResp, err := s.payuService.InitiateRefundByParams(

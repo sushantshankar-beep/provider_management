@@ -386,6 +386,7 @@ type PayoutStats struct {
 	CommissionAmount float64
 	GSTAmount        float64
 	TDSAmount        float64
+	VahanwireGSTAmount float64 
 	ServiceAmount    float64
 }
 
@@ -400,7 +401,8 @@ func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.
 				"totalPayAmount":   bson.M{"$sum": "$totalPayAmount"},
 				"netPayable":       bson.M{"$sum": "$netPayable"},
 				"commissionAmount": bson.M{"$sum": "$commissionAmount"},
-				"gstAmount":        bson.M{"$sum": "$gstAmount"},
+				"gstAmount": bson.M{"$sum": "$gstAmount"},
+				"vahanwireGstAmount":  bson.M{"$sum": "$vahanwireGstAmount"},
 				"tdsAmount":        bson.M{"$sum": "$tdsAmount"},
 				"serviceAmount":    bson.M{"$sum": "$baseAmount"}, 
 			},
@@ -418,6 +420,7 @@ func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.
 		NetPayable       float64 `bson:"netPayable"`
 		CommissionAmount float64 `bson:"commissionAmount"`
 		GSTAmount        float64 `bson:"gstAmount"`
+		VahanwireGSTAmount float64 `bson:"vahanwireGstAmount"`
 		TDSAmount        float64 `bson:"tdsAmount"`
 		ServiceAmount    float64 `bson:"serviceAmount"`
 	}
@@ -433,6 +436,7 @@ func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.
 			CommissionAmount: 0,
 			GSTAmount:        0,
 			TDSAmount:        0,
+			VahanwireGSTAmount: 0,
 			ServiceAmount:    0,
 		}, nil
 	}
@@ -443,6 +447,7 @@ func (r *PaymentPayoutRepo) GetAggregatedStats(ctx context.Context, filter bson.
 		CommissionAmount: result[0].CommissionAmount,
 		GSTAmount:        result[0].GSTAmount,
 		TDSAmount:        result[0].TDSAmount,
+		VahanwireGSTAmount:  result[0].VahanwireGSTAmount,
 		ServiceAmount:    result[0].ServiceAmount,
 	}, nil
 }

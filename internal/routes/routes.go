@@ -244,6 +244,7 @@ func SetupRoutes(
 		providerPayout.GET("/:id/bookings", rbac.Check("paymentandtransactions", "view_provider_payout_details"), payoutHandler.GetPayoutServices)
 		providerPayout.POST("/6hour", rbac.Check("paymentandtransactions", "create"), payoutHandler.Create6HourPayout)
 		providerPayout.GET("/stats", rbac.Check("paymentandtransactions", "view_provider_payout"), payoutHandler.GetPayoutStats)
+		providerPayout.GET("/stats-listing", settlementHandler.GetBookingsForPayoutStats)
 	}
 
 	providerSettlement := admin.Group("/provider-settlement")

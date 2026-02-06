@@ -1,9 +1,10 @@
 package dto
 
 import (
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"provider_management/internal/domain"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type PayoutFilters struct {
@@ -23,25 +24,26 @@ type PayoutSort struct {
 }
 
 type PayoutResponse struct {
-	ID                string               `json:"id"`
-	PayoutID          string               `json:"payout_id"`
-	ProviderID        string               `json:"provider_id"`
-	ProviderName      string               `json:"provider_name"`
-	ServiceIDs        []primitive.ObjectID `json:"service_ids"`
-	TotalPayAmount    float64              `json:"total_pay_amount"`
-	CommissionPercent float64              `json:"commission_percent"`
-	CommissionAmount  float64              `json:"commission_amount"`
-	GSTPercent        float64              `json:"gst_percent"`
-	BaseAmount        float64              `json:"base_amount"`
-	GSTAmount         float64              `json:"gst_amount"`
-	TDSPercent        float64              `json:"tds_percent"`
-	TDSAmount         float64              `json:"tds_amount"`
-	NetPayable        float64              `json:"net_payable"`
-	Status            string               `json:"status"`
-	PeriodFrom        time.Time            `json:"period_from"`
-	PeriodTo          time.Time            `json:"period_to"`
-	CreatedAt         time.Time            `json:"created_at"`
-	UpdatedAt         time.Time            `json:"updated_at"`
+	ID                 string               `json:"id"`
+	PayoutID           string               `json:"payout_id"`
+	ProviderID         string               `json:"provider_id"`
+	ProviderName       string               `json:"provider_name"`
+	ServiceIDs         []primitive.ObjectID `json:"service_ids"`
+	TotalPayAmount     float64              `json:"total_pay_amount"`
+	CommissionPercent  float64              `json:"commission_percent"`
+	CommissionAmount   float64              `json:"commission_amount"`
+	GSTPercent         float64              `json:"gst_percent"`
+	BaseAmount         float64              `json:"base_amount"`
+	GSTAmount          float64              `json:"gst_amount"`
+	TDSPercent         float64              `json:"tds_percent"`
+	TDSAmount          float64              `json:"tds_amount"`
+	NetPayable         float64              `json:"net_payable"`
+	Status             string               `json:"status"`
+	PeriodFrom         time.Time            `json:"period_from"`
+	VahanwireGSTAmount float64              `json:"vahanwire_gst_amount"`
+	PeriodTo           time.Time            `json:"period_to"`
+	CreatedAt          time.Time            `json:"created_at"`
+	UpdatedAt          time.Time            `json:"updated_at"`
 }
 
 type PayoutListResponse struct {
@@ -59,7 +61,7 @@ type PayoutServiceResponse struct {
 	CommissionAmount        float64             `json:"commission_amount"`
 	GSTPercent              float64             `json:"gst_percent"`
 	GSTAmount               float64             `json:"gst_amount"`
-	ProviderCode         string                  `json:"providerCode"`
+	ProviderCode            string              `json:"providerCode"`
 	TDSPercent              float64             `json:"tds_percent"`
 	TDSAmount               float64             `json:"tds_amount"`
 	NetAmount               float64             `json:"net_amount"`

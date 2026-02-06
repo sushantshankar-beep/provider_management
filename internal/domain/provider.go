@@ -5,15 +5,6 @@ import (
 	"time"
 )
 
-// noooo
-const (
-	IdentityProofTypeAadhaar        = "aadhaar"
-	IdentityProofTypePan            = "pan"
-	IdentityProofTypeVoterID        = "voter_id"
-	AddressProofTypeElectricityBill = "electricity_bill"
-	AddressProofTypeRentAgreement   = "rent_agreement"
-	AddressProofTypeVoterID         = "voter_id"
-)
 
 const (
 	VehicleTypeCar  = "car"
@@ -50,12 +41,12 @@ type Provider struct {
 	CreatedAt            time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt            time.Time          `bson:"updatedAt" json:"updatedAt"`
 	CreatedBy            primitive.ObjectID `bson:"createdBy" json:"createdBy"`
-
+AgreementUrl         string             `bson:"agreementUrl,omitempty" json:"agreementUrl,omitempty"`
 	//no need
 	Slug           string   `bson:"slug,omitempty" json:"slug,omitempty"`
 	AppStateStatus string   `bson:"appStateStatus" json:"app_state_status"`
 	OTP            OTP      `bson:"otp,omitempty" json:"-"`
-	Location       GeoPoint `bson:"location,omitempty" json:"location,omitempty"`
+
 	Status         string   `bson:"status" json:"status"`
 	IsAssigned     bool     `bson:"isAssigned" json:"is_assigned"`
 

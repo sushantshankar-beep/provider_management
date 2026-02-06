@@ -18,6 +18,7 @@ type SettlementRecord struct {
 	CommissionAmount      float64             `bson:"commissionAmount" json:"commission_amount"`
 	GSTPercent            float64             `bson:"gstPercent" json:"gst_percent"`
 	GSTAmount             float64             `bson:"gstAmount" json:"gst_amount"`
+	VahanwireGSTAmount    float64             `bson:"vahanwireGstAmount" json:"vahanwire_gst_amount"`
 	NetAmount             float64             `bson:"netAmount" json:"net_amount"`
 	TDSPercent            float64             `bson:"tdsPercent" json:"tds_percent"`
     TDSAmount             float64             `bson:"tdsAmount" json:"tds_amount"`

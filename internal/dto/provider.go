@@ -49,6 +49,7 @@ type CreateProviderRequest struct {
 	IfscCode          string               `form:"ifscCode"`
 	BranchName        string               `form:"branchName"`
 	Upi               string               `form:"upiId"`
+	AgreementUrl         string             `json:"agreementUrl,omitempty"`  
 }
 
 type UpdateProviderRequest struct {
@@ -73,6 +74,7 @@ type UpdateProviderRequest struct {
 	IfscCode          string               `form:"ifscCode"`
 	BranchName        string               `form:"branchName"`
 	Upi               string               `form:"upi"`
+	AgreementUrl         string             `json:"agreementUrl,omitempty"`  
 }
 
 type ProviderListResponse struct {

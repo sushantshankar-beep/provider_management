@@ -12,7 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+	"log"
+	"provider_management/internal/s3"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -28,6 +29,8 @@ type ProviderAdminService struct {
 	settlementHistoryRepo *repository.SettlementHistoryRepository
 	serviceRequestRepo *repository.ServiceRequestRepo
 	kycRepo  *repository.ProviderKYCRepository
+	agreementRepo         *repository.AgreementRepo       
+	pdfUploader           *s3.PDFUploader   
 }
 
 func NewProviderAdminService(
@@ -40,6 +43,8 @@ func NewProviderAdminService(
 	h *repository.SettlementHistoryRepository,
 	u *repository.ServiceRequestRepo,
 	k *repository.ProviderKYCRepository,
+	agreementRepo *repository.AgreementRepo,     
+	pdfUploader *s3.PDFUploader,  
 ) *ProviderAdminService {
 	return &ProviderAdminService{
 		providers:      p,
@@ -51,6 +56,8 @@ func NewProviderAdminService(
 		settlementHistoryRepo:  h,
 		serviceRequestRepo: u,
 		kycRepo: k,
+		agreementRepo:         agreementRepo,    
+		pdfUploader:           pdfUploader,    
 	}
 }
 
@@ -484,15 +491,56 @@ func (s *ProviderAdminService) UpdateProviderAccountAction(ctx context.Context, 
 	return s.providers.UpdateAccountStatus(ctx, id, mappedStatus)
 }
 
-func (s *ProviderAdminService) UpdateProviderCommission(ctx context.Context, id string, commissionPercentage float64) (*domain.Provider, error) {
+
+func (s *ProviderAdminService) UpdateProviderCommission(
+	ctx context.Context,
+	id string,
+	commissionPercentage float64,
+) (*domain.Provider, error) {
 
 	if commissionPercentage < 0 || commissionPercentage > 100 {
 		return nil, fmt.Errorf("commission percentage must be between 0 and 100")
 	}
 
-	return s.providers.UpdateCommission(ctx, id, commissionPercentage)
-}
+	provider, err := s.providers.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("provider not found: %w", err)
+	}
 
+	if provider.CommissionPercentage == commissionPercentage {
+		return provider, nil
+	}
+
+	provider.CommissionPercentage = commissionPercentage
+	provider.UpdatedAt = time.Now()
+
+	if provider.Name != "" && provider.City != "" {
+		_, err := s.agreementRepo.FindDefault(ctx)
+		if err != nil {
+			log.Printf("⚠️ Warning: Cannot regenerate agreement - no default template found: %v", err)
+		} else {
+			if err := s.generateAndUploadAgreement(ctx, provider); err != nil {
+				return nil, fmt.Errorf("failed to regenerate agreement: %w", err)
+			}
+		}
+	}
+
+	updateData := bson.M{
+		"commissionPercentage": utils.RoundTo2(commissionPercentage),
+		"updatedAt":            provider.UpdatedAt,
+	}
+
+	if provider.AgreementUrl != "" {
+		updateData["agreementUrl"] = provider.AgreementUrl
+	}
+
+	updatedProvider, err := s.providers.Update(ctx, id, updateData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update provider: %w", err)
+	}
+
+	return updatedProvider, nil
+}
 func formatDate(t time.Time) string {
 	return t.Format("2006-01-02")
 }
@@ -503,89 +551,6 @@ func formatDateDetailed(t time.Time) string {
 	}
 	return t.Format("Jan 2, 2006")
 }
-
-// func (s *ProviderAdminService) GetDocumentURL( ctx context.Context, providerID, documentType, documentID string ) (*dto.DocumentResponse, error) {
-
-// 	provider, err := s.providers.FindByID(ctx, providerID)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("provider not found")
-// 	}
-
-// 	switch documentType {
-
-// 	case "identity":
-// 		if len(provider.IdentityProof) == 0 {
-// 			return nil, fmt.Errorf("no identity proof documents found")
-// 		}
-
-// 		if documentID != "" {
-// 			for _, proof := range provider.IdentityProof {
-// 				if proof.ID.Hex() == documentID {
-// 					return &dto.DocumentResponse{
-// 						DocumentID:   proof.ID.Hex(),
-// 						DocumentType: "identity",
-// 						Type:         proof.Type,
-// 						File:         proof.File,
-// 						Verified:     proof.Verified,
-// 					}, nil
-// 				}
-// 			}
-// 			return nil, fmt.Errorf("identity document with ID %s not found", documentID)
-// 		}
-
-// 		proof := provider.IdentityProof[0]
-// 		return &dto.DocumentResponse{
-// 			DocumentID:   proof.ID.Hex(),
-// 			DocumentType: "identity",
-// 			Type:         proof.Type,
-// 			File:         proof.File,
-// 			Verified:     proof.Verified,
-// 		}, nil
-
-// 	case "address":
-// 		if len(provider.AddressProof) == 0 {
-// 			return nil, fmt.Errorf("no address proof documents found")
-// 		}
-
-// 		if documentID != "" {
-// 			for _, proof := range provider.AddressProof {
-// 				if proof.ID.Hex() == documentID {
-// 					return &dto.DocumentResponse{
-// 						DocumentID:   proof.ID.Hex(),
-// 						DocumentType: "address",
-// 						Type:         proof.Type,
-// 						File:         proof.File,
-// 						Verified:     proof.Verified,
-// 					}, nil
-// 				}
-// 			}
-// 			return nil, fmt.Errorf("address document with ID %s not found", documentID)
-// 		}
-
-// 		proof := provider.AddressProof[0]
-// 		return &dto.DocumentResponse{
-// 			DocumentID:   proof.ID.Hex(),
-// 			DocumentType: "address",
-// 			Type:         proof.Type,
-// 			File:         proof.File,
-// 			Verified:     proof.Verified,
-// 		}, nil
-
-// 	case "cancel_cheque":
-// 		if provider.CancelCheque == nil {
-// 			return nil, fmt.Errorf("no cancel cheque document found")
-// 		}
-
-// 		return &dto.DocumentResponse{
-// 			DocumentType: "cancel_cheque",
-// 			File:         provider.CancelCheque.File,
-// 			Verified:     provider.CancelCheque.Verified,
-// 		}, nil
-
-// 	default:
-// 		return nil, fmt.Errorf("invalid document type. Use: identity, address, or cancel_cheque")
-// 	}
-// }
 
 func (s *ProviderAdminService) AddNote( ctx context.Context, providerID string, req dto.AddNoteRequest ) error {
 
@@ -610,7 +575,14 @@ func (s *ProviderAdminService) AddNote( ctx context.Context, providerID string, 
 
 	return s.providers.AddProviderNote(ctx, objectID, note)
 }
-func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.CreateProviderRequest, documents []domain.KYCDocument,createdBy primitive.ObjectID, role string) (*domain.Provider, error) {
+
+func (s *ProviderAdminService) CreateProvider(
+	ctx context.Context,
+	req dto.CreateProviderRequest,
+	documents []domain.KYCDocument,
+	createdBy primitive.ObjectID,
+	role string,
+) (*domain.Provider, error) {
 
 	existingProvider, err := s.providers.FindByPhone(ctx, req.Phone)
 	if err == nil && existingProvider != nil {
@@ -639,8 +611,14 @@ func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.Creat
 		ProfileURL:       req.ProfileURL,
 		IsActive:         domain.AccountStatusActive,
 		CreatedBy:        createdBy,
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	if provider.Name != "" && provider.City != "" {
+		if err := s.generateAndUploadAgreement(ctx, provider); err != nil {
+			return nil, fmt.Errorf("failed to generate agreement: %w", err)
+		}
 	}
 
 	if err := s.providers.Create(ctx, provider); err != nil {
@@ -655,7 +633,7 @@ func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.Creat
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
-	
+
 	if req.AccountHolderName != "" {
 		kyc.Bank = domain.ProviderBankDetails{
 			AccountHolderName: req.AccountHolderName,
@@ -678,102 +656,120 @@ func (s *ProviderAdminService) CreateProvider(ctx context.Context, req dto.Creat
 	return provider, nil
 }
 
-
 func (s *ProviderAdminService) UpdateProvider(
-    ctx context.Context,
-    id string,
-    req dto.UpdateProviderRequest,
-    documents []domain.KYCDocument,
-    updatedBy primitive.ObjectID,
+	ctx context.Context,
+	id string,
+	req dto.UpdateProviderRequest,
+	documents []domain.KYCDocument,
+	updatedBy primitive.ObjectID,
 ) (*domain.Provider, error) {
 
-    provider, err := s.providers.FindByID(ctx, id)
-    if err != nil {
-        return nil, fmt.Errorf("provider not found")
-    }
+	provider, err := s.providers.FindByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("provider not found")
+	}
 
-    update := bson.M{
-        "updatedAt": time.Now(),
-        "updatedBy": updatedBy,
-    }
+	shouldRegenerateAgreement := false
+	
+	if req.Name != "" && req.Name != provider.Name {
+		shouldRegenerateAgreement = true
+	}
+	if req.CompanyName != "" && req.CompanyName != provider.CompanyName {
+		shouldRegenerateAgreement = true
+	}
+	if req.City != "" && req.City != provider.City {
+		shouldRegenerateAgreement = true
+	}
 
-    if req.Name != "" {
-        update["name"] = req.Name
-    }
-    if req.CompanyName != "" {
-        update["companyName"] = req.CompanyName
-    }
-    if req.Phone != "" {
-        update["phone"] = req.Phone
-    }
-    if req.Email != "" {
-        update["email"] = req.Email
-    }
-    if req.City != "" {
-        update["city"] = req.City
-    }
-    if req.Address != "" {
-        update["address"] = req.Address
-    }
-    if req.ProfileURL != "" {
-        update["profileUrl"] = req.ProfileURL
-    }
-    if len(req.VehicleType) > 0 {
-        update["vehicleType"] = req.VehicleType
-    }
-    if len(req.ProviderBrands) > 0 {
-        update["providerBrands"] = req.ProviderBrands
-    }
-    if len(req.ProviderServices) > 0 {
-        update["providerServices"] = req.ProviderServices
-    }
+	update := bson.M{
+		"updatedAt": time.Now(),
+		"updatedBy": updatedBy,
+	}
 
-    updatedProvider, err := s.providers.Update(ctx, id, update)
-    if err != nil {
-        return nil, err
-    }
+	if req.Name != "" {
+		update["name"] = req.Name
+		provider.Name = req.Name 
+	}
+	if req.CompanyName != "" {
+		update["companyName"] = req.CompanyName
+		provider.CompanyName = req.CompanyName
+	}
+	if req.Phone != "" {
+		update["phone"] = req.Phone
+	}
+	if req.Email != "" {
+		update["email"] = req.Email
+	}
+	if req.City != "" {
+		update["city"] = req.City
+		provider.City = req.City
+	}
+	if req.Address != "" {
+		update["address"] = req.Address
+	}
+	if req.ProfileURL != "" {
+		update["profileUrl"] = req.ProfileURL
+	}
+	if len(req.VehicleType) > 0 {
+		update["vehicleType"] = req.VehicleType
+	}
+	if len(req.ProviderBrands) > 0 {
+		update["providerBrands"] = req.ProviderBrands
+	}
+	if len(req.ProviderServices) > 0 {
+		update["providerServices"] = req.ProviderServices
+	}
 
-    if len(documents) > 0 || req.AccountHolderName != "" {
+	if shouldRegenerateAgreement && provider.Name != "" && provider.City != "" {
+		if err := s.generateAndUploadAgreement(ctx, provider); err != nil {
+			return nil, fmt.Errorf("failed to regenerate agreement: %w", err)
+		}
+		update["agreementUrl"] = provider.AgreementUrl
+	}
 
-        var existingKYC *domain.ProviderKYC
-        existingKYC, err = s.kycRepo.FindByProviderID(ctx, provider.ID)
-        if err != nil && err != mongo.ErrNoDocuments {
-            return nil, err
-        }
+	updatedProvider, err := s.providers.Update(ctx, id, update)
+	if err != nil {
+		return nil, err
+	}
 
-        kycUpdate := bson.M{
-            "updatedAt": time.Now(),
-            "status":    domain.KYC_PENDING,
-        }
+	if len(documents) > 0 || req.AccountHolderName != "" {
+		var existingKYC *domain.ProviderKYC
+		existingKYC, err = s.kycRepo.FindByProviderID(ctx, provider.ID)
+		if err != nil && err != mongo.ErrNoDocuments {
+			return nil, err
+		}
 
-        if len(documents) > 0 {
+		kycUpdate := bson.M{
+			"updatedAt": time.Now(),
+			"status":    domain.KYC_PENDING,
+		}
 
-            var existingDocs []domain.KYCDocument
-            if existingKYC != nil {
-                existingDocs = existingKYC.Documents
-            }
+		if len(documents) > 0 {
+			var existingDocs []domain.KYCDocument
+			if existingKYC != nil {
+				existingDocs = existingKYC.Documents
+			}
+			mergedDocs := mergeKYCDocuments(existingDocs, documents)
+			kycUpdate["documents"] = mergedDocs
+		}
 
-            mergedDocs := mergeKYCDocuments(existingDocs, documents)
-            kycUpdate["documents"] = mergedDocs
-        }
+		if req.AccountHolderName != "" {
+			kycUpdate["bank"] = domain.ProviderBankDetails{
+				AccountHolderName: req.AccountHolderName,
+				AccountNumber:     req.AccountNumber,
+				IFSC:              req.IfscCode,
+				BranchName:        req.BranchName,
+				UPIID:             req.Upi,
+				GSTNumber:         req.GSTNumber,
+			}
+		}
 
-        if req.AccountHolderName != "" {
-            kycUpdate["bank"] = domain.ProviderBankDetails{
-                AccountHolderName: req.AccountHolderName,
-                AccountNumber:     req.AccountNumber,
-                IFSC:              req.IfscCode,
-                BranchName:        req.BranchName,
-                UPIID:             req.Upi,
-                GSTNumber:         req.GSTNumber,
-            }
-        }
+		if err := s.kycRepo.UpdateByProviderID(ctx, provider.ID, kycUpdate); err != nil {
+			return nil, err
+		}
+	}
 
-        if err := s.kycRepo.UpdateByProviderID(ctx, provider.ID, kycUpdate); err != nil {
-            return nil, err
-        }
-    }
-
-    return updatedProvider, nil
+	return updatedProvider, nil
 }
 
 func mergeKYCDocuments(existing, incoming []domain.KYCDocument) []domain.KYCDocument {
@@ -1425,4 +1421,33 @@ func (s *ProviderAdminService) GetKYCDocument(
 	}
 
 	return nil, fmt.Errorf("document type %s not found", documentType)
+}
+
+func (s *ProviderAdminService) generateAndUploadAgreement(
+	ctx context.Context,
+	provider *domain.Provider,
+) error {
+
+	agreement, err := s.agreementRepo.FindDefault(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch agreement template: %w", err)
+	}
+
+	pdfBytes, err := utils.GenerateAgreementPDF(provider, agreement)
+	if err != nil {
+		return fmt.Errorf("failed to generate PDF: %w", err)
+	}
+
+	if provider.AgreementUrl != "" {
+		_ = s.pdfUploader.DeletePDF(provider.AgreementUrl)
+	}
+
+	url, err := s.pdfUploader.UploadPDF(pdfBytes, provider.ID.Hex())
+	if err != nil {
+		return fmt.Errorf("failed to upload PDF to S3: %w", err)
+	}
+
+	provider.AgreementUrl = url
+	
+	return nil
 }
