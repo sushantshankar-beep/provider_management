@@ -719,6 +719,14 @@ func (s *ProviderAdminService) UpdateProvider(
 	if len(req.ProviderServices) > 0 {
 		update["providerServices"] = req.ProviderServices
 	}
+	if req.AlternateContact != "" {
+		update["alternateContact"] = req.AlternateContact
+	}
+	
+	if req.VehicleNumber != "" {
+		update["vehicleNumber"] = req.VehicleNumber
+	}
+	
 
 	if shouldRegenerateAgreement && provider.Name != "" && provider.City != "" {
 		if err := s.generateAndUploadAgreement(ctx, provider); err != nil {

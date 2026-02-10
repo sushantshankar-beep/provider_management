@@ -66,6 +66,8 @@ type ComplaintListItem struct {
 	RaisedBy          string                 `json:"raised_by"`
 	Against           string                 `json:"against"`
 	Status            domain.ComplaintStatus `json:"status"`
+	UserName     string `json:"userName"`
+	ProviderName string `json:"providerName"`
 	CreatedAt         string                 `json:"created_at"`
 }
 

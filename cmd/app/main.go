@@ -17,6 +17,7 @@ import (
 	"provider_management/internal/routes"
 	"provider_management/internal/s3"
 	"provider_management/internal/service"
+	"provider_management/internal/worker"
 	"syscall"
 	"time"
 )
@@ -32,6 +33,8 @@ func main() {
 		log.Fatal("Failed to initialize AWS session:", err)
 	}
 	log.Println("AWS session initialized successfully")
+
+	ctx := context.Background()
 
 	s3Uploader := middleware.NewS3Uploader(awsSession, os.Getenv("AWS_BUCKET_NAME"))
 	pdfUploader := s3.NewPDFUploader(awsSession, os.Getenv("AWS_BUCKET_NAME"),os.Getenv("AWS_S3_FOLDER"))
@@ -101,7 +104,7 @@ func main() {
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo,complaintRepo,acceptedServiceRepo,payUService)
 	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService,transactionRepo,kycRepo)
 
-
+	worker.StartPayoutWorker(ctx, payoutService)
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
 	zoneService := service.NewZoneService(zoneRepo)
 	vehicleBrandService := service.NewVehicleBrandService(vehicleBrandRepo)

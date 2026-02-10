@@ -424,8 +424,6 @@ func (s *SettlementService) CreateSettlement(
 			continue
 		}
 
-		// transaction := transactionMap[serviceKey]
-
 		existingRecord, _ := s.settlementHistoryRepo.FindByServiceID(ctx, service.ID)
 
 		if service.HasComplaintAdjustment && existingRecord != nil {
@@ -469,14 +467,14 @@ func (s *SettlementService) CreateSettlement(
 		if hasGSTNumber {
 			commission = calculationAmount * (providerCommissionPercent / 100)
 			afterCommission := calculationAmount - commission
-			gst = payout.BaseAmount * 0.18
+			gst = calculationAmount * 0.18
 			amountWithGST := afterCommission + gst
 			tds = amountWithGST * 0.10
 			netAmount = amountWithGST - tds
 			vahanwireGST = 0
 		} else {
 			commission = calculationAmount * (providerCommissionPercent / 100)
-			vahanwireGST = calculationAmount * 0.18 
+			vahanwireGST = calculationAmount * 0.18
 			tds = 0
 			gst = 0
 			netAmount = calculationAmount - commission

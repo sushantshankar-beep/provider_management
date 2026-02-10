@@ -218,7 +218,7 @@ func (s *AdminBookingService) addProviderFilter(ctx context.Context, providerID 
 		return err
 	}
 
-	filter["user"] = objID
+	filter["provider"] = objID
 	return nil
 }
 
