@@ -122,9 +122,14 @@ func (r *ComplaintRepository) buildQuery(filter dto.ComplaintFilter) bson.M {
 	}
 
 	if filter.RaisedBy != nil {
-		query["raisedBy"] = *filter.RaisedBy
+		switch strings.ToLower(*filter.RaisedBy) {
+		case "user":
+			query["userComplaint"] = bson.M{"$ne": nil}
+		case "provider":
+			query["providerComplaint"] = bson.M{"$ne": nil}
+		}
 	}
-
+	
 	if filter.Category != nil {
 		query["userComplaint.problem"] = bson.M{
 			"$regex": *filter.Category,
@@ -250,6 +255,14 @@ func (r *ComplaintRepository) getFilteredStats(ctx context.Context, filter dto.C
 					{"$match": bson.M{"raisedBy": "Provider"}},
 					{"$count": "count"},
 				},
+				"userComplaints": []bson.M{
+					{"$match": bson.M{"userComplaint": bson.M{"$ne": nil}}},
+					{"$count": "count"},
+				},
+				"providerComplaints": []bson.M{
+					{"$match": bson.M{"providerComplaint": bson.M{"$ne": nil}}},
+					{"$count": "count"},
+				},
 			},
 		},
 	}
@@ -274,6 +287,8 @@ func (r *ComplaintRepository) getFilteredStats(ctx context.Context, filter dto.C
 		stats.StatusInitiated = extractCount(result, "initiated")
 		stats.RaisedByYou = extractCount(result, "raisedByUser")
 		stats.RaisedByProviders = extractCount(result, "raisedByProvider")
+		stats.UserComplaints = extractCount(result, "userComplaints")
+		stats.ProviderComplaints = extractCount(result, "providerComplaints")
 	}
 
 	return stats, nil

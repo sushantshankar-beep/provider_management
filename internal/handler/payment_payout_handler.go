@@ -1,13 +1,12 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"provider_management/internal/dto"
 	"provider_management/internal/service"
 	"strconv"
 	"strings"
-
+	"provider_management/internal/config"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -21,8 +20,8 @@ func NewPayoutHandler(svc *service.PayoutService) *PayoutHandler {
 }
 
 func (h *PayoutHandler) Create6HourPayout(c *gin.Context) {
-	log.Println("ksjndjkcnkjs")
-	if err := h.svc.CreatePayoutLast6Hours(c.Request.Context()); err != nil {
+	hours := config.GetPayoutIntervalHours()
+	if err := h.svc.CreatePayoutLast6Hours(c.Request.Context(), hours); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   true,
 			"message": err.Error(),

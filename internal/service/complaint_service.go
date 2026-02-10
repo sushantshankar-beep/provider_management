@@ -141,12 +141,30 @@ func (s *ComplaintService) GetAllComplaints(
 			CreatedAt:         indianTime.Format("2006-01-02 15:04:05"),
 		}
 
-		if complaint.UserComplaint != nil && complaint.UserID != "" && complaint.ProviderID != "" {
+		if complaint.UserID != "" {
+			user, err := s.userRepo.FindByID(ctx, complaint.UserID)
+			if err != nil {
+				log.Println("Error fetching user:", err, "UserID:", complaint.UserID)
+			} else {
+				resp.UserName = user.Name
+			}
+		}
+
+		if complaint.ProviderID != "" {
+			provider, err := s.providerRepo.FindByID(ctx, complaint.ProviderID)
+			if err != nil {
+				log.Println("Error fetching provider:", err, "ProviderID:", complaint.ProviderID)
+			} else {
+				resp.ProviderName = provider.Name
+			}
+		}
+
+		if complaint.UserComplaint != nil {
 			resp.RaisedBy = "user"
 			resp.Against = "provider"
 		}
 
-		if complaint.ProviderComplaint != nil && complaint.UserID != "" && complaint.ProviderID != "" {
+		if complaint.ProviderComplaint != nil {
 			resp.RaisedBy = "provider"
 			resp.Against = "user"
 		}
