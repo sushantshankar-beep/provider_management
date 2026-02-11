@@ -71,6 +71,8 @@ type AcceptedService struct {
 	Brand       string    	`bson:"brand" json:"brand"`
 	ModelYear   int        	`bson:"modelYear" json:"modelYear"`
 	Model      string      `bson:"model" json:"model"`
+	CancelledByProvider   bool                 `bson:"cancelledByProvider" json:"cancelledByProvider"`
+	CancelledProviderID   string               `bson:"cancelledProviderID" json:"cancelledProviderID"`
 }
 
 type BookingNote struct {

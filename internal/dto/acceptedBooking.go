@@ -129,6 +129,7 @@ type DetailedBookingResponse struct {
 	Notes              []domain.BookingNote    `bson:"notes,omitempty" json:"notes,omitempty"`
 	AllBookings        []BookingSummary        `json:"allBookings"`
 	SettlementStatus   SettlementStatus        `json:"settlement_status"`
+	CancelledByProvider   bool                 `json:"cancelledByProvider"`
 }
 
 

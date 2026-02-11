@@ -606,6 +606,7 @@ func (s *AdminBookingService) GetBookingByID(ctx context.Context, bookingID stri
 		Year:          svc.ModelYear,
 		FuelType:      svc.FuelType,
 		Problems:      svc.Issues,
+		CancelledByProvider: svc.CancelledByProvider,
 		// Description:      sr.Description,
 		// Location:         sr.Address,
 		SettlementStatus: dto.SettlementStatus(svc.SettlementStatus),
