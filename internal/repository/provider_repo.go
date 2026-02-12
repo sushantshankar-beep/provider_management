@@ -228,7 +228,13 @@ func (r *ProviderRepo) GetStats(ctx context.Context) (dto.ProvidersStats, error)
 					{"$count": "count"},
 				},
 				"inactive": []bson.M{
-					{"$match": bson.M{"isActive": bson.M{"$ne": "active"}}},
+					{
+						"$match": bson.M{
+							"isActive": bson.M{
+								"$in": []string{"suspended", "blacklisted"},
+							},
+						},
+					},
 					{"$count": "count"},
 				},
 			},
