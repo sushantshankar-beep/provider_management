@@ -56,25 +56,25 @@ type CreateSettlementRequest struct {
 }
 
 type ProviderSettlementResponse struct {
-	ID             primitive.ObjectID      `json:"_id"`
-	SettlementID   string                  `json:"settlementId"`
-	ProviderID     primitive.ObjectID      `json:"providerId"`
-	ProviderName   string                  `json:"providerName"`
-	ProviderCode   string                  `json:"providerCode"`
-	ProviderEmail  string                  `json:"providerEmail"`
-	AccountNo      string                  `json:"accountNo"`
-	PaymentType    string                  `json:"paymentType"`
-	IfscCode       string                  `json:"ifscCode"`
-	TotalAmount    float64                 `json:"totalAmount"`
-	IsDeduction    bool                    `json:"isDeduction"`
-	PaymentMode    string                  `json:"paymentMode"`
-	PaymentMethod  string                  `json:"paymentMethod"`
-	Justification  string                  `json:"justification"`
-	Status         domain.SettlementStatus `json:"settelementStatus"`
-	PayoutIdNumber string                  `json:"payoutId"`
-	DebitAccountNumber string `json:"debitAccountNumber"`
-	SettledAt      *time.Time              `json:"settledAt"`
-	CreatedAt      time.Time               `json:"createdAt"`
+	ID                 primitive.ObjectID      `json:"_id"`
+	SettlementID       string                  `json:"settlementId"`
+	ProviderID         primitive.ObjectID      `json:"providerId"`
+	ProviderName       string                  `json:"providerName"`
+	ProviderCode       string                  `json:"providerCode"`
+	ProviderEmail      string                  `json:"providerEmail"`
+	AccountNo          string                  `json:"accountNo"`
+	PaymentType        string                  `json:"paymentType"`
+	IfscCode           string                  `json:"ifscCode"`
+	TotalAmount        float64                 `json:"totalAmount"`
+	IsDeduction        bool                    `json:"isDeduction"`
+	PaymentMode        string                  `json:"paymentMode"`
+	PaymentMethod      string                  `json:"paymentMethod"`
+	Justification      string                  `json:"justification"`
+	Status             domain.SettlementStatus `json:"settelementStatus"`
+	PayoutIdNumber     string                  `json:"payoutId"`
+	DebitAccountNumber string                  `json:"debitAccountNumber"`
+	SettledAt          *time.Time              `json:"settledAt"`
+	CreatedAt          time.Time               `json:"createdAt"`
 }
 
 type ProviderSettlementIDResponse struct {
@@ -96,53 +96,51 @@ type ProviderSettlementIDResponse struct {
 	CreatedAt       time.Time               `json:"created_at"`
 }
 
-
 type GetBookingsByFinancialTypeRequest struct {
-    FinancialType string `form:"stats_type" binding:"required"`
-    Status        string `form:"status"`                          
-    StartDate     string `form:"start_date"`
-    EndDate       string `form:"end_date"`
-    Page          int64  `form:"page,default=1"`
-    Limit         int64  `form:"limit,default=10"`
-    SortField     string `form:"sort_field,default=createdAt"`
-    SortOrder     string `form:"sort_order,default=desc"`
+	FinancialType string `form:"stats_type" binding:"required"`
+	Status        string `form:"status"`
+	StartDate     string `form:"start_date"`
+	EndDate       string `form:"end_date"`
+	Page          int64  `form:"page,default=1"`
+	Limit         int64  `form:"limit,default=10"`
+	SortField     string `form:"sort_field,default=createdAt"`
+	SortOrder     string `form:"sort_order,default=desc"`
 }
 
 type BookingFinancialDetail struct {
-    ServiceID          primitive.ObjectID `json:"service_id"`
-    ServiceNumber      string              `json:"serviceNumber"`
-    ProviderName       string             `json:"provider_name"`
-    TotalPayAmount     float64         `json:"amount"`
-    ProviderCode       string             `json:"provider_code"`
-	ProviderID                 primitive.ObjectID `json:"provider_id"`
-    SettlementID       string             `json:"settlement_id"`
-    PayoutID           string             `json:"payout_id"`
-    BaseAmount         float64            `json:"base_amount"`
-    CommissionAmount   float64            `json:"commission_amount,omitempty"`
-    CommissionPercent  float64            `json:"commission_percent,omitempty"`
-    GSTAmount          float64            `json:"gst_amount,omitempty"`
-    GSTPercent         float64            `json:"gst_percent,omitempty"`
-    TDSAmount          float64            `json:"tds_amount,omitempty"`
-    TDSPercent         float64            `json:"tds_percent,omitempty"`
-    VahanwireGSTAmount float64            `json:"vahanwire_gst_amount,omitempty"`
-    NetAmount          float64            `json:"net_amount"`
-    Status             string             `json:"status"`
-    CreatedAt          time.Time          `json:"created_at"`
-    SettledAt          *time.Time         `json:"settled_at,omitempty"`
+	ServiceID          primitive.ObjectID `json:"service_id"`
+	ServiceNumber      string             `json:"serviceNumber"`
+	ProviderName       string             `json:"provider_name"`
+	TotalPayAmount     float64            `json:"amount"`
+	ProviderCode       string             `json:"provider_code"`
+	ProviderID         primitive.ObjectID `json:"provider_id"`
+	SettlementID       string             `json:"settlement_id"`
+	PayoutID           string             `json:"payout_id"`
+	BaseAmount         float64            `json:"base_amount"`
+	CommissionAmount   float64            `json:"commission_amount,omitempty"`
+	CommissionPercent  float64            `json:"commission_percent,omitempty"`
+	GSTAmount          float64            `json:"gst_amount,omitempty"`
+	GSTPercent         float64            `json:"gst_percent,omitempty"`
+	TDSAmount          float64            `json:"tds_amount,omitempty"`
+	TDSPercent         float64            `json:"tds_percent,omitempty"`
+	VahanwireGSTAmount float64            `json:"vahanwire_gst_amount,omitempty"`
+	NetAmount          float64            `json:"net_amount"`
+	Status             string             `json:"status"`
+	CreatedAt          time.Time          `json:"created_at"`
+	SettledAt          *time.Time         `json:"settled_at,omitempty"`
 }
 
 type BookingFinancialResponse struct {
-    Bookings   []BookingFinancialDetail `json:"bookings"`
-    Total      int64                    `json:"total"`
-    TotalPages int64                    `json:"total_pages"`
-    Summary    FinancialSummary         `json:"summary"`
+	Bookings   []BookingFinancialDetail `json:"bookings"`
+	Total      int64                    `json:"total"`
+	TotalPages int64                    `json:"total_pages"`
+	Summary    FinancialSummary         `json:"summary"`
 }
 
 type FinancialSummary struct {
-    TotalAmount float64 `json:"total_amount"`
-    Count       int64   `json:"count"`
+	TotalAmount float64 `json:"total_amount"`
+	Count       int64   `json:"count"`
 }
-
 
 func NewSettlementService(
 	serviceRepo *repository.AcceptedServiceRepo,
@@ -189,12 +187,25 @@ func (s *SettlementService) CreateSettlement(
 		return nil, fmt.Errorf("provider not found")
 	}
 
+	kyc, err := s.kycRepo.FindByProviderID(ctx, payout.ProviderID)
+	if err != nil || kyc == nil {
+		return nil, fmt.Errorf("provider KYC not found, cannot process settlement")
+	}
+
+	if kyc.Status != domain.KYC_APPROVED {
+		return nil, fmt.Errorf("provider KYC is not approved, cannot process settlement")
+	}
+
+	if strings.TrimSpace(kyc.Bank.AccountNumber) == "" ||
+		strings.TrimSpace(kyc.Bank.IFSC) == "" {
+		return nil, fmt.Errorf("provider bank details incomplete, cannot process settlement")
+	}
+
 	providerCommissionPercent := payout.CommissionPercent
 	if provider.CommissionPercentage > 0 {
 		providerCommissionPercent = provider.CommissionPercentage
 	}
 
-	kyc, _ := s.kycRepo.FindByProviderID(ctx, payout.ProviderID)
 	hasGSTNumber := false
 	if kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != "" {
 		hasGSTNumber = true
@@ -605,7 +616,6 @@ func (s *SettlementService) GetSettlements(
 		filter["status"] = req.Status
 	}
 
-
 	if req.ProviderID != "" {
 		providerObjID, err := primitive.ObjectIDFromHex(req.ProviderID)
 		if err != nil {
@@ -699,20 +709,20 @@ func (s *SettlementService) GetSettlements(
 	for _, settlement := range settlements {
 
 		resp := ProviderSettlementResponse{
-			ID:            settlement.ID,
-			SettlementID:  "SET" + strconv.FormatInt(settlement.SettlementID, 10),
-			ProviderID:    settlement.ProviderID,
-			PaymentType:   "NEFT",
-			AccountNo:     settlement.AccountNo,
-			IfscCode:      settlement.IfscCode,
-			TotalAmount:   utils.RoundTo2(settlement.TotalAmount),
-			PaymentMode:   settlement.PaymentMode,
-			PaymentMethod: settlement.PaymentMethod,
-			Justification: settlement.Justification,
-			Status:        settlement.Status,
-			SettledAt:     settlement.SettledAt,
+			ID:                 settlement.ID,
+			SettlementID:       "SET" + strconv.FormatInt(settlement.SettlementID, 10),
+			ProviderID:         settlement.ProviderID,
+			PaymentType:        "NEFT",
+			AccountNo:          settlement.AccountNo,
+			IfscCode:           settlement.IfscCode,
+			TotalAmount:        utils.RoundTo2(settlement.TotalAmount),
+			PaymentMode:        settlement.PaymentMode,
+			PaymentMethod:      settlement.PaymentMethod,
+			Justification:      settlement.Justification,
+			Status:             settlement.Status,
+			SettledAt:          settlement.SettledAt,
 			DebitAccountNumber: "",
-			CreatedAt:     settlement.CreatedAt,
+			CreatedAt:          settlement.CreatedAt,
 		}
 
 		provider, _ := s.providerRepo.FindByID(ctx, settlement.ProviderID.Hex())
@@ -953,7 +963,7 @@ func (s *SettlementService) GetBookingsForPayoutStats(
 		settlement, _ := s.settlementRepo.FindByID(ctx, record.SettlementID)
 
 		transaction, err := s.transactionRepo.FindByServiceID(ctx, record.ServiceID.Hex())
-		log.Println("jdbcjsbhjcbsdcs",transaction)
+		log.Println("jdbcjsbhjcbsdcs", transaction)
 		if err != nil {
 			log.Printf("transaction fetch failed for service %s: %v", record.ServiceID.Hex(), err)
 			continue
@@ -964,8 +974,8 @@ func (s *SettlementService) GetBookingsForPayoutStats(
 		}
 
 		booking := BookingFinancialDetail{
-			ServiceID:       record.ServiceID,
-			ServiceNumber:   service.ServiceNumber,
+			ServiceID:      record.ServiceID,
+			ServiceNumber:  service.ServiceNumber,
 			TotalPayAmount: transaction.Amount,
 			BaseAmount:     record.SettlementAmount,
 			NetAmount:      record.NetAmount,
