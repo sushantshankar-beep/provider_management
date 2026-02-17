@@ -257,6 +257,48 @@ func parseAction(path, method string) (action, entityType, entityID string) {
 			}
 		}
 
+	case strings.Contains(path, "/promo-codes"):
+		entityType = "promo_code"
+	
+		if strings.Contains(path, "/status") {
+			action = "Update Promo Code Status"
+		} else if method == "POST" && strings.Contains(path, "/create") {
+			action = "Create Promo Code"
+		} else if method == "PUT" {
+			action = "Update Promo Code"
+		} else if method == "DELETE" {
+			action = "Delete Promo Code"
+		}
+	
+		for i, part := range parts {
+			if part == "promo-codes" && i+1 < len(parts) &&
+				parts[i+1] != "create" && parts[i+1] != "stats" {
+				entityID = parts[i+1]
+				break
+			}
+		}
+	
+	case strings.Contains(path, "/discounts"):
+		entityType = "discount"
+	
+		if strings.Contains(path, "/status") {
+			action = "Update Discount Status"
+		} else if method == "POST" && strings.Contains(path, "/create") {
+			action = "Create Discount"
+		} else if method == "PUT" {
+			action = "Update Discount"
+		} else if method == "DELETE" {
+			action = "Delete Discount"
+		}
+	
+		for i, part := range parts {
+			if part == "discounts" && i+1 < len(parts) &&
+				parts[i+1] != "create" && parts[i+1] != "stats" {
+				entityID = parts[i+1]
+				break
+			}
+		}
+	
 	case strings.Contains(path, "/admin/panel"):
 		entityType = "admin"
 		if strings.Contains(path, "/login") {
@@ -290,6 +332,8 @@ func parseAction(path, method string) (action, entityType, entityID string) {
 			}
 		}
 	}
+
+	
 
 	if action == "" {
 		action = strings.ToLower(method) + "_" + entityType

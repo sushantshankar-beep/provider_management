@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"fmt"
+	"log"
 	"provider_management/internal/domain"
 	"strings"
 	"time"
 	"unicode"
+    "regexp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -683,7 +685,7 @@ func (r *AdminBookingRepo) AddBookingNote( ctx context.Context, serviceID primit
 
 
 func (r *AdminBookingRepo) FindServiceRequestsByZones(ctx context.Context, allowedZones []string) ([]primitive.ObjectID, error) {
-
+    
 	cursor, err := r.serviceRequestColl.Find(ctx, bson.M{
 		"status": "accepted",
 	})
@@ -738,3 +740,45 @@ func extractZone(address string) string {
 	}
 	return "N/A"
 }
+
+func (r *AdminBookingRepo) FindProvidersByZones(ctx context.Context, allowedZones []string) ([]primitive.ObjectID, error) {
+
+	log.Println("Finding providers for allowed zones:", allowedZones)
+
+	orConditions := []bson.M{}
+
+	for _, z := range allowedZones {
+		orConditions = append(orConditions, bson.M{
+			"city": bson.M{
+				"$regex":   "^" + regexp.QuoteMeta(z) + "$",
+				"$options": "i",
+			},
+		})
+	}
+
+	filter := bson.M{"$or": orConditions}
+
+	cursor, err := r.providerColl.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var providers []struct {
+		ID primitive.ObjectID `bson:"_id"`
+	}
+
+	if err := cursor.All(ctx, &providers); err != nil {
+		return nil, err
+	}
+
+	var ids []primitive.ObjectID
+	for _, p := range providers {
+		ids = append(ids, p.ID)
+	}
+
+	log.Println("Matched providers:", ids)
+
+	return ids, nil
+}
+

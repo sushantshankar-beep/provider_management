@@ -81,6 +81,8 @@ func main() {
 	ratingRepo := repository.NewRatingRepo(mongoDB)
 	vehicleRepo := repository.NewVehiclesRepo(mongoDB)
 	agreementRepo := repository.NewAgreementRepo(mongoDB)
+	promoCodeRepo := repository.NewPromoCodeRepo(mongoDB)
+	discountRepo := repository.NewDiscountRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo, vehicleRepo)
@@ -103,6 +105,8 @@ func main() {
 	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo,serviceMasterRepo)
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo,complaintRepo,acceptedServiceRepo,payUService)
 	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService,transactionRepo,kycRepo)
+	promoCodeService := service.NewPromoCodeService(promoCodeRepo)
+	discountService := service.NewDiscountService(discountRepo)
 
 	worker.StartPayoutWorker(ctx, payoutService)
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
@@ -129,6 +133,9 @@ func main() {
 	permissionHandler := handler.NewPermissionHandler(permissionService)
 	providerAgreementHandler := handler.NewAgreementHandler(providerAgreementService)
 	providerBrandServiceHandler := handler.NewProviderBrandServiceHandler(providerBrandService)
+	promoCodeHandler := handler.NewPromoCodeHandler(promoCodeService)
+	discountHandler := handler.NewDiscountHandler(discountService)
+	
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
@@ -163,6 +170,8 @@ func main() {
 		permissionHandler,
 		providerBrandServiceHandler,
 		providerAgreementHandler,
+		promoCodeHandler,
+		discountHandler,
 	)
 
 	srv := &http.Server{
