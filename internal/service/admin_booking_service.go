@@ -850,10 +850,10 @@ func (s *AdminBookingService) CancelBooking(ctx context.Context, bookingID strin
 
 	svc := services[0]
 
-	if svc.Status == "cancelled" {
+	if svc.Status == domain.StatusCancelled{
 		return nil, fmt.Errorf("booking already cancelled")
 	}
-	if svc.Status == "completed" {
+	if svc.Status == domain.StatusCompleted {
 		return nil, fmt.Errorf("cannot cancel completed booking")
 	}
 
@@ -861,7 +861,7 @@ func (s *AdminBookingService) CancelBooking(ctx context.Context, bookingID strin
 	update := bson.M{
 		"status":      "cancelled",
 		"cancelledBy": "admin",
-		"cancelledAt": now,
+		"timestamps.cancelledAt": now,
 		"updatedAt":   now,
 	}
 
@@ -894,17 +894,17 @@ func (s *AdminBookingService) MarkBookingCompleted(ctx context.Context, bookingI
 
 	svc := services[0]
 
-	if svc.Status == "completed" {
+	if svc.Status == domain.StatusCompleted {
 		return nil, fmt.Errorf("booking already completed")
 	}
-	if svc.Status == "cancelled" {
+	if svc.Status == domain.StatusCancelled {
 		return nil, fmt.Errorf("cannot complete cancelled booking")
 	}
 
 	now := time.Now()
 	update := bson.M{
-		"status":      "completed",
-		"completedAt": now,
+		"status":      domain.StatusCompleted,
+		"timestamps.completedAt": now,
 		"updatedAt":   now,
 	}
 
