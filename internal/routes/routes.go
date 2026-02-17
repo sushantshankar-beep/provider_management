@@ -40,6 +40,8 @@ func SetupRoutes(
 	permissionHandler *handler.PermissionHandler,
 	providerBrandServiceHandler *handler.ProviderBrandServiceHandler,
 	providerAgreementHandler *handler.AgreementHandler,
+	promoCodeHandler *handler.PromoCodeHandler,
+	discountHandler *handler.DiscountHandler,
 ) {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -352,5 +354,29 @@ func SetupRoutes(
 		providerAgreement.POST("", providerAgreementHandler.CreateAgreement)
 		providerAgreement.PUT("/:id", providerAgreementHandler.UpdateAgreement)
 
+	}
+
+	promos := admin.Group("/promo-codes")
+	{
+		promos.POST("/create", rbac.Check("promo_codes", "create_promo_code"), promoCodeHandler.CreatePromoCode)
+		promos.GET("", rbac.Check("promo_codes", "view_promo_code"), promoCodeHandler.GetPromoCodes)
+		promos.GET("/stats", rbac.Check("promo_codes", "view_promo_code"), promoCodeHandler.GetPromoCodeStats)
+		promos.GET("/:id", rbac.Check("promo_codes", "view_promo_code_details"), promoCodeHandler.GetPromoCodeByID)
+		promos.PUT("/:id", rbac.Check("promo_codes", "edit_promo_code"), promoCodeHandler.UpdatePromoCode)
+		promos.GET("/:id/activity-logs", rbac.Check("promo_codes", "view_promo_code_activity_logs"), activityLogHandler.GetPromoCodeActivityLogs)
+		promos.PATCH("/:id/status", rbac.Check("promo_codes", "edit_promo_code"), promoCodeHandler.UpdatePromoCodeStatus)
+		promos.DELETE("/:id", rbac.Check("promo_codes", "delete_promo_code"), promoCodeHandler.DeletePromoCode)
+	}
+
+	discounts := admin.Group("/discounts")
+	{
+		discounts.POST("/create", rbac.Check("discounts", "create_discount"), discountHandler.CreateDiscount)
+		discounts.GET("", rbac.Check("discounts", "view_discount"), discountHandler.GetDiscounts)
+		discounts.GET("/stats", rbac.Check("discounts", "view_discount"), discountHandler.GetDiscountStats)
+		discounts.GET("/:id", rbac.Check("discounts", "view_discount_details"), discountHandler.GetDiscountByID)
+		discounts.PUT("/:id", rbac.Check("discounts", "edit_discount"), discountHandler.UpdateDiscount)
+		discounts.PATCH("/:id/status", rbac.Check("discounts", "edit_discount"), discountHandler.UpdateDiscountStatus)
+		discounts.GET("/:id/activity-logs", rbac.Check("discounts", "view_discount_activity_logs"), activityLogHandler.GetDiscountActivityLogs)
+		discounts.DELETE("/:id", rbac.Check("discounts", "delete_discount"), discountHandler.DeleteDiscount)
 	}
 }

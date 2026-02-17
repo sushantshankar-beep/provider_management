@@ -276,20 +276,22 @@ func (s *AdminBookingService) addDateFilters(filters dto.BookingFilters, filter 
 		}
 	}
 }
-
 func (s *AdminBookingService) addZoneFilter(ctx context.Context, allowedZones []string, filter bson.M) error {
-	matchingSRs, err := s.repo.FindServiceRequestsByZones(ctx, allowedZones)
+
+	providerIDs, err := s.repo.FindProvidersByZones(ctx, allowedZones)
 	if err != nil {
 		return err
 	}
 
-	if len(matchingSRs) == 0 {
-		return fmt.Errorf("no service requests found in allowed zones")
+	if len(providerIDs) == 0 {
+		return fmt.Errorf("no providers found in allowed zones")
 	}
 
-	filter["serviceRequest"] = bson.M{"$in": matchingSRs}
+	filter["provider"] = bson.M{"$in": providerIDs}
+
 	return nil
 }
+
 
 func (s *AdminBookingService) buildBookingResponses(ctx context.Context, services []domain.AcceptedService) ([]dto.BookingResponse, error) {
 

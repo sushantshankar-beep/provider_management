@@ -172,9 +172,8 @@ func (s *DashboardService) GetDashboardStats(ctx context.Context,period string,d
 		transactionStats.TotalAmount - settlementStats.SettledAmount,
 	)
 
-	baseAmount := utils.RoundTo2(
-		transactionStats.TotalAmount - transactionStats.GSTAmount,
-	)
+    baseAmount := transactionStats.TotalAmount
+
 
 	var settledPercentage, platformPercentage, gstPercentage float64
 	if baseAmount > 0 {

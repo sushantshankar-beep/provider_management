@@ -151,3 +151,41 @@ func (h *ActivityLogHandler) GetAdminActivityLogs(c *gin.Context) {
 		"limit": limit,
 	})
 }
+
+func (h *ActivityLogHandler) GetPromoCodeActivityLogs(c *gin.Context) {
+	promoCodeID := c.Param("id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	logs, total, err := h.service.GetByEntityID(c.Request.Context(), "promo_code", promoCodeID, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch promo code activity logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":  logs,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
+
+func (h *ActivityLogHandler) GetDiscountActivityLogs(c *gin.Context) {
+	discountID := c.Param("id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	logs, total, err := h.service.GetByEntityID(c.Request.Context(), "discount", discountID, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch dicount activity logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"logs":  logs,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+	})
+}
