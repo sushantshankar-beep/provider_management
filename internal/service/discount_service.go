@@ -84,10 +84,15 @@ func (s *DiscountService) CreateDiscount(ctx context.Context, req dto.CreateDisc
 		CreatedBy:              req.CreatedBy,
 	}
 
+	now := time.Now().UTC()
+
 	if req.StartAt != "" {
 		t, err := time.Parse(time.RFC3339, req.StartAt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid start_at format, use RFC3339")
+		}
+		if t.Before(now) {
+			return nil, fmt.Errorf("start_at cannot be in the past")
 		}
 		d.StartAt = t
 	} else {
@@ -98,6 +103,9 @@ func (s *DiscountService) CreateDiscount(ctx context.Context, req dto.CreateDisc
 		t, err := time.Parse(time.RFC3339, req.EndAt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid end_at format, use RFC3339")
+		}
+		if t.Before(d.StartAt) {
+			return nil, fmt.Errorf("end_at must be after start_at")
 		}
 		d.EndAt = &t
 	}
@@ -227,10 +235,16 @@ func (s *DiscountService) UpdateDiscount(ctx context.Context, id string, req dto
 	if req.AllowStackingWithPromo != nil {
 		update["allowStackingWithPromo"] = *req.AllowStackingWithPromo
 	}
+
+	now := time.Now().UTC()
+
 	if req.StartAt != "" {
 		t, err := time.Parse(time.RFC3339, req.StartAt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid start_at format, use RFC3339")
+		}
+		if t.Before(now) {
+			return nil, fmt.Errorf("start_at cannot be in the past")
 		}
 		update["startAt"] = t
 	}
@@ -238,6 +252,9 @@ func (s *DiscountService) UpdateDiscount(ctx context.Context, id string, req dto
 		t, err := time.Parse(time.RFC3339, req.EndAt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid end_at format, use RFC3339")
+		}
+		if t.Before(now) {
+			return nil, fmt.Errorf("end_at cannot be in the past")
 		}
 		update["endAt"] = t
 	}
@@ -351,6 +368,7 @@ func (s *DiscountService) mapToDiscountListResponse(d domain.Discount) dto.Disco
 
 	return dto.DiscountListResponse{
 		ID:            d.ID.Hex(),
+		Code: 		   d.Code,
 		Name:          d.Name,
 		Description:   d.Description,
 		Type:          string(d.Type),
