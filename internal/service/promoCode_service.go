@@ -91,20 +91,28 @@ func (s *PromoCodeService) CreatePromoCode(ctx context.Context, req dto.CreatePr
 		CreatedBy:           req.CreatedBy,
 	}
 
+	now := time.Now().UTC()
+
 	if req.StartAt != "" {
 		t, err := time.Parse(time.RFC3339, req.StartAt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid start_at format, use RFC3339")
 		}
+		if t.Before(now) {
+			return nil, fmt.Errorf("start_at cannot be in the past")
+		}
 		promo.StartAt = t
 	} else {
-		promo.StartAt = time.Now()
+		promo.StartAt = now
 	}
 
 	if req.EndAt != "" {
 		t, err := time.Parse(time.RFC3339, req.EndAt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid end_at format, use RFC3339")
+		}
+		if t.Before(promo.StartAt) {
+			return nil, fmt.Errorf("end_at must be after start_at")
 		}
 		promo.EndAt = &t
 	}
@@ -238,17 +246,26 @@ func (s *PromoCodeService) UpdatePromoCode(ctx context.Context, id string, req d
 	if req.AllowStacking != nil {
 		update["allowStacking"] = *req.AllowStacking
 	}
+	now := time.Now().UTC()
+
 	if req.StartAt != "" {
 		t, err := time.Parse(time.RFC3339, req.StartAt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid start_at format, use RFC3339")
 		}
+		if t.Before(now) {
+			return nil, fmt.Errorf("start_at cannot be in the past")
+		}
 		update["startAt"] = t
 	}
+
 	if req.EndAt != "" {
 		t, err := time.Parse(time.RFC3339, req.EndAt)
 		if err != nil {
 			return nil, fmt.Errorf("invalid end_at format, use RFC3339")
+		}
+		if t.Before(now) {
+			return nil, fmt.Errorf("end_at cannot be in the past")
 		}
 		update["endAt"] = t
 	}
@@ -303,7 +320,6 @@ func (s *PromoCodeService) GetPromoCodeStats(ctx context.Context) (*dto.PromoCod
 		Drafts:          stats["draft"],
 	}, nil
 }
-
 
 func (s *PromoCodeService) mapToPromoCodeResponse(p domain.PromoCode) dto.PromoCodeResponse {
 	discount := fmt.Sprintf("%.0f%%", p.Value)
