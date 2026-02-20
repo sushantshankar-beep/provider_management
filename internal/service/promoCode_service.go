@@ -318,10 +318,12 @@ func (s *PromoCodeService) GetPromoCodeStats(ctx context.Context) (*dto.PromoCod
 		ScheduledPromos: stats["scheduled"],
 		ExpiredPromos:   stats["expired"],
 		Drafts:          stats["draft"],
+		InactivePromos:  stats["inactive"],
 	}, nil
 }
 
 func (s *PromoCodeService) mapToPromoCodeResponse(p domain.PromoCode) dto.PromoCodeResponse {
+	p.Status = resolvePromoStatus(p)
 	discount := fmt.Sprintf("%.0f%%", p.Value)
 	if p.DiscountType == domain.DiscountFlat {
 		discount = fmt.Sprintf("₹%.0f", p.Value)
@@ -370,6 +372,7 @@ func (s *PromoCodeService) mapToPromoCodeResponse(p domain.PromoCode) dto.PromoC
 }
 
 func (s *PromoCodeService) mapToPromoCodeListResponse(p domain.PromoCode) dto.PromoCodeListResponse {
+	p.Status = resolvePromoStatus(p)
 	discount := fmt.Sprintf("%.0f%%", p.Value)
 	if p.DiscountType == domain.DiscountFlat {
 		discount = fmt.Sprintf("₹%.0f", p.Value)
@@ -403,4 +406,35 @@ func (s *PromoCodeService) mapToPromoCodeListResponse(p domain.PromoCode) dto.Pr
 		CreatedAt:     p.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:     p.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+
+func resolvePromoStatus(p domain.PromoCode) domain.PromoStatus {
+	now := time.Now().UTC()
+
+	if p.Status == domain.PromoStatusDraft || p.Status == domain.PromoStatusInactive {
+		return p.Status
+	}
+
+	if p.EndAt != nil && now.After(*p.EndAt) {
+		return domain.PromoStatusExpired
+	}
+
+	if now.Before(p.StartAt) {
+		return domain.PromoStatusScheduled
+	}
+
+	if p.Status == domain.PromoStatusScheduled && !now.Before(p.StartAt) {
+		return domain.PromoStatusActive
+	}
+
+	return p.Status
+}
+
+func (s *PromoCodeService) SyncPromoStatuses(ctx context.Context) error {
+	now := time.Now().UTC()
+	if err := s.PromoCodeRepo.BulkUpdateExpired(ctx, now); err != nil {
+		return err
+	}
+	return s.PromoCodeRepo.BulkActivateScheduled(ctx, now)
 }

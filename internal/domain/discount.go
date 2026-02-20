@@ -27,6 +27,7 @@ type DiscountStatus string
 const (
 	DiscountStatusDraft     DiscountStatus = "draft"
 	DiscountStatusActive    DiscountStatus = "active"
+	DiscountStatusInActive    DiscountStatus = "inActive"
 	DiscountStatusScheduled DiscountStatus = "scheduled"
 	DiscountStatusExpired   DiscountStatus = "expired"
 	DiscountStatusPaused    DiscountStatus = "paused"
@@ -68,7 +69,8 @@ func IsValidDiscountStatus(s DiscountStatus) bool {
 		s == DiscountStatusActive ||
 		s == DiscountStatusScheduled ||
 		s == DiscountStatusExpired ||
-		s == DiscountStatusPaused
+		s == DiscountStatusPaused ||
+		s == DiscountStatusInActive
 }
 
 func IsValidDiscountApplicableOn(a DiscountApplicableOn) bool {

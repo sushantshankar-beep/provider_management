@@ -136,6 +136,11 @@ func main() {
 	promoCodeHandler := handler.NewPromoCodeHandler(promoCodeService)
 	discountHandler := handler.NewDiscountHandler(discountService)
 	
+	discountStatusWorker := worker.NewDiscountStatusWorker(discountService)
+	discountStatusWorker.Start(ctx)
+
+	promoStatusWorker := worker.NewPromoStatusWorker(promoCodeService)
+    promoStatusWorker.Start(ctx)
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)

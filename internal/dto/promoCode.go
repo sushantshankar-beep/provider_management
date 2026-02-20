@@ -98,6 +98,7 @@ type PromoCodeStatsResponse struct {
 	ScheduledPromos  int64 `json:"scheduled_promos"`
 	ExpiredPromos    int64 `json:"expired_promos"`
 	Drafts           int64 `json:"drafts"`
+	InactivePromos   int64 `json:"inactive_promos"`
 }
 
 func FormatEndAt(t *time.Time) *string {

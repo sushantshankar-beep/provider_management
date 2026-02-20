@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
@@ -313,6 +314,7 @@ func (s *DiscountService) GetDiscountStats(ctx context.Context) (*dto.DiscountSt
 }
 
 func (s *DiscountService) mapToDiscountResponse(d domain.Discount) dto.DiscountResponse {
+	d.Status = resolveDiscountStatus(d)
 	discount := fmt.Sprintf("%.0f%%", d.Value)
 	if d.Type == domain.DiscountFlat {
 		discount = fmt.Sprintf("₹%.0f", d.Value)
@@ -353,6 +355,7 @@ func (s *DiscountService) mapToDiscountResponse(d domain.Discount) dto.DiscountR
 }
 
 func (s *DiscountService) mapToDiscountListResponse(d domain.Discount) dto.DiscountListResponse {
+	d.Status = resolveDiscountStatus(d)
 	discount := fmt.Sprintf("%.0f%%", d.Value)
 	if d.Type == domain.DiscountFlat {
 		discount = fmt.Sprintf("₹%.0f", d.Value)
@@ -385,4 +388,35 @@ func (s *DiscountService) mapToDiscountListResponse(d domain.Discount) dto.Disco
 		CreatedAt:     d.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:     d.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+func resolveDiscountStatus(d domain.Discount) domain.DiscountStatus {
+	now := time.Now().UTC()
+
+	if d.Status == domain.DiscountStatusDraft || d.Status == domain.DiscountStatusInActive || d.Status == domain.DiscountStatusPaused {
+		return d.Status
+	}
+
+	if d.EndAt != nil && now.After(*d.EndAt) {
+		return domain.DiscountStatusExpired
+	}
+
+	if now.Before(d.StartAt) {
+		return domain.DiscountStatusScheduled
+	}
+
+	if d.Status == domain.DiscountStatusScheduled && !now.Before(d.StartAt) {
+		return domain.DiscountStatusActive
+	}
+
+	return d.Status
+}
+
+func (s *DiscountService) SyncDiscountStatuses(ctx context.Context) error {
+	now := time.Now().UTC()
+	log.Println("Syncing discount statuses at", now.Format(time.RFC3339))
+	if err := s.DiscountRepo.BulkUpdateExpired(ctx, now); err != nil {
+		return err
+	}
+	return s.DiscountRepo.BulkActivateScheduled(ctx, now)
 }
