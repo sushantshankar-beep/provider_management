@@ -9,7 +9,7 @@ import (
 	"provider_management/internal/dto"
 	"strings"
 	"time"
-
+    "go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -718,4 +718,35 @@ func (r *AcceptedServiceRepo) FindByServiceRequestID(
 	}
 
 	return &res, nil
+}
+
+func (r *AcceptedServiceRepo) PromoCodeUsage(
+	ctx context.Context,
+	page, limit int,
+) ([]domain.AcceptedService, int64, error) {
+
+	filter := bson.M{
+		"totalDiscount": bson.M{"$gt": 0},
+	}
+
+	skip := (page - 1) * limit
+
+	cur, err := r.col.Find(ctx, filter, options.Find().
+		SetSkip(int64(skip)).
+		SetLimit(int64(limit)).
+		SetSort(bson.M{"createdAt": -1}),
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cur.Close(ctx)
+
+	var services []domain.AcceptedService
+	if err := cur.All(ctx, &services); err != nil {
+		return nil, 0, err
+	}
+
+	total, _ := r.col.CountDocuments(ctx, filter)
+
+	return services, total, nil
 }

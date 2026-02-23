@@ -17,7 +17,6 @@ func NewDiscountStatusWorker(svc *service.DiscountService) *DiscountStatusWorker
 
 func (w *DiscountStatusWorker) Start(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
-log.Println("Starting DiscountStatusWorker to sync discount statuses every 1 minute")
 	go func() {
 		for {
 			select {

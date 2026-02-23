@@ -136,8 +136,7 @@ func (h *ComplaintHandler) PostAssessment(c *gin.Context) {
 		})
 		return
 	}
-
-	complaint, err := h.complaintService.GetComplaintByNumber(c.Request.Context(), id)
+	complaint, err := h.complaintService.GetComplaintByID(c.Request.Context(), id)
 	if err != nil {
 
 		c.JSON(http.StatusNotFound, gin.H{

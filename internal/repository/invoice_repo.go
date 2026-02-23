@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 	"provider_management/internal/domain"
-
+    "go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -21,12 +21,13 @@ func NewInvoiceRepo(db *mongo.Database) *InvoiceRepo {
 
 func (r *InvoiceRepo) GetByID(ctx context.Context, id string) (*domain.Invoice, error) {
 	var invoice domain.Invoice
-	log.Println("Searching for serviceId:", id)
 	
 	filter := bson.M{"serviceId": id}
-	log.Println("Filter:", filter)
 	
-	err := r.col.FindOne(ctx, filter).Decode(&invoice)
+	opts := options.FindOne().
+	SetSort(bson.D{{Key: "createdAt", Value: -1}})
+
+	err := r.col.FindOne(ctx, filter,opts).Decode(&invoice)
 	if err != nil {
 		log.Println("MongoDB error:", err)
 		return nil, err

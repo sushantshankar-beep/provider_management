@@ -73,6 +73,10 @@ type AcceptedService struct {
 	Model      string      `bson:"model" json:"model"`
 	CancelledByProvider   bool                 `bson:"cancelledByProvider" json:"cancelledByProvider"`
 	CancelledProviderID   string               `bson:"cancelledProviderID" json:"cancelledProviderID"`
+	TotalDiscount    float64                   `bson:"totalDiscount" json:"totalDiscount"`
+	AmountPaidByUser float64                   `bson:"amountPaidByUser" json:"amountPaidByUser"`
+    AppliedPromo     *AppliedPromoSummary      `bson:"appliedPromo,omitempty" json:"appliedPromo,omitempty"`
+    AppliedDiscount  *AppliedDiscountSummary   `bson:"appliedDiscount,omitempty" json:"appliedDiscount,omitempty"`
 }
 
 type BookingNote struct {

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"provider_management/internal/dto"
 	"provider_management/internal/middleware"
@@ -190,9 +189,7 @@ func (h *AdminBookingHandler) AddNote(c *gin.Context) {
 
 func (h *AdminBookingHandler) GetInvoice(c *gin.Context) {
 	bookingID := c.Query("bookingId")
-    log.Println("dlkcsnjsndjkdc",bookingID)
 	invoice, err := h.svc.GetInvoice(c.Request.Context(), bookingID)
-	log.Println("invoiceeee",invoice)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "invoice not found",

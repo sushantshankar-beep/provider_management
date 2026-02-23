@@ -97,3 +97,9 @@ func IsValidPromoServiceType(s PromoServiceType) bool {
 		s == PromoServiceTowAway ||
 		s == PromoServicePetrol
 }
+
+type AppliedPromoSummary struct {
+	PromoID     string  `bson:"promoId,omitempty" json:"promoId,omitempty"`
+	Code        string  `bson:"code,omitempty" json:"code,omitempty"`
+	DiscountAmt float64 `bson:"discountAmt" json:"discountAmt"`
+}

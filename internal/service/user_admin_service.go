@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
@@ -239,7 +238,7 @@ func (s *UserAdminService) GetUserByID(ctx context.Context, userCode string) (*d
 	}
 
 	vehicles, err := s.vehicleRepo.FindByIDs(ctx, vehicleIDs)
-	log.Println("vehiclessss",vehicles)
+
 	if err != nil {
 		return nil, err
 	}

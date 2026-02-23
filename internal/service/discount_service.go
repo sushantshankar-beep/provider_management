@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
@@ -414,7 +413,6 @@ func resolveDiscountStatus(d domain.Discount) domain.DiscountStatus {
 
 func (s *DiscountService) SyncDiscountStatuses(ctx context.Context) error {
 	now := time.Now().UTC()
-	log.Println("Syncing discount statuses at", now.Format(time.RFC3339))
 	if err := s.DiscountRepo.BulkUpdateExpired(ctx, now); err != nil {
 		return err
 	}

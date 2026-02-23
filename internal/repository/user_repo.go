@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"log"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"time"
@@ -31,7 +30,7 @@ type UserStatistics struct {
 
 func (r *UserRepo) FindByID(ctx context.Context, id string) (*domain.User, error) {
 	var res domain.User
-    log.Println("kjqbejdksbnkjbasjkba",id)
+
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err == nil {
 		err = r.col.FindOne(ctx, bson.M{"_id": objID}).Decode(&res)

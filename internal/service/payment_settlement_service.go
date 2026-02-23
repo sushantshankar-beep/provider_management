@@ -285,13 +285,11 @@ func (s *SettlementService) CreateSettlement(
 
 		if payout.ServicePartialAmounts != nil {
 			if partialAmt, exists := payout.ServicePartialAmounts[serviceKey]; exists && partialAmt == 0 {
-				log.Printf("Service %s has cancelled payout (amount=0), skipping from settlement", serviceKey)
 				continue
 			}
 		}
 
 		if service.IsPayoutCancelled {
-			log.Printf("Service %s marked as cancelled, skipping from settlement", serviceKey)
 			continue
 		}
 
@@ -312,8 +310,6 @@ func (s *SettlementService) CreateSettlement(
 
 		if service.HasComplaintAdjustment {
 			settlementAmount -= service.PendingDeductionAmount
-			log.Printf("Service %s complaint adjustment: deducting %.2f",
-				serviceKey, service.PendingDeductionAmount)
 			continue
 		}
 
@@ -331,9 +327,6 @@ func (s *SettlementService) CreateSettlement(
 			gst = 0
 			net = baseAmount - commission
 		}
-
-		log.Printf("Service %s: Base=%.2f Commission=%.2f TDS=%.2f GST=%.2f Net=%.2f",
-			serviceKey, baseAmount, commission, tds, gst, net)
 
 		settlementAmount += net
 	}
@@ -450,12 +443,8 @@ func (s *SettlementService) CreateSettlement(
 			}
 
 			if err := s.settlementHistoryRepo.UpdateByID(ctx, existingRecord.ID, updateData); err != nil {
-				log.Printf("Failed to update settlement record with deduction for service %s: %v", serviceKey, err)
 				return nil, fmt.Errorf("failed to update settlement record with deduction: %v", err)
 			}
-
-			log.Printf("Updated settlement record for service %s with deduction: Amount=-%.2f",
-				serviceKey, service.PendingDeductionAmount)
 
 			continue
 		}
@@ -528,12 +517,8 @@ func (s *SettlementService) CreateSettlement(
 		}
 
 		if _, err := s.settlementHistoryRepo.Create(ctx, settlementRecord); err != nil {
-			log.Printf("Failed to create settlement record for service %s: %v", serviceKey, err)
 			return nil, fmt.Errorf("failed to create settlement record: %v", err)
 		}
-
-		log.Printf("Created settlement record for service %s: Original=%.2f, Partial=%.2f, Settlement=%.2f, Net=%.2f",
-			serviceKey, originalAmount, partialAmount, calculationAmount, netAmount)
 	}
 
 	servicesToSettle := []primitive.ObjectID{}
@@ -569,7 +554,6 @@ func (s *SettlementService) CreateSettlement(
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Unsettled service count:", unsettledCount)
 
 	if unsettledCount == 0 {
 		err = s.payoutRepo.UpdateStatus(
@@ -963,7 +947,6 @@ func (s *SettlementService) GetBookingsForPayoutStats(
 		settlement, _ := s.settlementRepo.FindByID(ctx, record.SettlementID)
 
 		transaction, err := s.transactionRepo.FindByServiceID(ctx, record.ServiceID.Hex())
-		log.Println("jdbcjsbhjcbsdcs", transaction)
 		if err != nil {
 			log.Printf("transaction fetch failed for service %s: %v", record.ServiceID.Hex(), err)
 			continue
