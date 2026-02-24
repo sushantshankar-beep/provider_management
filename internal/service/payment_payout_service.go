@@ -312,10 +312,20 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			partialAmount = 0
 		}
 
-		var serviceCommission, serviceTDS, serviceGST, vahanwireGSTAmount,serviceNet float64
+		var serviceCommission, serviceTDS, serviceGST, vahanwireGSTAmount, serviceNet float64
 		var tdsPercent, gstPercent float64
 
-		if hasGSTNumber {
+		isComplaintAfterSettlement := service.PayoutStatus == domain.PayoutStatusComplaintAfterSettlement && isInSettlement
+
+		if isComplaintAfterSettlement {
+			serviceCommission = 0
+			serviceTDS = 0
+			serviceGST = 0
+			vahanwireGSTAmount = 0
+			serviceNet = partialAmount
+			tdsPercent = 0
+			gstPercent = 0
+		} else if hasGSTNumber {
 			tdsPercent = constants.DefaultTDSPercent
 			gstPercent = constants.DefaultGSTPercent
 			serviceCommission = baseAmount * (providerCommissionPercent / 100)
@@ -693,7 +703,7 @@ func (s *PayoutService) createNewPayoutWithoutComplaint(ctx context.Context, pro
 	return s.payoutRepo.Create(ctx, payout)
 }
 
-func (s *PayoutService) updateExistingProviderPayout( ctx context.Context, existing *domain.PaymentPayout, serviceIDs []primitive.ObjectID, req dto.PayoutRequest, commissionPercent, gstPercent float64 ) error {
+func (s *PayoutService) updateExistingProviderPayout(ctx context.Context, existing *domain.PaymentPayout, serviceIDs []primitive.ObjectID, req dto.PayoutRequest, commissionPercent, gstPercent float64) error {
 
 	if existing.ServicePartialAmounts == nil {
 		existing.ServicePartialAmounts = make(map[string]float64)
@@ -706,72 +716,71 @@ func (s *PayoutService) updateExistingProviderPayout( ctx context.Context, exist
 
 	for _, sid := range serviceIDs {
 		key := sid.Hex()
-	
+
 		if !serviceExists[key] {
-	
+
 			service, err := s.serviceRepo.FindByID(ctx, key)
 			if err != nil {
 				fmt.Printf("ERROR: Failed to fetch service: %v", err)
 				continue
 			}
-	
+
 			transaction, err := s.transactionRepo.FindByServiceID(ctx, key)
 			if err != nil {
 				fmt.Printf("ERROR: Failed to fetch transaction: %v", err)
 				continue
 			}
-	
+
 			existing.ServiceIDs = append(existing.ServiceIDs, sid)
 			serviceExists[key] = true
-	
+
 			if req.PartialAmount > 0 {
 				existing.ServicePartialAmounts[key] = req.PartialAmount
 				existing.BaseAmount += req.PartialAmount
 			} else {
 				existing.BaseAmount += service.FinalPrice
 			}
-	
+
 			existing.TotalPayAmount += transaction.Amount
 			continue
 		}
-	
+
 		if req.PartialAmount > 0 {
-	
+
 			service, err := s.serviceRepo.FindByID(ctx, key)
 			if err != nil {
 				fmt.Printf("ERROR: Failed to fetch service: %v", err)
 				continue
 			}
-	
+
 			delta := calculateBaseAmountDelta(
 				existing,
 				key,
 				service.FinalPrice,
 				req.PartialAmount,
 			)
-	
+
 			existing.BaseAmount += delta
 			existing.ServicePartialAmounts[key] = req.PartialAmount
 		}
 	}
-	
 
 	for _, sid := range serviceIDs {
 		if req.CancelPayout {
 			key := sid.Hex()
-	
+
 			if err := s.cancelServiceProviderPayout(ctx, key); err != nil {
 				fmt.Printf("ERROR: Failed to cancel service: %v", err)
 			}
-	
+
 			if old, ok := existing.ServicePartialAmounts[key]; ok {
 				existing.BaseAmount -= old
 			}
-	
+
 			delete(existing.ServicePartialAmounts, key)
 		}
 	}
-	
+
 	effective := s.calculateEffectiveAmount(ctx, existing)
 	tdsPercent := 0.0
 	finalGSTPercent := 0.0
@@ -1001,7 +1010,7 @@ func (s *PayoutService) GetPayoutStats(
 				string(domain.PayoutStatusPartiallySettled),
 			},
 		},
-	}	
+	}
 
 	if req.StartDate != "" {
 		startDate, err := time.Parse("2006-01-02", req.StartDate)
