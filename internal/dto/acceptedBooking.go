@@ -151,6 +151,10 @@ type PaymentDetailsInfo struct {
 	Subtotal      float64 `json:"subtotal"`
 	GST           float64 `json:"gst"`
 	Total         float64 `json:"total"`
+	TotalDiscount  float64 `json:"totalDiscount"`
+	AmountAfterDiscount float64 `json:"amountAfterDiscount"` 
+	AppliedPromo        *AppliedPromoInfo    `json:"appliedPromo,omitempty"`
+    AppliedDiscount     *AppliedDiscountInfo `json:"appliedDiscount,omitempty"`
 }
 
 type EstimatedTimeInfo struct {
@@ -196,6 +200,7 @@ type TransactionDetailsInfo struct {
 }
 
 type ProviderEarningsInfo struct {
+	ServiceAmount      float64        `json:"serviceAmount"`
 	UserPaid           float64        `json:"userPaid"`
 	Commission         CommissionInfo `json:"commission"`
 	GST                GSTInfo        `json:"gst"`
@@ -277,3 +282,13 @@ const (
 	SettleStatusPending SettlementStatus = "pending"
 	SettleStatusSettled SettlementStatus = "settled"
 )
+
+type AppliedPromoInfo struct {
+    Code        string  `json:"code"`
+    DiscountAmt float64 `json:"discountAmt"`
+}
+
+type AppliedDiscountInfo struct {
+    Code        string  `json:"code"`
+    DiscountAmt float64 `json:"discountAmt"`
+}

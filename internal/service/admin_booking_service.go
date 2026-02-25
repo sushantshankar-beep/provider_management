@@ -631,26 +631,47 @@ func (s *AdminBookingService) GetBookingByID(ctx context.Context, bookingID stri
 		booking.RatingProvider = provider.Rating
 	}
 
-	basePrice := svc.BasePrice
-	if basePrice == 0 {
-		basePrice = svc.FinalPrice
-	}
-	finalPrice := svc.FinalPrice
-	gstAmount := finalPrice * 0.18
-	subtotal := finalPrice + gstAmount
-	discount := 0.0
-	if basePrice > finalPrice {
-		discount = basePrice - finalPrice
+
+	serviceCharge := svc.FinalPrice
+	if svc.BasePrice > 0 {
+		serviceCharge = svc.BasePrice
 	}
 
-	booking.PaymentDetails = &dto.PaymentDetailsInfo{
-		ServiceCharge: basePrice,
-		Discount:      discount,
-		Subtotal:      utils.RoundTo2(subtotal),
-		GST:           gstAmount,
-		Total:         subtotal,
+	totalDiscount := svc.TotalDiscount
+	amountAfterDiscount := serviceCharge - totalDiscount
+	if amountAfterDiscount < 0 {
+		amountAfterDiscount = 0
 	}
 
+	gstPercent := 18.0
+	
+	gstAmount := utils.RoundTo2(serviceCharge * gstPercent / 100)
+    total := utils.RoundTo2(serviceCharge + gstAmount - totalDiscount)
+
+	paymentDetails := &dto.PaymentDetailsInfo{
+		ServiceCharge:       utils.RoundTo2(serviceCharge),
+		TotalDiscount:       utils.RoundTo2(totalDiscount),
+		AmountAfterDiscount: utils.RoundTo2(amountAfterDiscount),
+		GST:                 gstAmount,
+		Subtotal:            total,
+		Total:               total,
+	}
+	
+	if svc.AppliedPromo != nil && svc.AppliedPromo.Code != "" {
+		paymentDetails.AppliedPromo = &dto.AppliedPromoInfo{
+			Code:        svc.AppliedPromo.Code,
+			DiscountAmt: utils.RoundTo2(svc.AppliedPromo.DiscountAmt),
+		}
+	}
+	
+	if svc.AppliedDiscount != nil && svc.AppliedDiscount.Code != "" {
+		paymentDetails.AppliedDiscount = &dto.AppliedDiscountInfo{
+			Code:        svc.AppliedDiscount.Code,
+			DiscountAmt: utils.RoundTo2(svc.AppliedDiscount.DiscountAmt),
+		}
+	}
+	
+	booking.PaymentDetails = paymentDetails
 	timestamps := domain.ServiceTimestamps{}
 	createdAt := svc.CreatedAt
 	timestamps.CreatedAt = &createdAt
@@ -779,15 +800,19 @@ func (s *AdminBookingService) GetBookingByID(ctx context.Context, bookingID stri
 	}
 
 	if transaction != nil && transaction.Status == "paid" {
+		serviceAmount := svc.FinalPrice
 
+		if svc.BasePrice > 0 {
+			serviceAmount = svc.BasePrice
+		}
 		userPaid := transaction.Amount
 
-		baseAmount := userPaid / 1.18
-		gstAmount := userPaid - baseAmount
-		commissionAmount := baseAmount * 0.20
+		gstAmount := serviceAmount * 0.18
+		commissionAmount := serviceAmount * 0.20
 
 		booking.ProviderEarnings = &dto.ProviderEarningsInfo{
 			UserPaid: utils.RoundTo2(userPaid),
+			ServiceAmount: utils.RoundTo2(serviceAmount),
 			Commission: dto.CommissionInfo{
 				Percentage: 20,
 				Amount:     utils.RoundTo2(commissionAmount),
@@ -804,8 +829,8 @@ func (s *AdminBookingService) GetBookingByID(ctx context.Context, bookingID stri
 	if settlement, err := s.settlementRepo.FindLatestByServiceID(ctx, svc.ID); err == nil && settlement != nil {
 
 		booking.ProviderEarnings = &dto.ProviderEarningsInfo{
-			UserPaid: utils.RoundTo2(settlement.OriginalAmount),
-
+			ServiceAmount: utils.RoundTo2(settlement.OriginalAmount),
+            
 			Commission: dto.CommissionInfo{
 				Percentage: settlement.CommissionPercent,
 				Amount:     utils.RoundTo2(settlement.CommissionAmount),
