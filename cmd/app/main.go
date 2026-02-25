@@ -105,7 +105,7 @@ func main() {
 	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo,serviceMasterRepo)
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo,complaintRepo,acceptedServiceRepo,payUService)
 	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService,transactionRepo,kycRepo)
-	promoCodeService := service.NewPromoCodeService(promoCodeRepo)
+	promoCodeService := service.NewPromoCodeService(promoCodeRepo,acceptedServiceRepo)
 	discountService := service.NewDiscountService(discountRepo)
 
 	worker.StartPayoutWorker(ctx, payoutService)
@@ -136,6 +136,11 @@ func main() {
 	promoCodeHandler := handler.NewPromoCodeHandler(promoCodeService)
 	discountHandler := handler.NewDiscountHandler(discountService)
 	
+	discountStatusWorker := worker.NewDiscountStatusWorker(discountService)
+	discountStatusWorker.Start(ctx)
+
+	promoStatusWorker := worker.NewPromoStatusWorker(promoCodeService)
+    promoStatusWorker.Start(ctx)
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)

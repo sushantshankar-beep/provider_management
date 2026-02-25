@@ -36,8 +36,8 @@ func NewComplaintService(
 	providerRepo *repository.ProviderRepo,
 	refundService *RefundService,
 	payoutService *PayoutService,
-	transactionRepo     *repository.TransactionRepo,
-	kycRepo             *repository.ProviderKYCRepository,
+	transactionRepo *repository.TransactionRepo,
+	kycRepo *repository.ProviderKYCRepository,
 ) *ComplaintService {
 	return &ComplaintService{
 		paymentPayoutRepo:   paymentPayoutRepo,
@@ -47,8 +47,8 @@ func NewComplaintService(
 		providerRepo:        providerRepo,
 		refundService:       refundService,
 		payoutService:       payoutService,
-		transactionRepo: transactionRepo,
-		kycRepo:kycRepo,
+		transactionRepo:     transactionRepo,
+		kycRepo:             kycRepo,
 	}
 }
 
@@ -74,11 +74,13 @@ func (s *ComplaintService) GetComplaint(ctx context.Context, id string) (*domain
 	return nil, fmt.Errorf("complaint not found with ID: %s", id)
 }
 
-func (s *ComplaintService) GetComplaintByNumber(ctx context.Context, complaintNumber string ) (*domain.Complaint, error) {
+func (s *ComplaintService) GetComplaintByNumber(ctx context.Context, complaintNumber string) (*domain.Complaint, error) {
 	return s.complaintRepo.GetByComplaintNumber(ctx, complaintNumber)
 }
 
-
+func (s *ComplaintService) GetComplaintByID(ctx context.Context, complaintID string) (*domain.Complaint, error) {
+	return s.complaintRepo.GetByID(ctx, complaintID)
+}
 
 func (s *ComplaintService) GetAllComplaints(
 	ctx context.Context,
@@ -208,9 +210,7 @@ func (s *ComplaintService) GetComplaintWithDetails(
 
 	var user *domain.User
 	if complaint.UserID != "" {
-		log.Println("kdsnjksnjkvd",complaint.UserID)
 		user, err = s.userRepo.FindByID(ctx, complaint.UserID)
-		log.Println("dkjsncjksnac",user)
 		if err != nil {
 			log.Println("Error fetching user:", err, "UserID:", complaint.UserID)
 		}
@@ -233,11 +233,11 @@ func (s *ComplaintService) GetComplaintWithDetails(
 	}
 
 	resp := &dto.ComplaintDetailResponse{
-		ComplaintID:     complaint.ID,
-		ComplaintNumber: complaint.ComplaintNumber,
-		Status:          complaint.Status,
-		Tracking:        complaint.Timeline,
-		Notes:  complaint.Notes,
+		ComplaintID:      complaint.ID,
+		ComplaintNumber:  complaint.ComplaintNumber,
+		Status:           complaint.Status,
+		Tracking:         complaint.Timeline,
+		Notes:            complaint.Notes,
 		Assessment:       complaint.Assessment,
 		ActionsTriggered: complaint.ActionsTriggered,
 		CreatedAt:        complaint.CreatedAt,
@@ -313,7 +313,7 @@ func (s *ComplaintService) GetComplaintWithDetails(
 }
 
 func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID string, req dto.AssessComplaintRequest) error {
-	complaint, err := s.GetComplaintByNumber(ctx, complaintID)
+	complaint, err := s.complaintRepo.GetByID(ctx, complaintID)
 
 	if err != nil {
 		return fmt.Errorf("failed to get complaint: %w", err)
@@ -343,7 +343,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 
 	if err := s.validateComplaintAssessmentAmounts(&req, acceptedService.FinalPrice); err != nil {
 		return err
-	}	
+	}
 
 	if err := s.saveAssessmentAndResolve(ctx, complaint.ID, req); err != nil {
 		return err
@@ -359,19 +359,15 @@ func (s *ComplaintService) validateComplaintAssessmentAmounts(req *dto.AssessCom
 		return fmt.Errorf("invalid original booking amount: %.2f", originalAmount)
 	}
 
-	log.Println("kcencjknwjedcw",originalAmount)
-
 	// gstAmount, tdsAmount, netAmount := s.calculateNetAmounts(originalAmount)
 
 	if req.RefundToUser == domain.RefundTypeFull {
 		req.RefundAmount = originalAmount
 	}
-    log.Println("dkjsnjkcsndsc",req.RefundAmount)
+
 	if req.PayoutToProvider == domain.PayoutTypeFull {
 		req.PayoutAmount = originalAmount
 	}
-
-	log.Println("dkjsnjkcsndsc",req.PayoutAmount)
 
 	if req.RefundToUser == domain.RefundTypePartial {
 		if req.RefundAmount <= 0 || req.RefundAmount > originalAmount {
@@ -393,17 +389,16 @@ func (s *ComplaintService) validateComplaintAssessmentAmounts(req *dto.AssessCom
 }
 
 func (s *ComplaintService) saveAssessmentAndResolve(ctx context.Context, complaintID string, req dto.AssessComplaintRequest) error {
-    log.Println("hcsdbhjsdcc",req.RefundAmount)
-	log.Println("ndcsjkncds",req.PayoutAmount)
+
 	assessment := domain.ComplaintAssessment{
-		FaultParty:       req.FaultParty,
-		RefundToUser:     req.RefundToUser,
-		RefundAmount:     req.RefundAmount,
-		PayoutToProvider: req.PayoutToProvider,
-		PayoutAmount:     req.PayoutAmount,
-		RemarkForUser:    req.RemarkForUser,
-		RemarkForProvider:req.RemarkForProvider,
-		AssessedBy:       req.AssessedBy,
+		FaultParty:        req.FaultParty,
+		RefundToUser:      req.RefundToUser,
+		RefundAmount:      req.RefundAmount,
+		PayoutToProvider:  req.PayoutToProvider,
+		PayoutAmount:      req.PayoutAmount,
+		RemarkForUser:     req.RemarkForUser,
+		RemarkForProvider: req.RemarkForProvider,
+		AssessedBy:        req.AssessedBy,
 	}
 
 	if err := s.complaintRepo.SaveAssessment(ctx, complaintID, assessment); err != nil {
@@ -453,7 +448,7 @@ func (s *ComplaintService) processPaymentActions(ctx context.Context, complaint 
 }
 
 func (s *ComplaintService) processRefund(ctx context.Context, complaint *domain.Complaint, acceptedService *domain.AcceptedService, req dto.AssessComplaintRequest) string {
-    
+
 	userObjID, err := primitive.ObjectIDFromHex(complaint.UserID)
 
 	if err != nil {
@@ -469,7 +464,6 @@ func (s *ComplaintService) processRefund(ctx context.Context, complaint *domain.
 		refundReason = refundReason
 	}
 
-
 	var transaction *domain.Transaction
 	if complaint.AcceptedService != "" {
 		transaction, err = s.transactionRepo.FindByServiceID(ctx, complaint.AcceptedService)
@@ -479,18 +473,18 @@ func (s *ComplaintService) processRefund(ctx context.Context, complaint *domain.
 	}
 
 	complaintObjID, err := primitive.ObjectIDFromHex(complaint.ID)
-   if err != nil {
-     	log.Println("Invalid complaint ID:", complaint.ID)
-	    return ""
-    }
+	if err != nil {
+		log.Println("Invalid complaint ID:", complaint.ID)
+		return ""
+	}
 
 	if err := s.refundService.ProcessRefund(ctx, dto.RefundRequest{
-		UserID:              userObjID.Hex(),
-		TxnID:               transaction.TxnID,
-		BookingID:           complaint.AcceptedService,
-		ComplaintID:         complaintObjID.Hex(),
-		Amount:              req.RefundAmount,
-		Reason:              refundReason,
+		UserID:      userObjID.Hex(),
+		TxnID:       transaction.TxnID,
+		BookingID:   complaint.AcceptedService,
+		ComplaintID: complaintObjID.Hex(),
+		Amount:      req.RefundAmount,
+		Reason:      refundReason,
 	}); err != nil {
 		fmt.Printf("Warning: Failed to process refund: %v", err)
 		return ""
@@ -538,10 +532,8 @@ func (s *ComplaintService) processPayout(ctx context.Context, complaint *domain.
 }
 
 func (s *ComplaintService) handleNoPayoutSettled(ctx context.Context, complaint *domain.Complaint, acceptedService *domain.AcceptedService, providerID string, originalAmount float64) []string {
-    
-	commission := originalAmount * 20.0 / 100
-	gst := (originalAmount - commission) * 18.0 / 100
-	netPayable := originalAmount - commission - gst
+
+	originalNetPaid := s.calculateOriginalNetPaid(ctx, providerID, acceptedService.Provider, originalAmount)
 
 	err := s.payoutService.ProcessPayout(ctx, dto.PayoutRequest{
 		ProviderID:          providerID,
@@ -563,11 +555,11 @@ func (s *ComplaintService) handleNoPayoutSettled(ctx context.Context, complaint 
 	_ = s.acceptedServiceRepo.UpdateComplaintFlags(ctx, acceptedService.ID.Hex(), map[string]any{
 		"payoutStatus":           domain.PayoutStatusComplaintAfterSettlement,
 		"hasComplaintAdjustment": true,
-		"pendingDeductionAmount": utils.RoundTo2(netPayable),
+		"pendingDeductionAmount": utils.RoundTo2(originalNetPaid),
 		"complaintId":            complaint.ID,
 	})
 
-	return []string{fmt.Sprintf("Deduction entry of %.2f created for future recovery", netPayable)}
+	return []string{fmt.Sprintf("Deduction entry of %.2f created for future recovery", originalNetPaid)}
 }
 
 func (s *ComplaintService) handleNoPayoutNotSettled(ctx context.Context, complaint *domain.Complaint, acceptedService *domain.AcceptedService, providerID string, originalAmount float64) []string {
@@ -598,8 +590,7 @@ func (s *ComplaintService) handleNoPayoutNotSettled(ctx context.Context, complai
 }
 
 func (s *ComplaintService) handlePartialPayout(ctx context.Context, complaint *domain.Complaint, acceptedService *domain.AcceptedService, providerID string, originalAmount, payoutAmount float64, isSettled bool) []string {
-	log.Println("jcsdbjbdjsbdcscds",originalAmount)
-	log.Println("kjdsnckjnjksdcdcs",payoutAmount)
+
 	err := s.payoutService.ProcessPayout(ctx, dto.PayoutRequest{
 		ProviderID:          providerID,
 		BookingID:           complaint.AcceptedService,
@@ -618,11 +609,9 @@ func (s *ComplaintService) handlePartialPayout(ctx context.Context, complaint *d
 	}
 
 	if isSettled {
-		deductionAmount := originalAmount - payoutAmount
-		commission := deductionAmount * 20.0 / 100
-		afterCommission := deductionAmount - commission
-		gst := afterCommission * 18.0 / 100
-		netDeduction := deductionAmount - commission - gst
+
+		originalNetPaid := s.calculateOriginalNetPaid(ctx, providerID, acceptedService.Provider, originalAmount)
+		netDeduction := originalNetPaid - payoutAmount
 
 		_ = s.acceptedServiceRepo.UpdateComplaintFlags(ctx, acceptedService.ID.Hex(), map[string]any{
 			"payoutStatus":           domain.PayoutStatusComplaintAfterSettlement,
@@ -635,9 +624,34 @@ func (s *ComplaintService) handlePartialPayout(ctx context.Context, complaint *d
 	return []string{fmt.Sprintf("Payout of %.2f processed", payoutAmount)}
 }
 
+
+func (s *ComplaintService) calculateOriginalNetPaid(ctx context.Context, providerID string, providerObjID primitive.ObjectID, originalAmount float64) float64 {
+
+	provider, _ := s.providerRepo.FindByID(ctx, providerID)
+	commissionPercent := 20.0
+	if provider != nil && provider.CommissionPercentage > 0 {
+		commissionPercent = provider.CommissionPercentage
+	}
+
+	kyc, _ := s.kycRepo.FindByProviderID(ctx, providerObjID)
+	hasGST := kyc != nil && strings.TrimSpace(kyc.Bank.GSTNumber) != ""
+
+	if hasGST {
+		commission := originalAmount * commissionPercent / 100
+		afterCommission := originalAmount - commission
+		gst := originalAmount * 0.18
+		amountWithGST := afterCommission + gst
+		tds := amountWithGST * 0.10
+		return amountWithGST - tds
+	}
+
+	commission := originalAmount * commissionPercent / 100
+	return originalAmount - commission
+}
+
 func (s *ComplaintService) StartAssessment(ctx context.Context, complaintID string) error {
-	
-	complaint, err := s.complaintRepo.GetByComplaintNumber(ctx, complaintID)
+
+	complaint, err := s.complaintRepo.GetByID(ctx, complaintID)
 
 	if err != nil {
 		return fmt.Errorf("failed to get complaint: %w", err)
@@ -653,7 +667,7 @@ func (s *ComplaintService) StartAssessment(ctx context.Context, complaintID stri
 func (s *ComplaintService) UpdateComplaintStatus(ctx context.Context, complaintID string, status domain.ComplaintStatus, adminID string) error {
 
 	complaint, err := s.GetComplaint(ctx, complaintID)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to get complaint: %w", err)
 	}
@@ -719,18 +733,3 @@ func isValidComplaintStatus(status domain.ComplaintStatus) bool {
 	}
 	return false
 }
-
-func (s *ComplaintService) calculateNetAmounts(originalAmount float64, hasGSTNumber bool) (gstAmount, tdsAmount, netAmount float64) {
-
-    if hasGSTNumber {
-        tdsAmount = originalAmount * 0.10
-        netAmount = originalAmount - tdsAmount
-        gstAmount = 0
-    } else {
-        gstAmount = originalAmount * 0.18
-        netAmount = originalAmount - gstAmount
-        tdsAmount = 0
-    }
-    return gstAmount, tdsAmount, netAmount
-}
-

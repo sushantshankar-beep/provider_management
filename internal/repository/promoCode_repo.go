@@ -139,6 +139,7 @@ func (r *PromoCodeRepo) GetStats(ctx context.Context) (map[string]int64, error) 
 		domain.PromoStatusScheduled,
 		domain.PromoStatusExpired,
 		domain.PromoStatusDraft,
+		domain.PromoStatusInactive,
 	}
 
 	result := map[string]int64{}
@@ -158,4 +159,36 @@ func (r *PromoCodeRepo) GetStats(ctx context.Context) (map[string]int64, error) 
 	}
 
 	return result, nil
+}
+
+func (r *PromoCodeRepo) BulkUpdateExpired(ctx context.Context, now time.Time) error {
+	_, err := r.collection.UpdateMany(
+		ctx,
+		bson.M{
+			"endAt":  bson.M{"$ne": nil, "$lt": now},
+			"status": bson.M{"$nin": bson.A{
+				domain.PromoStatusExpired,
+				domain.PromoStatusDraft,
+				domain.PromoStatusInactive,
+			}},
+		},
+		bson.M{"$set": bson.M{"status": domain.PromoStatusExpired, "updatedAt": now}},
+	)
+	return err
+}
+
+func (r *PromoCodeRepo) BulkActivateScheduled(ctx context.Context, now time.Time) error {
+	_, err := r.collection.UpdateMany(
+		ctx,
+		bson.M{
+			"status":  domain.PromoStatusScheduled,
+			"startAt": bson.M{"$lte": now},
+			"$or": bson.A{
+				bson.M{"endAt": nil},
+				bson.M{"endAt": bson.M{"$gt": now}},
+			},
+		},
+		bson.M{"$set": bson.M{"status": domain.PromoStatusActive, "updatedAt": now}},
+	)
+	return err
 }

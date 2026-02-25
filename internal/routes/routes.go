@@ -366,6 +366,7 @@ func SetupRoutes(
 		promos.GET("/:id/activity-logs", rbac.Check("promo_codes", "view_promo_code_activity_logs"), activityLogHandler.GetPromoCodeActivityLogs)
 		promos.PATCH("/:id/status", rbac.Check("promo_codes", "edit_promo_code"), promoCodeHandler.UpdatePromoCodeStatus)
 		promos.DELETE("/:id", rbac.Check("promo_codes", "delete_promo_code"), promoCodeHandler.DeletePromoCode)
+		promos.GET("/promo-usage",promoCodeHandler.ListPromoCodeUsage)
 	}
 
 	discounts := admin.Group("/discounts")

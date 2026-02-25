@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"math"
 	"provider_management/internal/dto"
 	"provider_management/internal/service"
 	"strconv"
@@ -263,5 +264,38 @@ func (h *PromoCodeHandler) GetPromoCodeStats(c *gin.Context) {
 		"error":   false,
 		"message": "Promo code stats fetched successfully",
 		"data":    stats,
+	})
+}
+
+func (h *PromoCodeHandler) ListPromoCodeUsage(c *gin.Context) {
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	data, total, err := h.svc.ListPromoCodeUsage(
+		c.Request.Context(),
+		page,
+		limit,
+	)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+	c.JSON(200, gin.H{
+		"data":        data,
+		"page":        page,
+		"limit":       limit,
+		"total":       total,
+		"total_pages": totalPages,
 	})
 }

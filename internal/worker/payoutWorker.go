@@ -16,12 +16,10 @@ func StartPayoutWorker(ctx context.Context, payoutService *service.PayoutService
 	ticker := time.NewTicker(interval)
 
 	go func() {
-		log.Printf("Payout worker started (runs every %d hours)", hours)
 
 		for {
 			select {
 			case <-ticker.C:
-				log.Println("Running payout worker...")
 				if err := payoutService.CreatePayoutLast6Hours(ctx, hours); err != nil {
 					log.Println("Payout worker error:", err)
 				}

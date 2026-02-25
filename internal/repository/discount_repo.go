@@ -151,3 +151,31 @@ func (r *DiscountRepo) GetStats(ctx context.Context) (map[string]int64, error) {
 
 	return result, nil
 }
+
+func (r *DiscountRepo) BulkUpdateExpired(ctx context.Context, now time.Time) error {
+	_, err := r.collection.UpdateMany(
+		ctx,
+		bson.M{
+			"endAt":  bson.M{"$ne": nil, "$lt": now},
+			"status": bson.M{"$nin": bson.A{domain.DiscountStatusExpired, domain.DiscountStatusDraft, domain.DiscountStatusPaused,domain.DiscountStatusInActive }},
+		},
+		bson.M{"$set": bson.M{"status": domain.DiscountStatusExpired, "updatedAt": now}},
+	)
+	return err
+}
+
+func (r *DiscountRepo) BulkActivateScheduled(ctx context.Context, now time.Time) error {
+	_, err := r.collection.UpdateMany(
+		ctx,
+		bson.M{
+			"status":  domain.DiscountStatusScheduled,
+			"startAt": bson.M{"$lte": now},
+			"$or": bson.A{
+				bson.M{"endAt": nil},
+				bson.M{"endAt": bson.M{"$gt": now}},
+			},
+		},
+		bson.M{"$set": bson.M{"status": domain.DiscountStatusActive, "updatedAt": now}},
+	)
+	return err
+}

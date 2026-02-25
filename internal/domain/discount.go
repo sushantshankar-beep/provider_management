@@ -27,6 +27,7 @@ type DiscountStatus string
 const (
 	DiscountStatusDraft     DiscountStatus = "draft"
 	DiscountStatusActive    DiscountStatus = "active"
+	DiscountStatusInActive    DiscountStatus = "inActive"
 	DiscountStatusScheduled DiscountStatus = "scheduled"
 	DiscountStatusExpired   DiscountStatus = "expired"
 	DiscountStatusPaused    DiscountStatus = "paused"
@@ -68,9 +69,15 @@ func IsValidDiscountStatus(s DiscountStatus) bool {
 		s == DiscountStatusActive ||
 		s == DiscountStatusScheduled ||
 		s == DiscountStatusExpired ||
-		s == DiscountStatusPaused
+		s == DiscountStatusPaused ||
+		s == DiscountStatusInActive
 }
 
 func IsValidDiscountApplicableOn(a DiscountApplicableOn) bool {
 	return a == DiscountApplicableServices || a == DiscountApplicableAMC
+}
+type AppliedDiscountSummary struct {
+	DiscountID  string  `bson:"discountId,omitempty" json:"discountId,omitempty"`
+	Code        string  `bson:"code,omitempty" json:"code,omitempty"`
+	DiscountAmt float64 `bson:"discountAmt" json:"discountAmt"`
 }

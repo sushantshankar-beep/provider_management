@@ -14,10 +14,14 @@ import (
 
 type PromoCodeService struct {
 	PromoCodeRepo *repository.PromoCodeRepo
+	AcceptedServiceRepo *repository.AcceptedServiceRepo
 }
 
-func NewPromoCodeService(PromoCodeRepo *repository.PromoCodeRepo) *PromoCodeService {
-	return &PromoCodeService{PromoCodeRepo: PromoCodeRepo}
+func NewPromoCodeService(PromoCodeRepo *repository.PromoCodeRepo,AcceptedServiceRepo *repository.AcceptedServiceRepo) *PromoCodeService {
+	return &PromoCodeService{
+		PromoCodeRepo: PromoCodeRepo,
+		AcceptedServiceRepo: AcceptedServiceRepo,
+	}
 }
 
 func (s *PromoCodeService) CreatePromoCode(ctx context.Context, req dto.CreatePromoCodeRequest) (*dto.PromoCodeResponse, error) {
@@ -318,10 +322,12 @@ func (s *PromoCodeService) GetPromoCodeStats(ctx context.Context) (*dto.PromoCod
 		ScheduledPromos: stats["scheduled"],
 		ExpiredPromos:   stats["expired"],
 		Drafts:          stats["draft"],
+		InactivePromos:  stats["inactive"],
 	}, nil
 }
 
 func (s *PromoCodeService) mapToPromoCodeResponse(p domain.PromoCode) dto.PromoCodeResponse {
+	p.Status = resolvePromoStatus(p)
 	discount := fmt.Sprintf("%.0f%%", p.Value)
 	if p.DiscountType == domain.DiscountFlat {
 		discount = fmt.Sprintf("₹%.0f", p.Value)
@@ -370,6 +376,7 @@ func (s *PromoCodeService) mapToPromoCodeResponse(p domain.PromoCode) dto.PromoC
 }
 
 func (s *PromoCodeService) mapToPromoCodeListResponse(p domain.PromoCode) dto.PromoCodeListResponse {
+	p.Status = resolvePromoStatus(p)
 	discount := fmt.Sprintf("%.0f%%", p.Value)
 	if p.DiscountType == domain.DiscountFlat {
 		discount = fmt.Sprintf("₹%.0f", p.Value)
@@ -403,4 +410,74 @@ func (s *PromoCodeService) mapToPromoCodeListResponse(p domain.PromoCode) dto.Pr
 		CreatedAt:     p.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:     p.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+
+func resolvePromoStatus(p domain.PromoCode) domain.PromoStatus {
+	now := time.Now().UTC()
+
+	if p.Status == domain.PromoStatusDraft || p.Status == domain.PromoStatusInactive {
+		return p.Status
+	}
+
+	if p.EndAt != nil && now.After(*p.EndAt) {
+		return domain.PromoStatusExpired
+	}
+
+	if now.Before(p.StartAt) {
+		return domain.PromoStatusScheduled
+	}
+
+	if p.Status == domain.PromoStatusScheduled && !now.Before(p.StartAt) {
+		return domain.PromoStatusActive
+	}
+
+	return p.Status
+}
+
+func (s *PromoCodeService) SyncPromoStatuses(ctx context.Context) error {
+	now := time.Now().UTC()
+	if err := s.PromoCodeRepo.BulkUpdateExpired(ctx, now); err != nil {
+		return err
+	}
+	return s.PromoCodeRepo.BulkActivateScheduled(ctx, now)
+}
+
+func (s *PromoCodeService) ListPromoCodeUsage(
+	ctx context.Context,
+	page, limit int,
+) ([]dto.PromoCodeTrack, int64, error) {
+
+	services, total, err := s.AcceptedServiceRepo.PromoCodeUsage(ctx, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var result []dto.PromoCodeTrack
+
+	for _, svc := range services {
+
+		item := dto.PromoCodeTrack{
+			ServiceID:     svc.ID.Hex(),
+			ServiceNumber: svc.ServiceNumber,
+			UserID:        svc.User.Hex(),
+			TotalDiscount: svc.TotalDiscount,
+			AmountPaid:    svc.AmountPaidByUser,
+			CreatedAt:     svc.CreatedAt.Format(time.RFC3339),
+		}
+
+		if svc.AppliedPromo != nil {
+			item.PromoCode = svc.AppliedPromo.Code
+			item.PromoAmount = svc.AppliedPromo.DiscountAmt
+		}
+
+		if svc.AppliedDiscount != nil {
+			item.DiscountCode = svc.AppliedDiscount.Code
+			item.DiscountAmount = svc.AppliedDiscount.DiscountAmt
+		}
+
+		result = append(result, item)
+	}
+
+	return result, total, nil
 }

@@ -47,10 +47,6 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest
 	if err != nil {
 		return fmt.Errorf("transaction not found with txnid %s: %w", req.TxnID, err)
 	}
-
-	log.Printf("Found transaction: ID=%s, TxnID=%s, Amount=%.2f, Method=%s",
-		transaction.ID, transaction.TxnID, transaction.Amount, transaction.Method)
-
 	
 	gstAmount := req.Amount * 0.18
 
@@ -71,11 +67,8 @@ func (s *RefundService) ProcessRefund(ctx context.Context, req dto.RefundRequest
 	}
 
 	if err := s.refundRepo.Create(ctx, refund); err != nil {
-		log.Printf("ProcessRefund - Failed to create refund: %v", err)
 		return fmt.Errorf("failed to create refund: %w", err)
 	}
-
-	log.Printf("ProcessRefund - Refund created successfully with ID: %s", refund.RefundID)
 
 	if err := s.transactionRepo.UpdateRefundID(ctx, transaction.ID, refund.ID); err != nil {
 		log.Printf("ProcessRefund - Failed to update transaction with refund ID: %v", err)
@@ -306,12 +299,6 @@ func (s *RefundService) InitiateRefund(ctx context.Context, refundID string) err
 		return fmt.Errorf("refund initiated but failed to update record: %w", err)
 	}
 
-	log.Printf(
-		"Refund initiated successfully: RefundID=%s, PayURequestID=%s",
-		refund.RefundID,
-		payuResp.RequestID,
-	)
-
 	return nil
 }
 
@@ -380,7 +367,6 @@ func (s *RefundService) CheckRefundStatus(ctx context.Context, refundID string) 
 		return fmt.Errorf("status checked but failed to update record: %w", err)
 	}
 
-	log.Printf("Refund status updated: RefundID=%s, Status=%s", refund.RefundID, newStatus)
 	return nil
 }
 
