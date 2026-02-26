@@ -597,3 +597,60 @@ func (s *UserAdminService) AddNote( ctx context.Context, userID string, req dto.
 
 	return s.users.AddUserNote(ctx, user.UserCode, note)
 }
+
+
+func (s *UserAdminService) ListOfferUsageByUser(
+	ctx context.Context,
+	userID string,
+	page, limit int64,
+) ([]dto.OfferUsageItem, int64, int64, error) {
+
+	skip := (page - 1) * limit
+
+	services, total, err := s.bookings.GetOfferUsageByUser(
+		ctx,
+		userID,
+		skip,
+		limit,
+	)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	result := make([]dto.OfferUsageItem, 0, len(services))
+
+	for _, svc := range services {
+
+		item := dto.OfferUsageItem{
+			ServiceID:     svc.ID.Hex(),
+			ServiceNumber: svc.ServiceNumber,
+			UserID:        svc.User.Hex(),
+			TotalDiscount: svc.TotalDiscount,
+			AmountPaid:    svc.AmountPaidByUser,
+			CreatedAt:     svc.CreatedAt.Format(time.RFC3339),
+		}
+
+		if svc.AppliedPromo != nil {
+			item.Promo = &dto.OfferPromoInfo{
+				Code:   svc.AppliedPromo.Code,
+				Amount: svc.AppliedPromo.DiscountAmt,
+			}
+		}
+
+		if svc.AppliedDiscount != nil {
+			item.Discount = &dto.OfferDiscountInfo{
+				Code:   svc.AppliedDiscount.Code,
+				Amount: svc.AppliedDiscount.DiscountAmt,
+			}
+		}
+
+		result = append(result, item)
+	}
+
+	totalPages := total / limit
+	if total%limit > 0 {
+		totalPages++
+	}
+
+	return result, total, totalPages, nil
+}

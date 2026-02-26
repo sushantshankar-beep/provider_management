@@ -12,11 +12,17 @@ import (
 )
 
 type DiscountService struct {
-	DiscountRepo *repository.DiscountRepo
+	DiscountRepo        *repository.DiscountRepo
+	AcceptedServiceRepo *repository.AcceptedServiceRepo
+	UserRepo            *repository.UserRepo
 }
 
-func NewDiscountService(DiscountRepo *repository.DiscountRepo) *DiscountService {
-	return &DiscountService{DiscountRepo: DiscountRepo}
+func NewDiscountService(DiscountRepo *repository.DiscountRepo, AcceptedServiceRepo *repository.AcceptedServiceRepo, UserRepo *repository.UserRepo) *DiscountService {
+	return &DiscountService{
+		DiscountRepo:        DiscountRepo,
+		AcceptedServiceRepo: AcceptedServiceRepo,
+		UserRepo:            UserRepo,
+	}
 }
 
 func (s *DiscountService) CreateDiscount(ctx context.Context, req dto.CreateDiscountRequest) (*dto.DiscountResponse, error) {
@@ -68,7 +74,7 @@ func (s *DiscountService) CreateDiscount(ctx context.Context, req dto.CreateDisc
 	}
 
 	d := &domain.Discount{
-	    Code:                   req.Code,
+		Code:                   req.Code,
 		Name:                   req.Name,
 		Description:            req.Description,
 		Type:                   domain.DiscountType(req.Type),
@@ -192,7 +198,7 @@ func (s *DiscountService) UpdateDiscount(ctx context.Context, id string, req dto
 	if req.Code != "" {
 		update["code"] = req.Code
 	}
-	
+
 	if req.Name != "" {
 		update["name"] = req.Name
 	}
@@ -329,7 +335,7 @@ func (s *DiscountService) mapToDiscountResponse(d domain.Discount) dto.DiscountR
 
 	return dto.DiscountResponse{
 		ID:                     d.ID.Hex(),
-		Code: d.Code, 
+		Code:                   d.Code,
 		Name:                   d.Name,
 		Description:            d.Description,
 		Type:                   string(d.Type),
@@ -370,7 +376,7 @@ func (s *DiscountService) mapToDiscountListResponse(d domain.Discount) dto.Disco
 
 	return dto.DiscountListResponse{
 		ID:            d.ID.Hex(),
-		Code: 		   d.Code,
+		Code:          d.Code,
 		Name:          d.Name,
 		Description:   d.Description,
 		Type:          string(d.Type),
@@ -417,4 +423,132 @@ func (s *DiscountService) SyncDiscountStatuses(ctx context.Context) error {
 		return err
 	}
 	return s.DiscountRepo.BulkActivateScheduled(ctx, now)
+}
+func (s *DiscountService) ListDiscountsWithUsage(
+	ctx context.Context,
+	page, limit int64,
+	search, status string,
+) ([]dto.DiscountUsageListItem, int64, int64, error) {
+
+	skip := (page - 1) * limit
+
+	discounts, total, err := s.DiscountRepo.GetDiscounts(ctx, bson.M{}, skip, limit, "createdAt", -1)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	// collect IDs
+	ids := make([]string, 0, len(discounts))
+	for _, d := range discounts {
+		ids = append(ids, d.ID.Hex())
+	}
+
+	// 🔥 fetch usage stats from accepted_services
+	stats, err := s.AcceptedServiceRepo.GetDiscountUsageStats(ctx, ids)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	result := make([]dto.DiscountUsageListItem, 0, len(discounts))
+
+	for _, d := range discounts {
+
+		stat := stats[d.ID.Hex()]
+
+		uniqueUsers, _ := s.AcceptedServiceRepo.GetDiscountUserCount(ctx, d.ID.Hex())
+
+		item := dto.DiscountUsageListItem{
+			DiscountID:         d.ID.Hex(),
+			Code:               d.Code,
+			Name:               d.Name,
+			TotalRedemptions:   stat.TotalOrders,
+			UniqueUsers:        uniqueUsers,
+			TotalDiscountGiven: stat.TotalSavings,
+			CreatedAt:          d.CreatedAt.Format(time.RFC3339),
+		}
+
+		result = append(result, item)
+	}
+
+	totalPages := total / limit
+	if total%limit > 0 {
+		totalPages++
+	}
+
+	return result, total, totalPages, nil
+}
+
+func (s *DiscountService) GetDiscountUserUsage(
+	ctx context.Context,
+	discountID, userID string,
+	page, limit int,
+) (interface{}, int64, error) {
+	skip := int64((page - 1) * limit)
+	lim := int64(limit)
+
+	if userID != "" {
+		services, total, err := s.AcceptedServiceRepo.GetServicesByDiscountAndUser(
+			ctx, discountID, userID, skip, lim,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		result := make([]dto.DiscountServiceUsageItem, 0, len(services))
+		for _, svc := range services {
+			item := dto.DiscountServiceUsageItem{
+				ServiceID:     svc.ID.Hex(),
+				ServiceNumber: svc.ServiceNumber,
+				TotalDiscount: svc.TotalDiscount,
+				AmountPaid:    svc.AmountPaidByUser,
+				ServiceType:   svc.ServiceType,
+				CreatedAt:     svc.CreatedAt.Format(time.RFC3339),
+			}
+			if svc.AppliedDiscount != nil {
+				item.DiscountCode = svc.AppliedDiscount.Code
+				item.DiscountAmount = svc.AppliedDiscount.DiscountAmt
+			}
+			result = append(result, item)
+		}
+		return result, total, nil
+	}
+
+	rows, total, err := s.AcceptedServiceRepo.GetDiscountUsersAggregated(
+		ctx, discountID, skip, lim,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	userIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		userIDs = append(userIDs, row.UserID.Hex())
+	}
+
+	userMap := map[string]*domain.User{}
+	if s.UserRepo != nil && len(userIDs) > 0 {
+		users, err := s.UserRepo.FindByIDs(ctx, userIDs)
+		if err == nil {
+			for _, u := range users {
+				userMap[u.ID] = u
+			}
+		}
+	}
+
+	result := make([]dto.DiscountUserUsageItem, 0, len(rows))
+	for _, row := range rows {
+		item := dto.DiscountUserUsageItem{
+			UserID:        row.UserID.Hex(),
+			UsageCount:    row.UsageCount,
+			TotalDiscount: row.TotalDiscount,
+			LastUsedAt:    row.LastUsedAt.Format(time.RFC3339),
+		}
+		if u, ok := userMap[row.UserID.Hex()]; ok {
+			item.UserName = u.Name
+			item.UserPhone = u.Phone
+		}
+		result = append(result, item)
+	}
+
+	return result, total, nil
 }

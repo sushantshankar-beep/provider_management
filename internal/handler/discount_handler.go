@@ -6,7 +6,7 @@ import (
 	"provider_management/internal/service"
 	"strconv"
 	"strings"
-
+    "math"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -264,5 +264,76 @@ func (h *DiscountHandler) GetDiscountStats(c *gin.Context) {
 		"error":   false,
 		"message": "Discount stats fetched successfully",
 		"data":    stats,
+	})
+}
+
+func (h *DiscountHandler) ListDiscountUsage(c *gin.Context) {
+	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
+	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
+	search := c.Query("search")
+	status := c.Query("status")
+
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	data, total, totalPages, err := h.svc.ListDiscountsWithUsage(
+		c.Request.Context(),
+		page, limit,
+		search, status,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":        data,
+		"page":        page,
+		"limit":       limit,
+		"total":       total,
+		"total_pages": totalPages,
+	})
+}
+
+func (h *DiscountHandler) GetDiscountUsageByDiscountID(c *gin.Context) {
+	discountID := c.Param("id")
+	if discountID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "discount ID is required"})
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	userID := c.Query("userId")
+
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	data, total, err := h.svc.GetDiscountUserUsage(
+		c.Request.Context(),
+		discountID, userID,
+		page, limit,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(limit)))
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":        data,
+		"page":        page,
+		"limit":       limit,
+		"total":       total,
+		"total_pages": totalPages,
 	})
 }
