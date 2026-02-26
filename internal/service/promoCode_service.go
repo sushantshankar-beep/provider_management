@@ -13,14 +13,16 @@ import (
 )
 
 type PromoCodeService struct {
-	PromoCodeRepo *repository.PromoCodeRepo
+	PromoCodeRepo       *repository.PromoCodeRepo
 	AcceptedServiceRepo *repository.AcceptedServiceRepo
+	UserRepo            *repository.UserRepo
 }
 
-func NewPromoCodeService(PromoCodeRepo *repository.PromoCodeRepo,AcceptedServiceRepo *repository.AcceptedServiceRepo) *PromoCodeService {
+func NewPromoCodeService(PromoCodeRepo *repository.PromoCodeRepo, AcceptedServiceRepo *repository.AcceptedServiceRepo, UserRepo *repository.UserRepo) *PromoCodeService {
 	return &PromoCodeService{
-		PromoCodeRepo: PromoCodeRepo,
+		PromoCodeRepo:       PromoCodeRepo,
 		AcceptedServiceRepo: AcceptedServiceRepo,
+		UserRepo:            UserRepo,
 	}
 }
 
@@ -412,7 +414,6 @@ func (s *PromoCodeService) mapToPromoCodeListResponse(p domain.PromoCode) dto.Pr
 	}
 }
 
-
 func resolvePromoStatus(p domain.PromoCode) domain.PromoStatus {
 	now := time.Now().UTC()
 
@@ -443,39 +444,125 @@ func (s *PromoCodeService) SyncPromoStatuses(ctx context.Context) error {
 	return s.PromoCodeRepo.BulkActivateScheduled(ctx, now)
 }
 
-func (s *PromoCodeService) ListPromoCodeUsage(
+func (s *PromoCodeService) ListPromoCodesWithUsage(
 	ctx context.Context,
-	page, limit int,
-) ([]dto.PromoCodeTrack, int64, error) {
+	page, limit int64,
+	search, status string,
+) ([]dto.PromoUsageListItem, int64, int64, error) {
 
-	services, total, err := s.AcceptedServiceRepo.PromoCodeUsage(ctx, page, limit)
+	skip := (page - 1) * limit
+
+	promos, total, err := s.PromoCodeRepo.GetPromoCodesForUsage(ctx, skip, limit, search, status)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	codes := make([]string, 0, len(promos))
+	for _, p := range promos {
+		codes = append(codes, p.Code)
+	}
+
+	discountStats, err := s.AcceptedServiceRepo.GetPromoUsageStats(ctx, codes)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	result := make([]dto.PromoUsageListItem, 0, len(promos))
+
+	for _, p := range promos {
+
+		uniqueUsers, _ := s.AcceptedServiceRepo.GetPromoUserCount(ctx, p.ID.Hex())
+
+		item := dto.PromoUsageListItem{
+			PromoID:             p.ID.Hex(),
+			Code:                p.Code,
+			TotalRedemptions:    p.UsageCount,
+			UniqueUsers:         uniqueUsers,
+			TotalDiscountGiven:  discountStats[p.Code],
+			GlobalRedemptionCap: p.GlobalRedemptionCap,
+			CreatedAt:           p.CreatedAt.Format(time.RFC3339),
+		}
+
+		result = append(result, item)
+	}
+
+	totalPages := total / limit
+	if total%limit > 0 {
+		totalPages++
+	}
+
+	return result, total, totalPages, nil
+}
+
+func (s *PromoCodeService) GetPromoUserUsage(
+	ctx context.Context,
+	promoID, userID string,
+	page, limit int,
+) (interface{}, int64, error) {
+	skip := int64((page - 1) * limit)
+	lim := int64(limit)
+
+	if userID != "" {
+		services, total, err := s.AcceptedServiceRepo.GetServicesByPromoAndUser(
+			ctx, promoID, userID, skip, lim,
+		)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		result := make([]dto.PromoServiceUsageItem, 0, len(services))
+		for _, svc := range services {
+			item := dto.PromoServiceUsageItem{
+				ServiceID:     svc.ID.Hex(),
+				ServiceNumber: svc.ServiceNumber,
+				TotalDiscount: svc.TotalDiscount,
+				AmountPaid:    svc.AmountPaidByUser,
+				ServiceType:   svc.ServiceType,
+				CreatedAt:     svc.CreatedAt.Format(time.RFC3339),
+			}
+			if svc.AppliedPromo != nil {
+				item.PromoCode = svc.AppliedPromo.Code
+				item.PromoAmount = svc.AppliedPromo.DiscountAmt
+			}
+			result = append(result, item)
+		}
+		return result, total, nil
+	}
+
+	rows, total, err := s.AcceptedServiceRepo.GetPromoUsersAggregated(
+		ctx, promoID, skip, lim,
+	)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var result []dto.PromoCodeTrack
+	userIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		userIDs = append(userIDs, row.UserID.Hex())
+	}
 
-	for _, svc := range services {
-
-		item := dto.PromoCodeTrack{
-			ServiceID:     svc.ID.Hex(),
-			ServiceNumber: svc.ServiceNumber,
-			UserID:        svc.User.Hex(),
-			TotalDiscount: svc.TotalDiscount,
-			AmountPaid:    svc.AmountPaidByUser,
-			CreatedAt:     svc.CreatedAt.Format(time.RFC3339),
+	userMap := map[string]*domain.User{}
+	if s.UserRepo != nil && len(userIDs) > 0 {
+		users, err := s.UserRepo.FindByIDs(ctx, userIDs)
+		if err == nil {
+			for _, u := range users {
+				userMap[u.ID] = u
+			}
 		}
+	}
 
-		if svc.AppliedPromo != nil {
-			item.PromoCode = svc.AppliedPromo.Code
-			item.PromoAmount = svc.AppliedPromo.DiscountAmt
+	result := make([]dto.PromoUserUsageItem, 0, len(rows))
+	for _, row := range rows {
+		item := dto.PromoUserUsageItem{
+			UserID:        row.UserID.Hex(),
+			UsageCount:    row.UsageCount,
+			TotalDiscount: row.TotalDiscount,
+			LastUsedAt:    row.LastUsedAt.Format(time.RFC3339),
 		}
-
-		if svc.AppliedDiscount != nil {
-			item.DiscountCode = svc.AppliedDiscount.Code
-			item.DiscountAmount = svc.AppliedDiscount.DiscountAmt
+		if u, ok := userMap[row.UserID.Hex()]; ok {
+			item.UserName = u.Name
+			item.UserPhone = u.Phone
 		}
-
 		result = append(result, item)
 	}
 

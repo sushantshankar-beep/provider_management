@@ -179,3 +179,42 @@ func (r *DiscountRepo) BulkActivateScheduled(ctx context.Context, now time.Time)
 	)
 	return err
 }
+
+func (r *DiscountRepo) GetDiscountsForUsage(
+	ctx context.Context,
+	skip, limit int64,
+	search, status string,
+) ([]domain.Discount, int64, error) {
+	filter := bson.M{}
+	if status != "" {
+		filter["status"] = status
+	}
+	if search != "" {
+		filter["$or"] = []bson.M{
+			{"name": bson.M{"$regex": search, "$options": "i"}},
+			{"code": bson.M{"$regex": search, "$options": "i"}},
+		}
+	}
+
+	total, err := r.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().
+		SetSkip(skip).
+		SetLimit(limit).
+		SetSort(bson.M{"updatedAt": -1})
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var discounts []domain.Discount
+	if err := cursor.All(ctx, &discounts); err != nil {
+		return nil, 0, err
+	}
+	return discounts, total, nil
+}

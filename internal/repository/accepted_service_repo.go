@@ -9,10 +9,11 @@ import (
 	"provider_management/internal/dto"
 	"strings"
 	"time"
-    "go.mongodb.org/mongo-driver/mongo/options"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type AcceptedServiceRepo struct {
@@ -42,7 +43,7 @@ func (r *AcceptedServiceRepo) FindByID(ctx context.Context, id string) (*domain.
 	return &res, nil
 }
 
-func (r *AcceptedServiceRepo) FindByObjectIDs(ctx context.Context,id primitive.ObjectID) (*domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindByObjectIDs(ctx context.Context, id primitive.ObjectID) (*domain.AcceptedService, error) {
 	var res domain.AcceptedService
 
 	err := r.col.FindOne(ctx, bson.M{"_id": id}).Decode(&res)
@@ -238,8 +239,8 @@ func (r *AcceptedServiceRepo) GetServiceStats(ctx context.Context, providerID st
 	return total, completed, err
 }
 
-func (r *AcceptedServiceRepo) FindCompletedPaidBetween( 
-	ctx context.Context, 
+func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
+	ctx context.Context,
 	from, to time.Time,
 ) ([]domain.AcceptedService, error) {
 
@@ -269,7 +270,7 @@ func (r *AcceptedServiceRepo) FindCompletedPaidBetween(
 			},
 		},
 	}
-	
+
 	log.Println("Fetching services between:", from, "and", to)
 	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
@@ -360,7 +361,7 @@ func (r *AcceptedServiceRepo) FindCompletedPaidByProvider(ctx context.Context, p
 	return services, nil
 }
 
-func (r *AcceptedServiceRepo) FindUnsettledByProvider( ctx context.Context, providerID primitive.ObjectID) ([]*domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindUnsettledByProvider(ctx context.Context, providerID primitive.ObjectID) ([]*domain.AcceptedService, error) {
 	filter := bson.M{
 		"provider":      providerID,
 		"status":        "completed",
@@ -384,7 +385,7 @@ func (r *AcceptedServiceRepo) FindUnsettledByProvider( ctx context.Context, prov
 	return services, nil
 }
 
-func (r *AcceptedServiceRepo) CountUnsettledByIDs( ctx context.Context, serviceIDs []primitive.ObjectID) (int64, error) {
+func (r *AcceptedServiceRepo) CountUnsettledByIDs(ctx context.Context, serviceIDs []primitive.ObjectID) (int64, error) {
 
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
@@ -414,7 +415,7 @@ func (r *AcceptedServiceRepo) CountUnsettledByIDs( ctx context.Context, serviceI
 	return r.col.CountDocuments(ctx, filter)
 }
 
-func (r *AcceptedServiceRepo) CountSettledByIDs( ctx context.Context, serviceIDs []primitive.ObjectID ) (int64, error) {
+func (r *AcceptedServiceRepo) CountSettledByIDs(ctx context.Context, serviceIDs []primitive.ObjectID) (int64, error) {
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
 		"settlementStatus": bson.M{
@@ -428,11 +429,11 @@ func (r *AcceptedServiceRepo) CountSettledByIDs( ctx context.Context, serviceIDs
 	return r.col.CountDocuments(ctx, filter)
 }
 
-func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(ctx context.Context, serviceID primitive.ObjectID, settledAt *time.Time ) error {
+func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(ctx context.Context, serviceID primitive.ObjectID, settledAt *time.Time) error {
 	filter := bson.M{"_id": serviceID}
 	update := bson.M{
 		"$set": bson.M{
-			"settlementStatus":        domain.SettleStatusPending, 
+			"settlementStatus":        domain.SettleStatusPending,
 			"isSettledAfterComplaint": true,
 			"settledAfterComplaintAt": settledAt,
 			"updatedAt":               time.Now(),
@@ -443,7 +444,7 @@ func (r *AcceptedServiceRepo) MarkAsSettledAfterComplaint(ctx context.Context, s
 	return err
 }
 
-func (r *AcceptedServiceRepo) MarkPayoutCreated( ctx context.Context, serviceIDs []primitive.ObjectID ) error {
+func (r *AcceptedServiceRepo) MarkPayoutCreated(ctx context.Context, serviceIDs []primitive.ObjectID) error {
 	filter := bson.M{
 		"_id": bson.M{"$in": serviceIDs},
 	}
@@ -460,7 +461,7 @@ func (r *AcceptedServiceRepo) MarkPayoutCreated( ctx context.Context, serviceIDs
 	return err
 }
 
-func (r *AcceptedServiceRepo) FindByInternalID( ctx context.Context, internalID int64 ) (*domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindByInternalID(ctx context.Context, internalID int64) (*domain.AcceptedService, error) {
 
 	var svc domain.AcceptedService
 	err := r.col.FindOne(ctx, bson.M{
@@ -504,7 +505,7 @@ func (r *AcceptedServiceRepo) GetBookingStats(ctx context.Context) (dto.Bookings
 					{"$count": "count"},
 				},
 				"ongoing": []bson.M{
-					{"$match": bson.M{"status": bson.M{"$in": []string{"confirmed","started", "reached_location", "otp_verified", "in_progress"}}}},
+					{"$match": bson.M{"status": bson.M{"$in": []string{"confirmed", "started", "reached_location", "otp_verified", "in_progress"}}}},
 					{"$count": "count"},
 				},
 			},
@@ -642,7 +643,7 @@ func (r *AcceptedServiceRepo) UpdatePayoutCancellation(ctx context.Context, serv
 	return err
 }
 
-func (r *AcceptedServiceRepo) FindAll( ctx context.Context, filter bson.M ) ([]domain.AcceptedService, error) {
+func (r *AcceptedServiceRepo) FindAll(ctx context.Context, filter bson.M) ([]domain.AcceptedService, error) {
 	cursor, err := r.col.Find(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -657,7 +658,7 @@ func (r *AcceptedServiceRepo) FindAll( ctx context.Context, filter bson.M ) ([]d
 	return services, nil
 }
 
-func (r *AcceptedServiceRepo) MarkServicesAsSettled( ctx context.Context, serviceIDs []primitive.ObjectID, settlementID primitive.ObjectID, settledAt *time.Time,
+func (r *AcceptedServiceRepo) MarkServicesAsSettled(ctx context.Context, serviceIDs []primitive.ObjectID, settlementID primitive.ObjectID, settledAt *time.Time,
 ) error {
 	filter := bson.M{"_id": bson.M{"$in": serviceIDs}}
 	update := bson.M{
@@ -672,7 +673,6 @@ func (r *AcceptedServiceRepo) MarkServicesAsSettled( ctx context.Context, servic
 	_, err := r.col.UpdateMany(ctx, filter, update)
 	return err
 }
-
 
 func (r *AcceptedServiceRepo) FindByServiceID(
 	ctx context.Context,
@@ -696,7 +696,6 @@ func (r *AcceptedServiceRepo) FindByServiceID(
 
 	return &res, nil
 }
-
 
 func (r *AcceptedServiceRepo) FindByServiceRequestID(
 	ctx context.Context,
@@ -747,6 +746,416 @@ func (r *AcceptedServiceRepo) PromoCodeUsage(
 	}
 
 	total, _ := r.col.CountDocuments(ctx, filter)
+
+	return services, total, nil
+}
+
+func (r *AcceptedServiceRepo) GetUsageList(
+    ctx context.Context,
+    promoID, discountID, userID string,
+    page, limit int,
+) ([]domain.AcceptedService, int64, error) {
+    filter := bson.M{
+        "appliedPromo": bson.M{"$exists": true, "$ne": nil},
+    }
+
+    if promoID != "" {
+        filter["appliedPromo.promoId"] = promoID
+    }
+
+    if userID != "" {
+        userObjID, err := primitive.ObjectIDFromHex(userID)
+        if err != nil {
+            return nil, 0, fmt.Errorf("invalid user id")
+        }
+        filter["user"] = userObjID
+    }
+
+    if discountID != "" {
+        filter["appliedDiscount.discountId"] = discountID
+    }
+
+    total, err := r.col.CountDocuments(ctx, filter)
+    if err != nil {
+        return nil, 0, err
+    }
+
+    skip := int64((page - 1) * limit)
+    opts := options.Find().
+        SetSkip(skip).
+        SetLimit(int64(limit)).
+        SetSort(bson.D{{Key: "createdAt", Value: -1}})
+
+    cursor, err := r.col.Find(ctx, filter, opts)
+    if err != nil {
+        return nil, 0, err
+    }
+    defer cursor.Close(ctx)
+
+    var results []domain.AcceptedService
+    if err := cursor.All(ctx, &results); err != nil {
+        return nil, 0, err
+    }
+
+    return results, total, nil
+}
+
+func (r *AcceptedServiceRepo) GetPromoUserCount(ctx context.Context, promoID string) (int64, error) {
+    pipeline := mongo.Pipeline{
+        {{Key: "$match", Value: bson.M{
+            "appliedPromo.promoId": promoID,
+        }}},
+        {{Key: "$group", Value: bson.M{
+            "_id": "$user",
+        }}},
+        {{Key: "$count", Value: "uniqueUsers"}},
+    }
+
+    cursor, err := r.col.Aggregate(ctx, pipeline)
+    if err != nil {
+        return 0, err
+    }
+    defer cursor.Close(ctx)
+
+    var result []struct {
+        UniqueUsers int64 `bson:"uniqueUsers"`
+    }
+    if err := cursor.All(ctx, &result); err != nil {
+        return 0, err
+    }
+    if len(result) == 0 {
+        return 0, nil
+    }
+    return result[0].UniqueUsers, nil
+}
+
+func (r *AcceptedServiceRepo) GetServicesByPromoAndUser(
+	ctx context.Context,
+	promoID, userID string,
+	skip, limit int64,
+) ([]domain.AcceptedService, int64, error) {
+	userOID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	filter := bson.M{
+		"appliedPromo.promoId": promoID,
+		"user":                 userOID,
+	}
+
+	total, err := r.col.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().
+		SetSkip(skip).
+		SetLimit(limit).
+		SetSort(bson.M{"createdAt": -1})
+
+	cursor, err := r.col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var services []domain.AcceptedService
+	if err := cursor.All(ctx, &services); err != nil {
+		return nil, 0, err
+	}
+	return services, total, nil
+}
+
+
+func (r *AcceptedServiceRepo) GetPromoUsersAggregated(
+	ctx context.Context,
+	promoID string,
+	skip, limit int64,
+) ([]dto.PromoUserUsageRow, int64, error) {
+	matchStage := bson.M{"appliedPromo.promoId": promoID}
+
+	// Count total distinct users
+	countPipeline := mongo.Pipeline{
+		{{Key: "$match", Value: matchStage}},
+		{{Key: "$group", Value: bson.M{"_id": "$user"}}},
+		{{Key: "$count", Value: "count"}},
+	}
+	total, err := r.runCountPipeline(ctx, countPipeline)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Aggregate per user
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: matchStage}},
+		{{Key: "$group", Value: bson.M{
+			"_id":           "$user",
+			"usage_count":   bson.M{"$sum": 1},
+			"total_discount": bson.M{"$sum": "$appliedPromo.discountAmt"},
+			"last_used_at":  bson.M{"$max": "$createdAt"},
+		}}},
+		{{Key: "$sort", Value: bson.M{"usage_count": -1}}},
+		{{Key: "$skip", Value: skip}},
+		{{Key: "$limit", Value: limit}},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var rows []dto.PromoUserUsageRow
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+
+func (r *AcceptedServiceRepo) runCountPipeline(ctx context.Context, pipeline mongo.Pipeline) (int64, error) {
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, err
+	}
+	defer cursor.Close(ctx)
+	var results []struct {
+		Count int64 `bson:"count"`
+	}
+	if err := cursor.All(ctx, &results); err != nil {
+		return 0, err
+	}
+	if len(results) == 0 {
+		return 0, nil
+	}
+	return results[0].Count, nil
+}
+
+func (r *AcceptedServiceRepo) GetDiscountUsersAggregated(
+	ctx context.Context,
+	discountID string,
+	skip, limit int64,
+) ([]dto.DiscountUserUsageRow, int64, error) {
+	matchStage := bson.M{"appliedDiscount.discountId": discountID}
+
+	countPipeline := mongo.Pipeline{
+		{{Key: "$match", Value: matchStage}},
+		{{Key: "$group", Value: bson.M{"_id": "$user"}}},
+		{{Key: "$count", Value: "count"}},
+	}
+	total, err := r.runCountPipeline(ctx, countPipeline)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: matchStage}},
+		{{Key: "$group", Value: bson.M{
+			"_id":            "$user",
+			"usage_count":    bson.M{"$sum": 1},
+			"total_discount": bson.M{"$sum": "$appliedDiscount.discountAmt"},
+			"last_used_at":   bson.M{"$max": "$createdAt"},
+		}}},
+		{{Key: "$sort", Value: bson.M{"usage_count": -1}}},
+		{{Key: "$skip", Value: skip}},
+		{{Key: "$limit", Value: limit}},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var rows []dto.DiscountUserUsageRow
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+func (r *AcceptedServiceRepo) GetServicesByDiscountAndUser(
+	ctx context.Context,
+	discountID, userID string,
+	skip, limit int64,
+) ([]domain.AcceptedService, int64, error) {
+	userOID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	filter := bson.M{
+		"appliedDiscount.discountId": discountID,
+		"user":                       userOID,
+	}
+
+	total, err := r.col.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().
+		SetSkip(skip).
+		SetLimit(limit).
+		SetSort(bson.M{"createdAt": -1})
+
+	cursor, err := r.col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var services []domain.AcceptedService
+	if err := cursor.All(ctx, &services); err != nil {
+		return nil, 0, err
+	}
+	return services, total, nil
+}
+
+func (r *AcceptedServiceRepo) GetDiscountUserCount(ctx context.Context, discountID string) (int64, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"appliedDiscount.discountId": discountID}}},
+		{{Key: "$group", Value: bson.M{"_id": "$user"}}},
+		{{Key: "$count", Value: "count"}},
+	}
+	return r.runCountPipeline(ctx, pipeline)
+}
+
+func (r *AcceptedServiceRepo) GetDiscountUsageStats(
+	ctx context.Context,
+	discountIDs []string,
+) (map[string]struct {
+	TotalOrders  int64
+	TotalSavings float64
+}, error) {
+
+	match := bson.M{
+		"appliedDiscount.discountId": bson.M{"$in": discountIDs},
+	}
+
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: match}},
+		bson.D{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$appliedDiscount.discountId"},
+			{Key: "totalOrders", Value: bson.D{{Key: "$sum", Value: 1}}},
+			{Key: "totalSavings", Value: bson.D{{Key: "$sum", Value: "$appliedDiscount.discountAmt"}}},
+		}}},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	result := map[string]struct {
+		TotalOrders  int64
+		TotalSavings float64
+	}{}
+
+	for cursor.Next(ctx) {
+		var row struct {
+			ID           string  `bson:"_id"`
+			TotalOrders  int64   `bson:"totalOrders"`
+			TotalSavings float64 `bson:"totalSavings"`
+		}
+		if err := cursor.Decode(&row); err != nil {
+			return nil, err
+		}
+
+		result[row.ID] = struct {
+			TotalOrders  int64
+			TotalSavings float64
+		}{
+			TotalOrders:  row.TotalOrders,
+			TotalSavings: row.TotalSavings,
+		}
+	}
+
+	return result, nil
+}
+
+func (r *AcceptedServiceRepo) GetPromoUsageStats(
+	ctx context.Context,
+	promoIDs []string,
+) (map[string]float64, error) {
+
+	match := bson.M{
+		"appliedPromo.code": bson.M{"$in": promoIDs},
+	}
+
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: match}},
+		bson.D{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: "$appliedPromo.code"},
+			{Key: "totalDiscount", Value: bson.D{
+				{Key: "$sum", Value: "$appliedPromo.discountAmt"},
+			}},
+		}}},
+	}
+
+	cursor, err := r.col.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	result := map[string]float64{}
+
+	for cursor.Next(ctx) {
+		var row struct {
+			Code          string  `bson:"_id"`
+			TotalDiscount float64 `bson:"totalDiscount"`
+		}
+		if err := cursor.Decode(&row); err != nil {
+			return nil, err
+		}
+		result[row.Code] = row.TotalDiscount
+	}
+
+	return result, nil
+}
+
+func (r *AcceptedServiceRepo) GetOfferUsageByUser(
+	ctx context.Context,
+	userID string,
+	skip, limit int64,
+) ([]domain.AcceptedService, int64, error) {
+
+	userObjID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	filter := bson.M{
+		"user": userObjID,
+		"$or": []bson.M{
+			{"appliedPromo": bson.M{"$ne": nil}},
+			{"appliedDiscount": bson.M{"$ne": nil}},
+		},
+	}
+
+	total, err := r.col.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	opts := options.Find().
+		SetSkip(skip).
+		SetLimit(limit).
+		SetSort(bson.M{"createdAt": -1})
+
+	cursor, err := r.col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var services []domain.AcceptedService
+	if err := cursor.All(ctx, &services); err != nil {
+		return nil, 0, err
+	}
 
 	return services, total, nil
 }

@@ -116,3 +116,34 @@ func (h *UserAdminHandler) AddNote(c *gin.Context) {
 		"message": "Note added successfully",
 	})
 }
+
+func (h *UserAdminHandler) ListOfferUsageByUser(c *gin.Context) {
+
+	userID := c.Query("userId")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userId required"})
+		return
+	}
+
+	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
+	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
+
+	data, total, totalPages, err := h.svc.ListOfferUsageByUser(
+		c.Request.Context(),
+		userID,
+		page,
+		limit,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":        data,
+		"page":        page,
+		"limit":       limit,
+		"total":       total,
+		"total_pages": totalPages,
+	})
+}

@@ -1,9 +1,13 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
 type CreateDiscountRequest struct {
-	Code                string   `json:"code" binding:"required"`
+	Code                   string   `json:"code" binding:"required"`
 	Name                   string   `json:"name" binding:"required"`
 	Description            string   `json:"description"`
 	Type                   string   `json:"type" binding:"required"`
@@ -22,7 +26,7 @@ type CreateDiscountRequest struct {
 }
 
 type UpdateDiscountRequest struct {
-	Code                string   `json:"code"`
+	Code                   string   `json:"code"`
 	Name                   string   `json:"name"`
 	Description            string   `json:"description"`
 	Type                   string   `json:"type"`
@@ -44,7 +48,7 @@ type UpdateDiscountStatusRequest struct {
 
 type DiscountResponse struct {
 	ID                     string   `json:"id"`
-	Code                string   `json:"code" `
+	Code                   string   `json:"code" `
 	Name                   string   `json:"name"`
 	Description            string   `json:"description"`
 	Type                   string   `json:"type"`
@@ -69,7 +73,7 @@ type DiscountResponse struct {
 
 type DiscountListResponse struct {
 	ID            string   `json:"id"`
-		Code                string   `json:"code" `
+	Code          string   `json:"code" `
 	Name          string   `json:"name"`
 	Description   string   `json:"description"`
 	Type          string   `json:"type"`
@@ -102,4 +106,46 @@ func FormatEndAtPtr(t *time.Time) *string {
 	}
 	s := t.Format(time.RFC3339)
 	return &s
+}
+
+type DiscountUsageListItem struct {
+	DiscountID         string  `json:"discount_id"`
+	Code               string  `json:"code"`
+	Name               string  `json:"name"`
+	TotalRedemptions   int64     `json:"total_redemptions"`
+	UniqueUsers        int64   `json:"unique_users"`
+	TotalDiscountGiven float64 `json:"total_discount_given"`
+	CreatedAt          string  `json:"created_at"`
+}
+
+type DiscountUsageSummary struct {
+	TotalRedemptions int64   `json:"total_redemptions"`
+	TotalDiscount    float64 `json:"total_discount"`
+}
+
+type DiscountUserUsageItem struct {
+	UserID        string  `json:"user_id"`
+	UserName      string  `json:"user_name"`
+	UserPhone     string  `json:"user_phone"`
+	UsageCount    int64   `json:"usage_count"`
+	TotalDiscount float64 `json:"total_discount"`
+	LastUsedAt    string  `json:"last_used_at"`
+}
+
+type DiscountServiceUsageItem struct {
+	ServiceID      string  `json:"service_id"`
+	ServiceNumber  string  `json:"service_number"`
+	DiscountCode   string  `json:"discount_code"`
+	DiscountAmount float64 `json:"discount_amount"`
+	TotalDiscount  float64 `json:"total_discount"`
+	AmountPaid     float64 `json:"amount_paid"`
+	ServiceType    string  `json:"service_type"`
+	CreatedAt      string  `json:"created_at"`
+}
+
+type DiscountUserUsageRow struct {
+	UserID        primitive.ObjectID `bson:"_id"`
+	UsageCount    int64              `bson:"usage_count"`
+	TotalDiscount float64            `bson:"total_discount"`
+	LastUsedAt    time.Time          `bson:"last_used_at"`
 }

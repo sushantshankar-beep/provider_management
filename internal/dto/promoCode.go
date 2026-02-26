@@ -1,6 +1,7 @@
 package dto
 
 import "time"
+import "go.mongodb.org/mongo-driver/bson/primitive"
 
 type CreatePromoCodeRequest struct {
 	Code                string   `json:"code" binding:"required"`
@@ -107,4 +108,48 @@ func FormatEndAt(t *time.Time) *string {
 	}
 	s := t.Format(time.RFC3339)
 	return &s
+}
+type PromoUsageSummary struct {
+	ID               string `bson:"_id" json:"id"`
+	Code                string             `bson:"code" json:"code"`
+	UsageCount      int64   `json:"usageCount" bson:"usageCount"`
+	TotalDiscount   float64 `json:"totalDiscount" bson:"totalDiscount"`
+	TotalOrderValue float64 `json:"totalOrderValue" bson:"totalOrderValue"`
+}
+
+type PromoUsageListItem struct {
+	PromoID             string  `json:"promo_id"`
+	Code                string  `json:"code"`
+	TotalRedemptions    int     `json:"total_redemptions"`   
+	UniqueUsers         int64   `json:"unique_users"`         
+	TotalDiscountGiven  float64 `json:"total_discount_given"`
+	GlobalRedemptionCap int     `json:"global_redemption_cap"`
+	CreatedAt           string  `json:"created_at"`
+}
+
+type PromoUserUsageRow struct {
+	UserID        primitive.ObjectID `bson:"_id"`
+	UsageCount    int64              `bson:"usage_count"`
+	TotalDiscount float64            `bson:"total_discount"`
+	LastUsedAt    time.Time          `bson:"last_used_at"`
+}
+
+type PromoServiceUsageItem struct {
+	ServiceID     string  `json:"service_id"`
+	ServiceNumber string  `json:"service_number"`
+	PromoCode     string  `json:"promo_code"`
+	PromoAmount   float64 `json:"promo_amount"`
+	TotalDiscount float64 `json:"total_discount"`
+	AmountPaid    float64 `json:"amount_paid"`
+	ServiceType   string  `json:"service_type"`
+	CreatedAt     string  `json:"created_at"`
+}
+
+type PromoUserUsageItem struct {
+	UserID        string  `json:"user_id"`
+	UserName      string  `json:"user_name"`
+	UserPhone     string  `json:"user_phone"`
+	UsageCount    int64   `json:"usage_count"`    
+	TotalDiscount float64 `json:"total_discount"`
+	LastUsedAt    string  `json:"last_used_at"`
 }

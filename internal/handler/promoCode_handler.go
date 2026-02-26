@@ -2,11 +2,11 @@ package handler
 
 import (
 	"net/http"
-	"math"
 	"provider_management/internal/dto"
 	"provider_management/internal/service"
 	"strconv"
 	"strings"
+    "math"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -268,9 +268,10 @@ func (h *PromoCodeHandler) GetPromoCodeStats(c *gin.Context) {
 }
 
 func (h *PromoCodeHandler) ListPromoCodeUsage(c *gin.Context) {
-
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
+	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
+	search := c.Query("search")
+	status := c.Query("status")
 
 	if page <= 0 {
 		page = 1
@@ -279,19 +280,56 @@ func (h *PromoCodeHandler) ListPromoCodeUsage(c *gin.Context) {
 		limit = 20
 	}
 
-	data, total, err := h.svc.ListPromoCodeUsage(
+	data, total, totalPages, err := h.svc.ListPromoCodesWithUsage(
 		c.Request.Context(),
-		page,
-		limit,
+		page, limit,
+		search, status,
 	)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":        data,
+		"page":        page,
+		"limit":       limit,
+		"total":       total,
+		"total_pages": totalPages,
+	})
+}
+
+func (h *PromoCodeHandler) GetPromoUsageByPromoID(c *gin.Context) {
+	promoID := c.Param("id")
+	if promoID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "promo ID is required"})
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	userID := c.Query("userId")
+
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	data, total, err := h.svc.GetPromoUserUsage(
+		c.Request.Context(),
+		promoID, userID,
+		page, limit,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	totalPages := int(math.Ceil(float64(total) / float64(limit)))
 
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"data":        data,
 		"page":        page,
 		"limit":       limit,

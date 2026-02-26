@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	"os/signal"
 	"provider_management/internal/config"
 	"provider_management/internal/db"
@@ -20,6 +18,9 @@ import (
 	"provider_management/internal/worker"
 	"syscall"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -37,7 +38,7 @@ func main() {
 	ctx := context.Background()
 
 	s3Uploader := middleware.NewS3Uploader(awsSession, os.Getenv("AWS_BUCKET_NAME"))
-	pdfUploader := s3.NewPDFUploader(awsSession, os.Getenv("AWS_BUCKET_NAME"),os.Getenv("AWS_S3_FOLDER"))
+	pdfUploader := s3.NewPDFUploader(awsSession, os.Getenv("AWS_BUCKET_NAME"), os.Getenv("AWS_S3_FOLDER"))
 
 	client := db.ConnectMongo(cfg.MongoURI)
 	mongoDB := client.Database(cfg.MongoDBName)
@@ -71,7 +72,7 @@ func main() {
 	vehicleBrandRepo := repository.NewVehicleBrandRepo(mongoDB)
 	bidRepo := repository.NewBidRepo(mongoDB)
 	zoneFilterMiddleware := middleware.NewZoneFilterMiddleware(mongoDB)
-	permissionRepo := repository. NewPermissionRepo(mongoDB)
+	permissionRepo := repository.NewPermissionRepo(mongoDB)
 	settlementHistoryRepo := repository.NewSettlementHistoryRepository(mongoDB)
 	serviceR := repository.NewServiceRequestRepo(mongoDB)
 	providerAgreementRepo := repository.NewAgreementRepo(mongoDB)
@@ -99,14 +100,14 @@ func main() {
 	payUService := service.NewPayUService(cfg.PayU.Key, cfg.PayU.Salt, cfg.PayU.BaseURL)
 	amcRefundService := service.NewAMCRefundService(amcRefundRepo, amcPurchaseRepo, userRepo, amcPlanRepo, payUService)
 	adminRoleService := service.NewRoleService(roleRepo)
-	dashboardService := service.NewDashboardService(providerRepo, userRepo, acceptedServiceRepo, settlementRepo, complaintRepo,transactionRepo, amcPurchaseRepo, bidRepo)   
+	dashboardService := service.NewDashboardService(providerRepo, userRepo, acceptedServiceRepo, settlementRepo, complaintRepo, transactionRepo, amcPurchaseRepo, bidRepo)
 	permissionService := service.NewPermissionService(permissionRepo)
 	providerAgreementService := service.NewAgreementService(providerAgreementRepo)
-	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo,serviceMasterRepo)
-	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo,complaintRepo,acceptedServiceRepo,payUService)
-	complaintService := service.NewComplaintService(paymentPayoutRepo,complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService,transactionRepo,kycRepo)
-	promoCodeService := service.NewPromoCodeService(promoCodeRepo,acceptedServiceRepo)
-	discountService := service.NewDiscountService(discountRepo)
+	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo, serviceMasterRepo)
+	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo, complaintRepo, acceptedServiceRepo, payUService)
+	complaintService := service.NewComplaintService(paymentPayoutRepo, complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService, transactionRepo, kycRepo)
+	promoCodeService := service.NewPromoCodeService(promoCodeRepo, acceptedServiceRepo, userRepo)
+	discountService := service.NewDiscountService(discountRepo, acceptedServiceRepo, userRepo)
 
 	worker.StartPayoutWorker(ctx, payoutService)
 	complaintHandler := handler.NewComplaintHandler(complaintService, acceptedServiceRepo)
@@ -135,12 +136,12 @@ func main() {
 	providerBrandServiceHandler := handler.NewProviderBrandServiceHandler(providerBrandService)
 	promoCodeHandler := handler.NewPromoCodeHandler(promoCodeService)
 	discountHandler := handler.NewDiscountHandler(discountService)
-	
+
 	discountStatusWorker := worker.NewDiscountStatusWorker(discountService)
 	discountStatusWorker.Start(ctx)
 
 	promoStatusWorker := worker.NewPromoStatusWorker(promoCodeService)
-    promoStatusWorker.Start(ctx)
+	promoStatusWorker.Start(ctx)
 
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
@@ -198,4 +199,3 @@ func main() {
 	defer cancel()
 	srv.Shutdown(ctx)
 }
-

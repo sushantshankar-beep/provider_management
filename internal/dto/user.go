@@ -102,3 +102,26 @@ type UserMetaPagination struct {
 	HasNext     bool  `json:"has_next,omitempty"`
 	HasPrev     bool  `json:"has_prev,omitempty"`
 }
+
+type OfferUsageItem struct {
+	ServiceID     string  `json:"service_id"`
+	ServiceNumber string  `json:"service_number"`
+	UserID        string  `json:"user_id"`
+
+	Promo    *OfferPromoInfo    `json:"promo,omitempty"`
+	Discount *OfferDiscountInfo `json:"discount,omitempty"`
+
+	TotalDiscount float64 `json:"total_discount"`
+	AmountPaid    float64 `json:"amount_paid"`
+	CreatedAt     string  `json:"created_at"`
+}
+
+type OfferPromoInfo struct {
+	Code   string  `json:"code"`
+	Amount float64 `json:"amount"`
+}
+
+type OfferDiscountInfo struct {
+	Code   string  `json:"code"`
+	Amount float64 `json:"amount"`
+}

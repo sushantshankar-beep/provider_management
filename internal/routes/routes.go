@@ -164,6 +164,7 @@ func SetupRoutes(
 		users.GET("/:id/activity-logs", rbac.Check("users", "view_user_activity_logs"), activityLogHandler.GetUserActivityLogs)
 		users.PATCH("/:id/status", rbac.Check("users", "change_user_status"), userAdminHandler.UpdateStatus)
 		users.POST("/:id/notes", rbac.Check("users", "add_user_notes"), userAdminHandler.AddNote)
+		users.GET("/list-offer", userAdminHandler.ListOfferUsageByUser)
 	}
 
 	providers := admin.Group("/providers")
@@ -366,7 +367,8 @@ func SetupRoutes(
 		promos.GET("/:id/activity-logs", rbac.Check("promo_codes", "view_promo_code_activity_logs"), activityLogHandler.GetPromoCodeActivityLogs)
 		promos.PATCH("/:id/status", rbac.Check("promo_codes", "edit_promo_code"), promoCodeHandler.UpdatePromoCodeStatus)
 		promos.DELETE("/:id", rbac.Check("promo_codes", "delete_promo_code"), promoCodeHandler.DeletePromoCode)
-		promos.GET("/promo-usage",promoCodeHandler.ListPromoCodeUsage)
+		promos.GET("/usage", promoCodeHandler.ListPromoCodeUsage)
+		promos.GET("/usage/:id", promoCodeHandler.GetPromoUsageByPromoID)
 	}
 
 	discounts := admin.Group("/discounts")
@@ -379,5 +381,7 @@ func SetupRoutes(
 		discounts.PATCH("/:id/status", rbac.Check("discounts", "edit_discount"), discountHandler.UpdateDiscountStatus)
 		discounts.GET("/:id/activity-logs", rbac.Check("discounts", "view_discount_activity_logs"), activityLogHandler.GetDiscountActivityLogs)
 		discounts.DELETE("/:id", rbac.Check("discounts", "delete_discount"), discountHandler.DeleteDiscount)
+		discounts.GET("/usage", discountHandler.ListDiscountUsage)
+       discounts.GET("/usage/:id", discountHandler.GetDiscountUsageByDiscountID)
 	}
 }
