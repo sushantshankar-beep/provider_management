@@ -78,6 +78,8 @@ type PayoutServiceResponse struct {
 	IsPayoutCancelled       bool                `json:"isPayoutCancelled"`
 	IsSettledAfterComplaint bool                `json:"is_settled_after_complaint"`
 	TotalPaidAmount         float64             `json:"total_paid_amount"`
+	PayoutCreatedAt         time.Time           `json:"payoutCreatedAt"`
+
 	 
 	Complaints []ComplaintBookingInfo `json:"complaints,omitempty"`
 }

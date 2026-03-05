@@ -393,6 +393,7 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			PayoutStatus:            service.PayoutStatus,
 			IsPayoutCancelled:       service.IsPayoutCancelled,
 			IsSettledAfterComplaint: service.IsSettledAfterComplaint,
+			PayoutCreatedAt: service.PayoutCreatedAt,
 			Complaints:              complaints,
 		}
 
