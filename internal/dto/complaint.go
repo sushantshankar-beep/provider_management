@@ -136,6 +136,7 @@ type ComplaintInformation struct {
 	BookingID     string    `json:"bookingId,omitempty"`
 	AMCBookingID  string    `json:"amcBookingId,omitempty"`
 	BookingAmount float64   `json:"bookingAmount,omitempty"`
+	UserPaidAmount float64   `json:"userPaidAmount,omitempty"`
 	SubmittedAt   time.Time `json:"submittedAt"`
 }
 
