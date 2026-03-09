@@ -84,11 +84,12 @@ func main() {
 	agreementRepo := repository.NewAgreementRepo(mongoDB)
 	promoCodeRepo := repository.NewPromoCodeRepo(mongoDB)
 	discountRepo := repository.NewDiscountRepo(mongoDB)
+	snapShotRepo := repository.NewActiveServiceSnapshotRepo(mongoDB)
 
 	transactionService := service.NewTransactionService(transactionRepo, acceptedServiceRepo, userRepo)
 	userAdminService := service.NewUserAdminService(userRepo, vehiclesRepo, acceptedServiceRepo, amcRepo, vehicleRepo)
 	providerAdminService := service.NewProviderAdminService(providerRepo, serviceRepo, adminRepo, zoneRepo, roleRepo, settlementRepo, settlementHistoryRepo, serviceR, kycRepo, agreementRepo, pdfUploader)
-	adminBookingService := service.NewAdminBookingService(adminBookingRepo, invoiceRepo, transactionRepo, settlementHistoryRepo, ratingRepo)
+	adminBookingService := service.NewAdminBookingService(adminBookingRepo, invoiceRepo, transactionRepo, settlementHistoryRepo, ratingRepo,snapShotRepo)
 	payoutService := service.NewPayoutService(acceptedServiceRepo, paymentPayoutRepo, providerRepo, settlementRepo, kycRepo, transactionRepo)
 	settlementService := service.NewSettlementService(serviceRepo, settlementRepo, paymentPayoutRepo, providerRepo, settlementHistoryRepo, kycRepo, transactionRepo)
 	serviceMasterService := service.NewServiceMaster(serviceMasterRepo)
