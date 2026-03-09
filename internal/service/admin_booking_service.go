@@ -22,15 +22,17 @@ type AdminBookingService struct {
 	transactionRepo *repository.TransactionRepo
 	settlementRepo  *repository.SettlementHistoryRepository
 	ratingRepo  *repository.RatingRepo
+	snapshotRepo    *repository.ActiveServiceSnapshotRepo
 }
 
-func NewAdminBookingService(repo *repository.AdminBookingRepo, Invoicerepo *repository.InvoiceRepo, transactionRepo *repository.TransactionRepo, settlementRepo *repository.SettlementHistoryRepository,ratingRepo  *repository.RatingRepo) *AdminBookingService {
+func NewAdminBookingService(repo *repository.AdminBookingRepo, Invoicerepo *repository.InvoiceRepo, transactionRepo *repository.TransactionRepo, settlementRepo *repository.SettlementHistoryRepository,ratingRepo  *repository.RatingRepo,snapshotRepo *repository.ActiveServiceSnapshotRepo) *AdminBookingService {
 	return &AdminBookingService{
 		repo:            repo,
 		Invoicerepo:     Invoicerepo,
 		transactionRepo: transactionRepo,
 		settlementRepo:  settlementRepo,
 		ratingRepo: ratingRepo,
+		snapshotRepo: snapshotRepo,
 	}
 
 }
@@ -297,7 +299,7 @@ func (s *AdminBookingService) buildBookingResponses(ctx context.Context, service
 
 	userIDs, providerIDs, serviceRequestIDs, serviceIDs := s.collectIDs(services)
 
-	userMap, providerMap, serviceRequestMap, ratingsMap, err := s.fetchRelatedData(ctx, userIDs, providerIDs, serviceRequestIDs, serviceIDs)
+	userMap, providerMap, serviceRequestMap, ratingsMap, snapshotProviderMap,err := s.fetchRelatedData(ctx, userIDs, providerIDs, serviceRequestIDs, serviceIDs, services)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +307,7 @@ func (s *AdminBookingService) buildBookingResponses(ctx context.Context, service
 	bookings := make([]dto.BookingResponse, 0, len(services))
 
 	for _, svc := range services {
-		booking := s.mapServiceToBookingResponse(svc, userMap, providerMap, serviceRequestMap, ratingsMap)
+		booking := s.mapServiceToBookingResponse(svc, userMap, providerMap, serviceRequestMap, ratingsMap,snapshotProviderMap)
 		bookings = append(bookings, booking)
 	}
 
@@ -343,11 +345,12 @@ func (s *AdminBookingService) collectIDs(services []domain.AcceptedService) ([]s
 	return userIDs, providerIDs, serviceRequestIDs, serviceIDs
 }
 
-func (s *AdminBookingService) fetchRelatedData(ctx context.Context, userIDs, providerIDs, serviceRequestIDs, serviceIDs []string) (
+func (s *AdminBookingService) fetchRelatedData(ctx context.Context, userIDs, providerIDs, serviceRequestIDs, serviceIDs []string,services []domain.AcceptedService, ) (
 	map[string]*domain.User,
 	map[string]*domain.Provider,
 	map[string]*domain.ServiceRequest,
 	map[string][]*domain.Rating,
+	map[string]*domain.Provider,
 	error,
 ) {
 	userMap := make(map[string]*domain.User)
@@ -393,7 +396,19 @@ func (s *AdminBookingService) fetchRelatedData(ctx context.Context, userIDs, pro
 		}
 	}
 	
-	return userMap, providerMap, serviceRequestMap, ratingsMap, nil
+	snapshotProviderMap := make(map[string]*domain.Provider)
+    for _, svc := range services {
+        if svc.CancelledByProvider && svc.Provider == primitive.NilObjectID {
+            snapshot, err := s.snapshotRepo.FindByServiceID(ctx, svc.ID)
+            if err == nil && snapshot != nil {
+                provider, err := s.repo.FindProviderByID(ctx, snapshot.Service.Provider.Hex())
+                if err == nil {
+                    snapshotProviderMap[svc.ID.Hex()] = provider
+                }
+            }
+        }
+    }
+	return userMap, providerMap, serviceRequestMap, ratingsMap, snapshotProviderMap, nil
 }
 
 func (s *AdminBookingService) mapServiceToBookingResponse(
@@ -402,6 +417,7 @@ func (s *AdminBookingService) mapServiceToBookingResponse(
 	providerMap map[string]*domain.Provider,
 	serviceRequestMap map[string]*domain.ServiceRequest,
 	ratingsMap map[string][]*domain.Rating,
+	snapshotProviderMap map[string]*domain.Provider,
 ) dto.BookingResponse {
 	booking := dto.BookingResponse{
 		ID:            svc.ID.Hex(),
@@ -423,11 +439,17 @@ func (s *AdminBookingService) mapServiceToBookingResponse(
 		booking.Email = user.Email
 	}
 
-	if provider, ok := providerMap[svc.Provider.Hex()]; ok {
-		booking.ProviderName = provider.Name
-		booking.ProviderPhone = provider.Phone
-		booking.Zone = provider.City
-	}
+	var provider *domain.Provider
+    if svc.CancelledByProvider && svc.Provider == primitive.NilObjectID {
+        provider = snapshotProviderMap[svc.ID.Hex()]
+    } else {
+        provider = providerMap[svc.Provider.Hex()]
+    }
+    if provider != nil {
+        booking.ProviderName = provider.Name
+        booking.ProviderPhone = provider.Phone
+        booking.Zone = provider.City
+    }
 
 	if sr, ok := serviceRequestMap[svc.ServiceRequest.Hex()]; ok {
 		booking.VehicleType = sr.VehicleType
@@ -623,14 +645,29 @@ func (s *AdminBookingService) GetBookingByID(ctx context.Context, bookingID stri
 		booking.OTP = user.ServiceOTP
 	}
 
-	if provider, err := s.repo.FindProviderByID(ctx, svc.Provider.Hex()); err == nil {
-		booking.ProviderName = provider.Name
-		booking.ProviderPhone = provider.Phone
-		booking.MechanicType = provider.VehicleType
-		booking.Zone = provider.City
-		booking.RatingProvider = provider.Rating
-	}
+	providerID := svc.Provider
+    zeroID := primitive.NilObjectID
 
+   if svc.CancelledByProvider && providerID == zeroID {
+   
+    if snapshot, err := s.snapshotRepo.FindByServiceID(ctx, svc.ID); err == nil && snapshot != nil {
+        snapshotProvider := snapshot.Service.Provider
+        if provider, err := s.repo.FindProviderByID(ctx, snapshotProvider.Hex()); err == nil {
+            booking.ProviderID = snapshotProvider.Hex()
+            booking.ProviderName = provider.Name
+            booking.ProviderPhone = provider.Phone
+            booking.MechanicType = provider.VehicleType
+            booking.Zone = provider.City
+            booking.RatingProvider = provider.Rating
+        }
+      }
+    } else if provider, err := s.repo.FindProviderByID(ctx, providerID.Hex()); err == nil {
+            booking.ProviderName = provider.Name
+            booking.ProviderPhone = provider.Phone
+            booking.MechanicType = provider.VehicleType
+            booking.Zone = provider.City
+            booking.RatingProvider = provider.Rating
+    }
 
 	serviceCharge := svc.FinalPrice
 	if svc.BasePrice > 0 {
