@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"provider_management/internal/constants"
 	"provider_management/internal/domain"
 	"provider_management/internal/dto"
 	"provider_management/internal/repository"
@@ -253,8 +254,18 @@ func (s *ComplaintService) GetComplaintWithDetails(
 	}
 
 	if booking != nil {
+		serviceCharge := booking.FinalPrice 
+	    gstPercent := constants.DefaultGSTPercent
+
+		gstAmount := (serviceCharge * gstPercent) / 100
+	    totalAmount := serviceCharge + gstAmount
+
 		resp.ComplaintInformation.BookingID = booking.ServiceNumber
-		resp.ComplaintInformation.BookingAmount = transaction.Amount
+		resp.ComplaintInformation.BookingAmount = totalAmount
+		
+		if transaction != nil {
+			resp.ComplaintInformation.UserPaidAmount = transaction.Amount
+		}
 	}
 
 	if complaint.UserComplaint != nil {
