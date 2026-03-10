@@ -34,6 +34,7 @@ func (h *AdminBookingHandler) GetAllBookings(c *gin.Context) {
 		BookingID:     c.Query("bookingId"),
 		StartDate:     c.Query("startDate"),
 		EndDate:       c.Query("endDate"),
+		CreatedAt:     c.Query("createdAt"),
 		Sort:          c.Query("sort"),
 	}
 

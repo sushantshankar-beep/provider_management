@@ -601,7 +601,7 @@ func (s *UserAdminService) AddNote( ctx context.Context, userID string, req dto.
 
 func (s *UserAdminService) ListOfferUsageByUser(
 	ctx context.Context,
-	userID string,
+	userID, createdAt string,
 	page, limit int64,
 ) ([]dto.OfferUsageItem, int64, int64, error) {
 
@@ -610,6 +610,7 @@ func (s *UserAdminService) ListOfferUsageByUser(
 	services, total, err := s.bookings.GetOfferUsageByUser(
 		ctx,
 		userID,
+		createdAt,
 		skip,
 		limit,
 	)

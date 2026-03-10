@@ -1,12 +1,13 @@
 package handler
 
 import (
+	"math"
 	"net/http"
 	"provider_management/internal/dto"
 	"provider_management/internal/service"
 	"strconv"
 	"strings"
-    "math"
+
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -65,6 +66,8 @@ func (h *PromoCodeHandler) GetPromoCodes(c *gin.Context) {
 		c.Query("search"),
 		c.Query("status"),
 		c.Query("service_type"),
+		c.Query("validity_start"),
+		c.Query("validity_end"),
 		c.Query("sort_by"),
 		c.DefaultQuery("sort_order", "desc"),
 	)
@@ -272,6 +275,7 @@ func (h *PromoCodeHandler) ListPromoCodeUsage(c *gin.Context) {
 	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
 	search := c.Query("search")
 	status := c.Query("status")
+	createdAt := c.Query("created_at")
 
 	if page <= 0 {
 		page = 1
@@ -283,7 +287,7 @@ func (h *PromoCodeHandler) ListPromoCodeUsage(c *gin.Context) {
 	data, total, totalPages, err := h.svc.ListPromoCodesWithUsage(
 		c.Request.Context(),
 		page, limit,
-		search, status,
+		search, status, createdAt,
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -309,6 +313,7 @@ func (h *PromoCodeHandler) GetPromoUsageByPromoID(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	userID := c.Query("userId")
+	createdAt := c.Query("created_at")
 
 	if page <= 0 {
 		page = 1
@@ -319,7 +324,7 @@ func (h *PromoCodeHandler) GetPromoUsageByPromoID(c *gin.Context) {
 
 	data, total, err := h.svc.GetPromoUserUsage(
 		c.Request.Context(),
-		promoID, userID,
+		promoID, userID,createdAt,
 		page, limit,
 	)
 	if err != nil {

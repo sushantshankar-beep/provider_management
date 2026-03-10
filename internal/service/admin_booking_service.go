@@ -268,15 +268,23 @@ func (s *AdminBookingService) addDateFilters(filters dto.BookingFilters, filter 
 	if filters.StartDate != "" {
 		if sd, err := time.Parse("2006-01-02", filters.StartDate); err == nil {
 			sd = time.Date(sd.Year(), sd.Month(), sd.Day(), 0, 0, 0, 0, time.UTC)
-			filter["startedAt"] = bson.M{"$gte": sd}
+			filter["timestamps.startedAt"] = bson.M{"$gte": sd}
 		}
 	}
 	if filters.EndDate != "" {
 		if ed, err := time.Parse("2006-01-02", filters.EndDate); err == nil {
 			ed = time.Date(ed.Year(), ed.Month(), ed.Day(), 23, 59, 59, 999999999, time.UTC)
-			filter["completedAt"] = bson.M{"$lte": ed}
+			filter["timestamps.completedAt"] = bson.M{"$lte": ed}
 		}
 	}
+
+	if filters.CreatedAt != "" {
+		if ed, err := time.Parse("2006-01-02", filters.CreatedAt); err == nil {
+			ed = time.Date(ed.Year(), ed.Month(), ed.Day(), 23, 59, 59, 999999999, time.UTC)
+			filter["createdAt"] = bson.M{"$lte": ed}
+		}
+	}
+
 }
 func (s *AdminBookingService) addZoneFilter(ctx context.Context, allowedZones []string, filter bson.M) error {
 
@@ -428,7 +436,7 @@ func (s *AdminBookingService) mapServiceToBookingResponse(
 		PaymentStatus: s.mapPaymentStatus(svc.PaymentStatus),
 		VehicleType:   svc.VehicleType,
 		ServiceType:   svc.ServiceType,
-		BookingDate:   svc.CreatedAt,
+		BookingDate:   &svc.CreatedAt,
 		CompletedAt:   svc.Timestamps.CompletedAt,
 	}
 

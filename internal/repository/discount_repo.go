@@ -31,7 +31,18 @@ func (r *DiscountRepo) Create(ctx context.Context, d *domain.Discount) error {
 	return err
 }
 
-func (r *DiscountRepo) GetDiscounts(ctx context.Context, filter bson.M, skip, limit int64, sortBy string, sortOrder int) ([]domain.Discount, int64, error) {
+func (r *DiscountRepo) GetDiscounts(ctx context.Context, filter bson.M, skip, limit int64, sortBy string,createdAt string ,sortOrder int) ([]domain.Discount, int64, error) {
+	
+	if createdAt != "" {
+		if t, err := time.Parse("2006-01-02", createdAt); err == nil {
+			end := t.Add(24*time.Hour - time.Second)
+			filter["startAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(t),
+				"$lte": primitive.NewDateTimeFromTime(end),
+			}
+		}
+	}
+
 	total, err := r.collection.CountDocuments(ctx, filter)
 	if err != nil {
 		return nil, 0, err
