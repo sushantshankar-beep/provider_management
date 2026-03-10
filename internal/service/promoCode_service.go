@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -134,7 +135,7 @@ func (s *PromoCodeService) CreatePromoCode(ctx context.Context, req dto.CreatePr
 func (s *PromoCodeService) GetPromoCodes(
 	ctx context.Context,
 	page, limit int64,
-	search, status, serviceType, sortBy, sortOrder string,
+	search, status, serviceType, ValidityStart, ValidityEnd, sortBy, sortOrder string,
 ) ([]dto.PromoCodeListResponse, int64, int64, error) {
 	skip := (page - 1) * limit
 	filter := bson.M{}
@@ -149,6 +150,26 @@ func (s *PromoCodeService) GetPromoCodes(
 		filter["$or"] = []bson.M{
 			{"code": bson.M{"$regex": search, "$options": "i"}},
 			{"title": bson.M{"$regex": search, "$options": "i"}},
+		}
+	}
+
+	if ValidityStart != "" {
+		if t, err := time.Parse("2006-01-02", ValidityStart); err == nil {
+			end := t.Add(24*time.Hour - time.Second)
+			filter["startAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(t),
+				"$lte": primitive.NewDateTimeFromTime(end),
+			}
+		}
+	}
+
+	if ValidityEnd != "" {
+		if t, err := time.Parse("2006-01-02", ValidityEnd); err == nil {
+			end := t.Add(24*time.Hour - time.Second)
+			filter["endAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(t),
+				"$lte": primitive.NewDateTimeFromTime(end),
+			}
 		}
 	}
 
@@ -447,12 +468,12 @@ func (s *PromoCodeService) SyncPromoStatuses(ctx context.Context) error {
 func (s *PromoCodeService) ListPromoCodesWithUsage(
 	ctx context.Context,
 	page, limit int64,
-	search, status string,
+	search, status, createdAt string,
 ) ([]dto.PromoUsageListItem, int64, int64, error) {
 
 	skip := (page - 1) * limit
 
-	promos, total, err := s.PromoCodeRepo.GetPromoCodesForUsage(ctx, skip, limit, search, status)
+	promos, total, err := s.PromoCodeRepo.GetPromoCodesForUsage(ctx, skip, limit, search, status, createdAt)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -496,15 +517,15 @@ func (s *PromoCodeService) ListPromoCodesWithUsage(
 
 func (s *PromoCodeService) GetPromoUserUsage(
 	ctx context.Context,
-	promoID, userID string,
+	promoID, userID, createdAt string,
 	page, limit int,
 ) (interface{}, int64, error) {
 	skip := int64((page - 1) * limit)
 	lim := int64(limit)
-
+   
 	if userID != "" {
 		services, total, err := s.AcceptedServiceRepo.GetServicesByPromoAndUser(
-			ctx, promoID, userID, skip, lim,
+			ctx, promoID, userID, createdAt, skip, lim,
 		)
 		if err != nil {
 			return nil, 0, err
@@ -530,7 +551,7 @@ func (s *PromoCodeService) GetPromoUserUsage(
 	}
 
 	rows, total, err := s.AcceptedServiceRepo.GetPromoUsersAggregated(
-		ctx, promoID, skip, lim,
+		ctx, promoID,createdAt, skip, lim,
 	)
 	if err != nil {
 		return nil, 0, err

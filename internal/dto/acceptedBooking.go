@@ -16,6 +16,7 @@ type BookingFilters struct {
 	BookingID      string `form:"bookingId"`
 	StartDate      string `form:"startDate"`
 	EndDate        string `form:"endDate"`
+	CreatedAt      string `form:"createdAt"`
 	Sort           string `form:"sort"`
 }
 
@@ -49,7 +50,7 @@ type BookingResponse struct {
 	VehicleType    string      `json:"vehicleType"`
 	ServiceBidType string      `json:"serviceBidType"`
 	ServiceType    string      `json:"serviceType"`
-	BookingDate    time.Time   `json:"bookingDate"`
+	BookingDate    *time.Time   `json:"bookingDate"`
 	CompletedAt    *time.Time  `json:"completedAt"`
 	Zone           string      `json:"zone"`
 	Status         domain.ServiceStatus      `json:"status"`

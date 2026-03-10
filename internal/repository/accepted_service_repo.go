@@ -831,7 +831,7 @@ func (r *AcceptedServiceRepo) GetPromoUserCount(ctx context.Context, promoID str
 
 func (r *AcceptedServiceRepo) GetServicesByPromoAndUser(
 	ctx context.Context,
-	promoID, userID string,
+	promoID, userID, createdAt string,
 	skip, limit int64,
 ) ([]domain.AcceptedService, int64, error) {
 	userOID, err := primitive.ObjectIDFromHex(userID)
@@ -842,6 +842,20 @@ func (r *AcceptedServiceRepo) GetServicesByPromoAndUser(
 	filter := bson.M{
 		"appliedPromo.promoId": promoID,
 		"user":                 userOID,
+	}
+	
+	if createdAt != "" {
+		t, err := time.Parse("2006-01-02", createdAt)
+		if err == nil {
+	
+			startOfDay := t
+			endOfDay := t.Add(24 * time.Hour)
+	
+			filter["createdAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(startOfDay),
+				"$lt":  primitive.NewDateTimeFromTime(endOfDay),
+			}
+		}
 	}
 
 	total, err := r.col.CountDocuments(ctx, filter)
@@ -870,12 +884,24 @@ func (r *AcceptedServiceRepo) GetServicesByPromoAndUser(
 
 func (r *AcceptedServiceRepo) GetPromoUsersAggregated(
 	ctx context.Context,
-	promoID string,
+	promoID, createdAt string,
 	skip, limit int64,
 ) ([]dto.PromoUserUsageRow, int64, error) {
 	matchStage := bson.M{"appliedPromo.promoId": promoID}
 
-	// Count total distinct users
+	if createdAt != "" {
+		t, err := time.Parse("2006-01-02", createdAt)
+		if err == nil {
+			startOfDay := t
+			endOfDay := t.Add(24 * time.Hour)
+	
+			matchStage["createdAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(startOfDay),
+				"$lt":  primitive.NewDateTimeFromTime(endOfDay),
+			}
+		}
+	}
+	
 	countPipeline := mongo.Pipeline{
 		{{Key: "$match", Value: matchStage}},
 		{{Key: "$group", Value: bson.M{"_id": "$user"}}},
@@ -886,7 +912,6 @@ func (r *AcceptedServiceRepo) GetPromoUsersAggregated(
 		return nil, 0, err
 	}
 
-	// Aggregate per user
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: matchStage}},
 		{{Key: "$group", Value: bson.M{
@@ -934,11 +959,24 @@ func (r *AcceptedServiceRepo) runCountPipeline(ctx context.Context, pipeline mon
 
 func (r *AcceptedServiceRepo) GetDiscountUsersAggregated(
 	ctx context.Context,
-	discountID string,
+	discountID, createdAt string,
 	skip, limit int64,
 ) ([]dto.DiscountUserUsageRow, int64, error) {
 	matchStage := bson.M{"appliedDiscount.discountId": discountID}
 
+	if createdAt != "" {
+		t, err := time.Parse("2006-01-02", createdAt)
+		if err == nil {
+			startOfDay := t
+			endOfDay := t.Add(24 * time.Hour)
+	
+			matchStage["createdAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(startOfDay),
+				"$lt":  primitive.NewDateTimeFromTime(endOfDay),
+			}
+		}
+	}
+	
 	countPipeline := mongo.Pipeline{
 		{{Key: "$match", Value: matchStage}},
 		{{Key: "$group", Value: bson.M{"_id": "$user"}}},
@@ -977,17 +1015,31 @@ func (r *AcceptedServiceRepo) GetDiscountUsersAggregated(
 
 func (r *AcceptedServiceRepo) GetServicesByDiscountAndUser(
 	ctx context.Context,
-	discountID, userID string,
+	discountID, userID, createdAt string,
 	skip, limit int64,
 ) ([]domain.AcceptedService, int64, error) {
 	userOID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return nil, 0, err
 	}
-
+   log.Println("cdkjbhbshjbhjdsbcdcscdsxs",createdAt)
 	filter := bson.M{
 		"appliedDiscount.discountId": discountID,
 		"user":                       userOID,
+	}
+    log.Println("createdAt", createdAt)
+	if createdAt != "" {
+		t, err := time.Parse("2006-01-02", createdAt)
+		if err == nil {
+	
+			startOfDay := t
+			endOfDay := t.Add(24 * time.Hour)
+	
+			filter["createdAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(startOfDay),
+				"$lt":  primitive.NewDateTimeFromTime(endOfDay),
+			}
+		}
 	}
 
 	total, err := r.col.CountDocuments(ctx, filter)
@@ -1119,7 +1171,7 @@ func (r *AcceptedServiceRepo) GetPromoUsageStats(
 
 func (r *AcceptedServiceRepo) GetOfferUsageByUser(
 	ctx context.Context,
-	userID string,
+	userID, createdAt string,
 	skip, limit int64,
 ) ([]domain.AcceptedService, int64, error) {
 
@@ -1128,12 +1180,27 @@ func (r *AcceptedServiceRepo) GetOfferUsageByUser(
 		return nil, 0, err
 	}
 
+	
 	filter := bson.M{
 		"user": userObjID,
 		"$or": []bson.M{
 			{"appliedPromo": bson.M{"$ne": nil}},
 			{"appliedDiscount": bson.M{"$ne": nil}},
 		},
+	}
+
+	if createdAt != "" {
+		t, err := time.Parse("2006-01-02", createdAt)
+		if err == nil {
+	
+			startOfDay := t
+			endOfDay := t.Add(24 * time.Hour)
+	
+			filter["createdAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(startOfDay),
+				"$lt":  primitive.NewDateTimeFromTime(endOfDay),
+			}
+		}
 	}
 
 	total, err := r.col.CountDocuments(ctx, filter)

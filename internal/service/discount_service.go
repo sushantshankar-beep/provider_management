@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type DiscountService struct {
@@ -127,7 +128,7 @@ func (s *DiscountService) CreateDiscount(ctx context.Context, req dto.CreateDisc
 func (s *DiscountService) GetDiscounts(
 	ctx context.Context,
 	page, limit int64,
-	search, status, scope, sortBy, sortOrder string,
+	search, status, discountType, scope, validityStart, validityEnd, sortBy, sortOrder string,
 ) ([]dto.DiscountListResponse, int64, int64, error) {
 	skip := (page - 1) * limit
 	filter := bson.M{}
@@ -138,10 +139,33 @@ func (s *DiscountService) GetDiscounts(
 	if scope != "" {
 		filter["scope"] = scope
 	}
+	if discountType != "" {
+		filter["type"] = discountType
+	}
 	if search != "" {
 		filter["$or"] = []bson.M{
 			{"name": bson.M{"$regex": search, "$options": "i"}},
 			{"description": bson.M{"$regex": search, "$options": "i"}},
+		}
+	}
+
+	if  validityStart != "" {
+		if t, err := time.Parse("2006-01-02", validityStart); err == nil {
+			end := t.Add(24*time.Hour - time.Second)
+			filter["startAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(t),
+				"$lte": primitive.NewDateTimeFromTime(end),
+			}
+		}
+	}
+
+	if  validityEnd != "" {
+		if t, err := time.Parse("2006-01-02", validityEnd); err == nil {
+			end := t.Add(24*time.Hour - time.Second)
+			filter["endAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(t),
+				"$lte": primitive.NewDateTimeFromTime(end),
+			}
 		}
 	}
 
@@ -164,7 +188,7 @@ func (s *DiscountService) GetDiscounts(
 		}
 	}
 
-	discounts, total, err := s.DiscountRepo.GetDiscounts(ctx, filter, skip, limit, sortBy, order)
+	discounts, total, err := s.DiscountRepo.GetDiscounts(ctx, filter, skip, limit, sortBy,validityStart, order)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -427,23 +451,21 @@ func (s *DiscountService) SyncDiscountStatuses(ctx context.Context) error {
 func (s *DiscountService) ListDiscountsWithUsage(
 	ctx context.Context,
 	page, limit int64,
-	search, status string,
+	search, status, createdAt string,
 ) ([]dto.DiscountUsageListItem, int64, int64, error) {
 
 	skip := (page - 1) * limit
 
-	discounts, total, err := s.DiscountRepo.GetDiscounts(ctx, bson.M{}, skip, limit, "createdAt", -1)
+	discounts, total, err := s.DiscountRepo.GetDiscounts(ctx, bson.M{}, skip, limit,  "createdAt", createdAt, -1)
 	if err != nil {
 		return nil, 0, 0, err
 	}
 
-	// collect IDs
 	ids := make([]string, 0, len(discounts))
 	for _, d := range discounts {
 		ids = append(ids, d.ID.Hex())
 	}
 
-	// 🔥 fetch usage stats from accepted_services
 	stats, err := s.AcceptedServiceRepo.GetDiscountUsageStats(ctx, ids)
 	if err != nil {
 		return nil, 0, 0, err
@@ -480,15 +502,15 @@ func (s *DiscountService) ListDiscountsWithUsage(
 
 func (s *DiscountService) GetDiscountUserUsage(
 	ctx context.Context,
-	discountID, userID string,
+	discountID, userID, createdAt string,
 	page, limit int,
 ) (interface{}, int64, error) {
 	skip := int64((page - 1) * limit)
 	lim := int64(limit)
-
+  
 	if userID != "" {
 		services, total, err := s.AcceptedServiceRepo.GetServicesByDiscountAndUser(
-			ctx, discountID, userID, skip, lim,
+			ctx, discountID, userID, createdAt, skip, lim,
 		)
 		if err != nil {
 			return nil, 0, err
@@ -514,7 +536,7 @@ func (s *DiscountService) GetDiscountUserUsage(
 	}
 
 	rows, total, err := s.AcceptedServiceRepo.GetDiscountUsersAggregated(
-		ctx, discountID, skip, lim,
+		ctx, discountID,createdAt, skip, lim,
 	)
 	if err != nil {
 		return nil, 0, err

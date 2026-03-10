@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"log"
 	"provider_management/internal/domain"
 	"time"
 
@@ -196,7 +197,7 @@ func (r *PromoCodeRepo) BulkActivateScheduled(ctx context.Context, now time.Time
 func (r *PromoCodeRepo) GetPromoCodesForUsage(
 	ctx context.Context,
 	skip, limit int64,
-	search, status string,
+	search, status, createdAt string,
 ) ([]domain.PromoCode, int64, error) {
 	filter := bson.M{}
 	if status != "" {
@@ -206,6 +207,16 @@ func (r *PromoCodeRepo) GetPromoCodesForUsage(
 		filter["$or"] = []bson.M{
 			{"code": bson.M{"$regex": search, "$options": "i"}},
 			{"title": bson.M{"$regex": search, "$options": "i"}},
+		}
+	}
+    log.Println("createdAt",createdAt)
+	if createdAt != "" {
+		if t, err := time.Parse("2006-01-02", createdAt); err == nil {
+			end := t.Add(24*time.Hour - time.Second)
+			filter["createdAt"] = bson.M{
+				"$gte": primitive.NewDateTimeFromTime(t),
+				"$lte": primitive.NewDateTimeFromTime(end),
+			}
 		}
 	}
 

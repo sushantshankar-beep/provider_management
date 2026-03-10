@@ -63,7 +63,6 @@ func (r *SavedVehiclesRepo) FindByIDs(
 	ids []primitive.ObjectID,
 ) ([]domain.Vehicle, error) {
 
-	log.Println("vehiclesss",ids)
 	if len(ids) == 0 {
 		return []domain.Vehicle{}, nil
 	}

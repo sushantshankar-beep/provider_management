@@ -125,12 +125,15 @@ func (h *UserAdminHandler) ListOfferUsageByUser(c *gin.Context) {
 		return
 	}
 
+	createdAt := c.Query("created_at")
+
 	page, _ := strconv.ParseInt(c.DefaultQuery("page", "1"), 10, 64)
 	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "20"), 10, 64)
 
 	data, total, totalPages, err := h.svc.ListOfferUsageByUser(
 		c.Request.Context(),
 		userID,
+		createdAt,
 		page,
 		limit,
 	)
