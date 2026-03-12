@@ -155,7 +155,8 @@ func (h *ProviderAdminHandler) VerifyDocument(c *gin.Context) {
 	kycID := c.Param("id") 
 	var body struct {
 		DocumentID string `json:"documentId"` 
-		Action     string `json:"action"`   
+		Action     string `json:"action"` 
+		RejectionNote string `json:"rejectionNote"`  
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -166,7 +167,7 @@ func (h *ProviderAdminHandler) VerifyDocument(c *gin.Context) {
 		return
 	}
 
-	res, err := h.svc.VerifyDocument(c.Request.Context(), kycID, body.DocumentID, body.Action)
+	res, err := h.svc.VerifyDocument(c.Request.Context(), kycID, body.DocumentID, body.Action,body.RejectionNote)
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{

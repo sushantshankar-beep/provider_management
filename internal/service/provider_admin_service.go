@@ -427,7 +427,7 @@ func (s *ProviderAdminService) UpdateProviderKYC(ctx context.Context, id, kycSta
 	return s.providers.UpdateKYCStatus(ctx, id, mappedStatus)
 }
 
-func (s *ProviderAdminService) VerifyDocument( ctx context.Context, kycID, documentID, action string ) (*domain.ProviderKYC, error) {
+func (s *ProviderAdminService) VerifyDocument( ctx context.Context, kycID, documentID, action,rejectedNote string ) (*domain.ProviderKYC, error) {
 
 	if action != "approve" && action != "reject" {
 		return nil, fmt.Errorf("invalid action (approve/reject required)")
@@ -438,7 +438,7 @@ func (s *ProviderAdminService) VerifyDocument( ctx context.Context, kycID, docum
 		verificationStatus = domain.VERIFICATION_REJECTED
 	}
 
-	kyc, err := s.kycRepo.UpdateDocumentVerification(ctx, kycID, documentID, verificationStatus)
+	kyc, err := s.kycRepo.UpdateDocumentVerification(ctx, kycID, documentID, verificationStatus,rejectedNote)
 	if err != nil {
 		return nil, err
 	}
