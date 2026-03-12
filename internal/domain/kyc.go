@@ -33,6 +33,7 @@ type KYCDocument struct {
 	ID       primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Type     DocumentType       `bson:"type" json:"type"`
 	URL      string             `bson:"url" json:"url"`
+	RejectionNote string `json:"rejectionNote" bson:"rejectionNote"`
 	Verified VerificationStatus `bson:"verified" json:"verified"`
 }
 

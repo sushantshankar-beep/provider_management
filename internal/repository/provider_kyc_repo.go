@@ -51,7 +51,7 @@ func (r *ProviderKYCRepository) FindByIDs(ctx context.Context, ids []primitive.O
 	return kycs, nil
 }
 
-func (r *ProviderKYCRepository) UpdateDocumentVerification( ctx context.Context,kycID string, documentID string, status domain.VerificationStatus ) (*domain.ProviderKYC, error) {
+func (r *ProviderKYCRepository) UpdateDocumentVerification( ctx context.Context,kycID string, documentID string, status domain.VerificationStatus, rejectedNote string ) (*domain.ProviderKYC, error) {
 
 	kycObjID, err := primitive.ObjectIDFromHex(kycID)
 	if err != nil {
@@ -71,6 +71,7 @@ func (r *ProviderKYCRepository) UpdateDocumentVerification( ctx context.Context,
 	update := bson.M{
 		"$set": bson.M{
 			"documents.$.verified": status,
+			"documents.$.rejectionNote": rejectedNote,
 			"updatedAt":            time.Now(),
 		},
 	}
