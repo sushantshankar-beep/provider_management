@@ -344,15 +344,22 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 		return fmt.Errorf("no transaction associated with this booking")
 	}
 
-	// var transaction *domain.Transaction
-	// if complaint.AcceptedService != "" {
-	// 	transaction, err = s.transactionRepo.FindByServiceID(ctx, complaint.AcceptedService)
-	// 	if err != nil {
-	// 		log.Println("Error fetching transactio:", err, "Service", complaint.AcceptedService)
-	// 	}
-	// }
+	var transaction *domain.Transaction
+	var transactionAmount float64
+	if complaint.AcceptedService != "" {
+		transaction, err = s.transactionRepo.FindByServiceID(ctx, complaint.AcceptedService)
+		if err != nil {
+			log.Println("Error fetching transaction:", err, "Service", complaint.AcceptedService)
+		} else if transaction != nil {
+			transactionAmount = transaction.Amount
+		}
+	}
 
-	if err := s.validateComplaintAssessmentAmounts(&req, acceptedService.FinalPrice); err != nil {
+	if transactionAmount == 0 {
+		transactionAmount = acceptedService.FinalPrice 
+	}
+
+	if err := s.validateComplaintAssessmentAmounts(&req, acceptedService.FinalPrice, transactionAmount); err != nil {
 		return err
 	}
 
@@ -364,7 +371,7 @@ func (s *ComplaintService) AssessComplaint(ctx context.Context, complaintID stri
 
 }
 
-func (s *ComplaintService) validateComplaintAssessmentAmounts(req *dto.AssessComplaintRequest, originalAmount float64) error {
+func (s *ComplaintService) validateComplaintAssessmentAmounts(req *dto.AssessComplaintRequest, originalAmount float64, transactionAmount float64) error {
 
 	if originalAmount <= 0 {
 		return fmt.Errorf("invalid original booking amount: %.2f", originalAmount)
@@ -373,7 +380,8 @@ func (s *ComplaintService) validateComplaintAssessmentAmounts(req *dto.AssessCom
 	// gstAmount, tdsAmount, netAmount := s.calculateNetAmounts(originalAmount)
 
 	if req.RefundToUser == domain.RefundTypeFull {
-		req.RefundAmount = originalAmount
+		refundVal := transactionAmount / 1.18
+		req.RefundAmount = refundVal
 	}
 
 	if req.PayoutToProvider == domain.PayoutTypeFull {
@@ -381,7 +389,7 @@ func (s *ComplaintService) validateComplaintAssessmentAmounts(req *dto.AssessCom
 	}
 
 	if req.RefundToUser == domain.RefundTypePartial {
-		if req.RefundAmount <= 0 || req.RefundAmount > originalAmount {
+		if req.RefundAmount <= 0 || req.RefundAmount > transactionAmount {
 			return fmt.Errorf("invalid refund amount: %.2f", req.RefundAmount)
 		}
 	}
@@ -390,10 +398,6 @@ func (s *ComplaintService) validateComplaintAssessmentAmounts(req *dto.AssessCom
 		if req.PayoutAmount <= 0 || req.PayoutAmount > originalAmount {
 			return fmt.Errorf("invalid payout amount: %.2f", req.PayoutAmount)
 		}
-	}
-
-	if req.RefundAmount+req.PayoutAmount > originalAmount {
-		return fmt.Errorf("refund (%.2f) + payout (%.2f) exceeds payable booking amount %.2f", req.RefundAmount, req.PayoutAmount, originalAmount)
 	}
 
 	return nil
