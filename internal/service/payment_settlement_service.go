@@ -879,13 +879,20 @@ func (s *SettlementService) GetBookingsForPayoutStats(
 	}
 
 	if req.StartDate != "" {
-		start, err := time.Parse("2006-01-02", req.StartDate)
+		sd, err := time.Parse("2006-01-02", req.StartDate)
 		if err != nil {
 			return nil, fmt.Errorf("invalid start date")
 		}
-		filter["createdAt"] = bson.M{"$gte": start}
+	
+		startOfDay := time.Date(sd.Year(), sd.Month(), sd.Day(), 0, 0, 0, 0, time.UTC)
+		endOfDay := startOfDay.Add(24 * time.Hour)
+	
+		filter["createdAt"] = bson.M{
+			"$gte": startOfDay,
+			"$lt":  endOfDay,
+		}
 	}
-
+	
 	if req.EndDate != "" {
 		end, err := time.Parse("2006-01-02", req.EndDate)
 		if err != nil {
