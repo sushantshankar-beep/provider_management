@@ -280,9 +280,24 @@ func (s *ProviderAdminService) GetAllProviders(
 		},
 	})
 
-	pendingKycCount, _ := s.kycRepo.Count(ctx, bson.M{
+	pendingKycs, err := s.kycRepo.Find(ctx, bson.M{
 		"status": domain.KYC_PENDING,
 	})
+	
+	var pendingKycCount int64 = 0
+	if err == nil {
+		var pendingKycIDs []primitive.ObjectID
+		for _, kyc := range pendingKycs {
+			pendingKycIDs = append(pendingKycIDs, kyc.ID)
+		}
+		
+		if len(pendingKycIDs) > 0 {
+			pendingKycCount, _ = s.providers.Count(ctx, bson.M{
+				"kycId": bson.M{"$in": pendingKycIDs},
+				"isActive": bson.M{"$ne": "delete"},
+			})
+		}
+	}
 
 	totalPages := int64(math.Ceil(float64(total) / float64(pagination.Limit)))
 
