@@ -363,7 +363,7 @@ func (s *ProviderAdminService) GetProviderByID(ctx context.Context, id string) (
 		ProviderID:           provider.ProviderCode,
 		Name:                 defaultStr(provider.Name, "N/A"),
 		Phone:                provider.Phone,
-		Email:                defaultStr(provider.Email, "N/A"),
+		Email:                defaultStr(provider.Email, ""),
 		AlternateContact:     provider.AlternateContact,
 		ProfileURL:           provider.ProfileURL,
 		Address:              provider.Address,
