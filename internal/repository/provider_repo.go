@@ -415,7 +415,10 @@ func (r *ProviderRepo) UpdateKYCID(
 
 func (r *ProviderRepo) FindByPhone(ctx context.Context, phone string) (*domain.Provider, error) {
 	var provider domain.Provider
-	filter := bson.M{"phone": phone}
+	filter := bson.M{
+		"phone": phone,
+		"isActive": bson.M{"$ne": "delete"},
+	}
 	err := r.col.FindOne(ctx, filter).Decode(&provider)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
