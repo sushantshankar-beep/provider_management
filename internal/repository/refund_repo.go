@@ -266,4 +266,17 @@ func (r *RefundRepository) FindByID(ctx context.Context, id string) (*domain.Ref
 	return &refund, nil
 }
 
+func (r *RefundRepository) FindByComplaintID(ctx context.Context, complaintID string) (*domain.Refund, error) {
+	var refund domain.Refund
+	opts := options.FindOne().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	err := r.collection.FindOne(ctx, bson.M{"complaintId": complaintID}, opts).Decode(&refund)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &refund, nil
+}
+
 

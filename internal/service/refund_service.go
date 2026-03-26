@@ -370,3 +370,7 @@ func (s *RefundService) CheckRefundStatus(ctx context.Context, refundID string) 
 	return nil
 }
 
+func (s *RefundService) GetRefundByComplaintID(ctx context.Context, complaintID string) (*domain.Refund, error) {
+	return s.refundRepo.FindByComplaintID(ctx, complaintID)
+}
+
