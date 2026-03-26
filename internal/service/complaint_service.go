@@ -248,6 +248,36 @@ func (s *ComplaintService) GetComplaintWithDetails(
 		PaymentTracking:  complaint.PaymentTracking,
 	}
 
+	if resp.PaymentTracking != nil {
+		if resp.PaymentTracking.RefundStatus != domain.PaymentActionNA {
+			refund, err := s.refundService.GetRefundByComplaintID(ctx, complaint.ID)
+			if err == nil && refund != nil {
+				if refund.Status == domain.RefundStatusSuccess {
+					resp.PaymentTracking.RefundStatus = domain.PaymentActionCompleted
+				} else if refund.Status == domain.RefundStatusFailed {
+					resp.PaymentTracking.RefundStatus = domain.PaymentActionFailed
+				} else {
+					resp.PaymentTracking.RefundStatus = domain.PaymentActionPending
+				}
+			}
+		}
+
+		if resp.PaymentTracking.PayoutStatus != domain.PaymentActionNA {
+			objID, err := primitive.ObjectIDFromHex(complaint.ID)
+			if err == nil {
+				if payout, err := s.paymentPayoutRepo.FindLatestByComplaintID(ctx, objID); err == nil && payout != nil {
+					if payout.IsPayoutCancelled {
+						resp.PaymentTracking.PayoutStatus = domain.PaymentActionNA
+					} else if payout.Status == domain.PayoutStatusSettled {
+						resp.PaymentTracking.PayoutStatus = domain.PaymentActionCompleted
+					} else {
+						resp.PaymentTracking.PayoutStatus = domain.PaymentActionPending
+					}
+				}
+			}
+		}
+	}
+
 	resp.ComplaintInformation = dto.ComplaintInformation{
 		ComplaintID: complaint.ComplaintNumber,
 		SubmittedAt: complaint.CreatedAt,
@@ -448,6 +478,13 @@ func (s *ComplaintService) processPaymentActions(ctx context.Context, complaint 
 		payoutActions := s.processPayout(ctx, complaint, acceptedService, req)
 		if len(payoutActions) > 0 {
 			paymentTracking.PayoutStatus = domain.PaymentActionPending
+
+			isNoPayout := req.PayoutToProvider == domain.PayoutTypeNone || req.PayoutToProvider == "No Payout"
+			isSettled := acceptedService.SettlementStatus == domain.SettleStatusPending || acceptedService.SettlementStatus == domain.SettleStatusSettled
+			if isNoPayout && !isSettled {
+				paymentTracking.PayoutStatus = domain.PaymentActionNA
+			}
+
 			actions = append(actions, payoutActions...)
 		}
 	}
