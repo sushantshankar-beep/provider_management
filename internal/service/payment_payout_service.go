@@ -366,6 +366,11 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			})
 		}
 
+		payoutCreatedAt := service.PayoutCreatedAt
+		if service.IsPayoutCancelled && payoutCreatedAt.IsZero() && service.PayoutCancelledAt != nil {
+			payoutCreatedAt = *service.PayoutCancelledAt
+		}
+
 		resp := dto.PayoutServiceResponse{
 			ID:                      service.ID.Hex(),
 			BookingID:               service.ServiceNumber,
@@ -393,9 +398,11 @@ func (s *PayoutService) GetPayoutServices(ctx context.Context, payoutID string) 
 			PayoutStatus:            service.PayoutStatus,
 			IsPayoutCancelled:       service.IsPayoutCancelled,
 			IsSettledAfterComplaint: service.IsSettledAfterComplaint,
-			PayoutCreatedAt: service.PayoutCreatedAt,
+			PayoutCreatedAt:         payoutCreatedAt,
+			PayoutCancelledAt:       service.PayoutCancelledAt,
 			Complaints:              complaints,
 		}
+
 
 		data = append(data, resp)
 	}

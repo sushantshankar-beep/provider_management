@@ -637,7 +637,7 @@ func (r *AcceptedServiceRepo) UpdatePayoutCancellation(ctx context.Context, serv
 		bson.M{"_id": objID},
 		bson.M{"$set": bson.M{
 			"isPayoutCancelled": cancelled,
-			"payoutCancelledAt": time.Now(),
+			"PayoutCancelledAt": time.Now(),
 		}},
 	)
 	return err

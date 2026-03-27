@@ -56,7 +56,7 @@ type AcceptedService struct {
 	PayoutCreated           bool                `bson:"payoutCreated,omitempty" json:"payoutCreated,omitempty"`
 	PayoutCreatedAt         time.Time           `bson:"payoutCreatedAt,omitempty" json:"payoutCreatedAt,omitempty"`
 	IsPayoutCancelled       bool                `bson:"isPayoutCancelled" json:"isPayoutCancelled"`
-	PayoutCancelledAt       *time.Time          `bson:"payoutCancelledAt" json:"payoutCancelledAt",omitempty"`
+	PayoutCancelledAt       *time.Time          `bson:"PayoutCancelledAt" json:"PayoutCancelledAt",omitempty"`
 	PayoutStatus            PayoutStatus        `bson:"payoutStatus" json:"payoutStatus"`
 	IsSettledAfterComplaint bool                `bson:"isSettledAfterComplaint" json:"is_settled_after_complaint"`
 	SettledAfterComplaintAt *time.Time          `bson:"settledAfterComplaintAt,omitempty" json:"settled_after_complaint_at,omitempty"`
