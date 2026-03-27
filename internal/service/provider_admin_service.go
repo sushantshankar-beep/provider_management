@@ -764,11 +764,12 @@ func (s *ProviderAdminService) UpdateProvider(
 
 		kycUpdate := bson.M{
 			"updatedAt": time.Now(),
-			"status":    domain.KYC_PENDING,
 		}
 
 		if len(documents) > 0 {
+			kycUpdate["status"] = domain.KYC_PENDING
 			var existingDocs []domain.KYCDocument
+
 			if existingKYC != nil {
 				existingDocs = existingKYC.Documents
 			}
