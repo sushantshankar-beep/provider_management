@@ -204,7 +204,9 @@ func (r *TransactionRepo) FindWithFilter(
 
 func (r *TransactionRepo) FindByServiceID(ctx context.Context, serviceID string) (*domain.Transaction, error) {
 	var transaction domain.Transaction
-	err := r.col.FindOne(ctx, bson.M{"serviceId": serviceID}).Decode(&transaction)
+	opts := options.FindOne().SetSort(bson.D{{"createdAt", -1}}) 
+
+	err := r.col.FindOne(ctx, bson.M{"serviceId": serviceID},opts).Decode(&transaction)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, fmt.Errorf("transaction not found for service ID: %s", serviceID)

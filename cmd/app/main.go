@@ -106,7 +106,7 @@ func main() {
 	providerAgreementService := service.NewAgreementService(providerAgreementRepo)
 	providerBrandService := service.NewProviderBrandService(providerVehicleBrandRepo, serviceMasterRepo)
 	refundService := service.NewRefundService(refundRepo, transactionRepo, userRepo, complaintRepo, acceptedServiceRepo, payUService)
-	complaintService := service.NewComplaintService(paymentPayoutRepo, complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService, transactionRepo, kycRepo)
+	complaintService := service.NewComplaintService(paymentPayoutRepo, complaintRepo, acceptedServiceRepo, userRepo, providerRepo, refundService, payoutService, transactionRepo, kycRepo, settlementHistoryRepo)
 	promoCodeService := service.NewPromoCodeService(promoCodeRepo, acceptedServiceRepo, userRepo)
 	discountService := service.NewDiscountService(discountRepo, acceptedServiceRepo, userRepo)
 
