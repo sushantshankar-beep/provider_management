@@ -474,7 +474,13 @@ func (r *PaymentPayoutRepo) FindByPayoutNumber(
 func (r *PaymentPayoutRepo) FindLatestByComplaintID(ctx context.Context, complaintID primitive.ObjectID) (*domain.PaymentPayout, error) {
 	var payout domain.PaymentPayout
 	opts := options.FindOne().SetSort(bson.D{{Key: "createdAt", Value: -1}})
-	err := r.col.FindOne(ctx, bson.M{"complaintId": complaintID}, opts).Decode(&payout)
+	filter := bson.M{
+		"$or": []bson.M{
+			{"complaintId": complaintID},
+			{"complaintAdjustments.complaintId": complaintID},
+		},
+	}
+	err := r.col.FindOne(ctx, filter, opts).Decode(&payout)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, nil

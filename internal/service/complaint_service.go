@@ -27,6 +27,7 @@ type ComplaintService struct {
 	payoutService       *PayoutService
 	transactionRepo     *repository.TransactionRepo
 	kycRepo             *repository.ProviderKYCRepository
+	settlementHistoryRepo *repository.SettlementHistoryRepository
 }
 
 func NewComplaintService(
@@ -39,6 +40,7 @@ func NewComplaintService(
 	payoutService *PayoutService,
 	transactionRepo *repository.TransactionRepo,
 	kycRepo *repository.ProviderKYCRepository,
+	settlementHistoryRepo *repository.SettlementHistoryRepository,
 ) *ComplaintService {
 	return &ComplaintService{
 		paymentPayoutRepo:   paymentPayoutRepo,
@@ -50,6 +52,7 @@ func NewComplaintService(
 		payoutService:       payoutService,
 		transactionRepo:     transactionRepo,
 		kycRepo:             kycRepo,
+		settlementHistoryRepo: settlementHistoryRepo,
 	}
 }
 
@@ -246,7 +249,7 @@ func (s *ComplaintService) GetComplaintWithDetails(
 		UpdatedByAdmin:   complaint.UpdatedByAdmin,
 		AdminUpdatedAt:   complaint.AdminUpdatedAt,
 		PaymentTracking:  complaint.PaymentTracking,
-	}
+	} 
 
 	if resp.PaymentTracking != nil {
 		if resp.PaymentTracking.RefundStatus != domain.PaymentActionNA {
@@ -263,20 +266,30 @@ func (s *ComplaintService) GetComplaintWithDetails(
 		}
 
 		if resp.PaymentTracking.PayoutStatus != domain.PaymentActionNA {
-			objID, err := primitive.ObjectIDFromHex(complaint.ID)
-			if err == nil {
-				if payout, err := s.paymentPayoutRepo.FindLatestByComplaintID(ctx, objID); err == nil && payout != nil {
-					if payout.IsPayoutCancelled {
-						resp.PaymentTracking.PayoutStatus = domain.PaymentActionNA
-					} else if payout.Status == domain.PayoutStatusSettled {
+			if serviceObjID, err := primitive.ObjectIDFromHex(complaint.AcceptedService); err == nil {
+				if settlement, err := s.settlementHistoryRepo.FindByServiceID(ctx, serviceObjID); err == nil && settlement != nil {
+					if settlement.SettlementStatus == domain.SettleStatusSettled {
 						resp.PaymentTracking.PayoutStatus = domain.PaymentActionCompleted
 					} else {
 						resp.PaymentTracking.PayoutStatus = domain.PaymentActionPending
+					}
+			} else {
+				objID, err := primitive.ObjectIDFromHex(complaint.ID)
+				if err == nil {
+					if payout, err := s.paymentPayoutRepo.FindLatestByComplaintID(ctx, objID); err == nil && payout != nil {
+						if payout.IsPayoutCancelled {
+							resp.PaymentTracking.PayoutStatus = domain.PaymentActionNA
+						} else if payout.Status == domain.PayoutStatusSettled ||  payout.Status == domain.PayoutStatusPartiallySettled{
+							resp.PaymentTracking.PayoutStatus = domain.PaymentActionCompleted
+						} else {
+							resp.PaymentTracking.PayoutStatus = domain.PaymentActionPending
+						}
 					}
 				}
 			}
 		}
 	}
+}
 
 	resp.ComplaintInformation = dto.ComplaintInformation{
 		ComplaintID: complaint.ComplaintNumber,
@@ -594,7 +607,7 @@ func (s *ComplaintService) handleNoPayoutSettled(ctx context.Context, complaint 
 		PartialAmount:       0,
 		CancelPayout:        false,
 		CreateDeduction:     true,
-		Reason:              fmt.Sprintf("Complaint CMP%d - Deduction Entry (No Payout)", complaint.ComplaintNumber),
+		Reason:              fmt.Sprintf("Complaint CMP%s - Deduction Entry (No Payout)", complaint.ComplaintNumber),
 		ComplaintID:         complaint.ID,
 		ComplaintInternalID: complaint.ComplaintNumber,
 	})
@@ -622,7 +635,7 @@ func (s *ComplaintService) handleNoPayoutNotSettled(ctx context.Context, complai
 		PartialAmount:       0,
 		CancelPayout:        true,
 		CreateDeduction:     false,
-		Reason:              fmt.Sprintf("Complaint CMP%d - Payout Cancelled (No Payout)", complaint.ComplaintNumber),
+		Reason:              fmt.Sprintf("Complaint CMP%s - Payout Cancelled (No Payout)", complaint.ComplaintNumber),
 		ComplaintID:         complaint.ID,
 		ComplaintInternalID: complaint.ComplaintNumber,
 	})
@@ -650,7 +663,7 @@ func (s *ComplaintService) handlePartialPayout(ctx context.Context, complaint *d
 		PartialAmount:       payoutAmount,
 		CancelPayout:        false,
 		CreateDeduction:     false,
-		Reason:              fmt.Sprintf("Complaint CMP%d", complaint.ComplaintNumber),
+		Reason:              fmt.Sprintf("Complaint CMP%s", complaint.ComplaintNumber),
 		ComplaintID:         complaint.ID,
 		ComplaintInternalID: complaint.ComplaintNumber,
 	})

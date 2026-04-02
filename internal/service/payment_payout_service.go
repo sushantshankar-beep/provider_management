@@ -817,6 +817,30 @@ func (s *PayoutService) updateExistingProviderPayout(ctx context.Context, existi
 	existing.NetPayable = calc.NetPayable
 	existing.UpdatedAt = time.Now()
 
+	if req.ComplaintID != "" {
+		complaintObjID, err := primitive.ObjectIDFromHex(req.ComplaintID)
+		if err == nil {
+			if existing.ComplaintID == nil {
+				existing.ComplaintID = &complaintObjID
+				existing.ComplaintInternalID = req.ComplaintInternalID
+			}
+
+			internalID, _ := strconv.ParseInt(req.ComplaintInternalID, 10, 64)
+			var serviceID primitive.ObjectID
+			if len(serviceIDs) > 0 {
+				serviceID = serviceIDs[0]
+			}
+
+			existing.ComplaintAdjustments = append(existing.ComplaintAdjustments, domain.ComplaintAdjustment{
+				ServiceID:           serviceID,
+				ComplaintID:         complaintObjID,
+				ComplaintInternalID: internalID,
+				Amount:              req.PartialAmount,
+				CreatedAt:           time.Now(),
+			})
+		}
+	}
+
 	return s.payoutRepo.Update(ctx, existing)
 }
 
